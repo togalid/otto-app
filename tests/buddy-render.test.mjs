@@ -34,7 +34,6 @@ test('Otto sustained notes do not rewrite pad/key highlights on every audio tick
     key.dataset.midi = String(48 + i)
     return key
   })
-  element('#buddy-inline').querySelector = element
   element('#count-in').checked = false
   const globals = {
     document: {
@@ -43,7 +42,6 @@ test('Otto sustained notes do not rewrite pad/key highlights on every audio tick
       createElementNS: () => new ElementStub(), addEventListener() {},
     },
     window: { addEventListener() {} },
-    MutationObserver: class { observe() {} },
   }
   for (const [name, value] of Object.entries(globals)) {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, name)
@@ -64,10 +62,12 @@ test('Otto sustained notes do not rewrite pad/key highlights on every audio tick
     async start() { this.running = true },
   }
   const palette = melodyPalette(0, 'FM7', 0, 'key')
+  let actions
+  const view = {}
   const buddy = mountBuddy({ progression: transport, instrument: player,
     drums: { hitAt() {} }, getNotes: () => palette, notesAt: () => palette,
     reportNote() {}, refreshTransport() {}, onModeChange() {}, reveal() {},
-  })
+  }, (_ui, handlers) => { actions = handlers; return view })
   buddy.setMode('all-pc')
   await buddy.start()
   context.currentTime = .1
@@ -79,7 +79,11 @@ test('Otto sustained notes do not rewrite pad/key highlights on every audio tick
   for (let i = 0; i < 10; i++) { context.currentTime += .01; tick() }
   assert.equal(writes(), before, 'same held note should not clear/re-add attributes')
 
-  element('#otto-join').listeners.get('click')()
+  assert.equal(view.hideJoin, false)
+  actions.join()
+  assert.equal(view.hideJoin, true)
+  assert.equal(view.speaking, false)
+  assert.equal(view.line, '君のメロディ聞かせて')
   tick()
   assert.ok(pads.every(pad => !pad.disabled && !pad.hasAttribute('data-pc-playing')))
   assert.ok(keys.every(key => !key.hasAttribute('data-pc-playing')))

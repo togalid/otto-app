@@ -1,10 +1,21 @@
-import { createApp, h } from './vendor/vue.runtime.esm-browser.prod.js'
+import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 
 export function mountReferenceControls() {
+  const state = ref({
+    duration: 0, position: 0, head: '0', ruler: '0', region: false, regionLabel: '',
+    bandStyle: {left: '0%', width: '0%'}, clock: '0:00.0 / 0:00.0',
+    message: '', result: '', splitStatus: '', stems: false,
+    dragging: false, matching: false, playing: false, starting: false,
+    enabledStems: [true, true, true, true],
+  }).value
+  const playbackPosition = {render: () => [
+    h("input", {"id": "ref-seek", "type": "range", "min": "0", "max": state.duration || 1, "step": "0.01", "value": state.position, "aria-label": "お手本の再生位置"}),
+    h("output", {"id": "ref-clock"}, state.clock),
+  ]}
   createApp({
     render: () => [
       h("summary", null, "お手本 · MP3を読み込む"),
-      h("label", {"class": "reference-drop", "id": "ref-drop"}, [
+      h("label", {"class": ["reference-drop", {dragging: state.dragging}], "id": "ref-drop"}, [
         h("input", {"id": "ref-file", "type": "file", "accept": "audio/*,.mp3"}),
         h("span", null, [
           "音声ファイルをここにドロップ",
@@ -12,50 +23,49 @@ export function mountReferenceControls() {
           "またはクリックして選択",
         ]),
       ]),
-      h("p", {"id": "ref-status", "role": "status"}),
-      h("fieldset", {"disabled": true}, [
+      h("p", {"id": "ref-status", "role": "status"}, state.message),
+      h("fieldset", {"disabled": !state.duration}, [
         h("legend", {"class": "sr-only"}, "お手本の再生"),
         h("div", {"class": "reference-row"}, [
           h("button", {"id": "ref-region", "type": "button"}, "再生位置を8小節の頭に"),
           h("label", null, [
             "頭（秒）",
-            h("input", {"id": "ref-head", "type": "number", "min": "0", "step": "0.001", "value": "0"}),
+            h("input", {"id": "ref-head", "type": "number", "min": "0", "step": "0.001", "max": state.duration || 1, "value": state.head}),
           ]),
-          h("button", {"id": "ref-apply", "type": "button", "disabled": true}, "合わせる"),
+          h("button", {"id": "ref-apply", "type": "button", "disabled": !state.region || state.matching}, "合わせる"),
         ]),
         h("div", {"class": "reference-row"}, [
-          h("output", {"id": "ref-bpm-result", "role": "status"}),
-          h("output", {"id": "ref-split-status", "role": "status"}),
+          h("output", {"id": "ref-bpm-result", "role": "status"}, state.result),
+          h("output", {"id": "ref-split-status", "role": "status"}, state.splitStatus),
         ]),
-        h("div", {"id": "ref-stems", "class": "reference-row", "style": "display:none"}, [
+        h("div", {"id": "ref-stems", "class": "reference-row", "style": {display: state.stems ? "" : "none"}}, [
           h("label", null, [
-            h("input", {"type": "checkbox", "checked": true}),
+            h("input", {"type": "checkbox", "checked": state.enabledStems[0]}),
             "歌",
           ]),
           h("label", null, [
-            h("input", {"type": "checkbox", "checked": true}),
+            h("input", {"type": "checkbox", "checked": state.enabledStems[1]}),
             "ドラム",
           ]),
           h("label", null, [
-            h("input", {"type": "checkbox", "checked": true}),
+            h("input", {"type": "checkbox", "checked": state.enabledStems[2]}),
             "ベース",
           ]),
           h("label", null, [
-            h("input", {"type": "checkbox", "checked": true}),
+            h("input", {"type": "checkbox", "checked": state.enabledStems[3]}),
             "その他",
           ]),
         ]),
         h("div", {"class": "reference-ruler"}, [
-          h("output", {"id": "ref-region-label"}),
+          h("output", {"id": "ref-region-label"}, state.regionLabel),
           h("div", {"class": "reference-timeline"}, [
-            h("div", {"id": "ref-band", "hidden": true, "aria-hidden": "true"}),
-            h("input", {"id": "ref-ruler", "type": "range", "min": "0", "max": "1", "step": "0.001", "value": "0", "aria-label": "8小節の開始位置"}),
+            h("div", {"id": "ref-band", "hidden": !state.region, "style": state.bandStyle, "aria-hidden": "true"}),
+            h("input", {"id": "ref-ruler", "type": "range", "min": "0", "max": state.duration || 1, "step": "0.001", "value": state.ruler, "aria-label": "8小節の開始位置"}),
           ]),
         ]),
         h("div", {"class": "reference-row"}, [
-          h("button", {"id": "ref-play", "type": "button"}, "▶ お手本を再生"),
-          h("input", {"id": "ref-seek", "type": "range", "min": "0", "max": "1", "step": "0.01", "value": "0", "aria-label": "お手本の再生位置"}),
-          h("output", {"id": "ref-clock"}, "0:00.0 / 0:00.0"),
+          h("button", {"id": "ref-play", "type": "button", "disabled": state.starting}, state.playing ? "Ⅱ 一時停止" : "▶ お手本を再生"),
+          h(playbackPosition),
           h("label", null, [
             "原曲の音量",
             h("input", {"id": "ref-volume", "type": "range", "min": "0", "max": "1", "step": "0.01", "value": "0.5"}),
@@ -64,6 +74,7 @@ export function mountReferenceControls() {
       ]),
     ],
   }).mount('#reference-player')
+  return state
 }
 
 export function mountBasicParts() {

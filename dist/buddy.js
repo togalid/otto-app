@@ -1,3 +1,4 @@
+import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { ottoStyleFor } from './otto-style.js'
 import { Instrument } from './audio.js'
 import { Progression } from './progression.js'
@@ -213,25 +214,42 @@ export function conversationTurn(beat, mode) {
   return {block, local: Math.max(0, beat) % 8, pc: mode === 'all-pc' || (mode !== 'all-you' && block % 2 === (mode === true || mode === 'pc' ? 0 : 1)), bar: Math.floor(Math.max(0, beat) / 4) % 8 + 1}
 }
 
+/** @param {HTMLElement} ui @param {{join:()=>void,imitate:()=>void,keepPlaying:()=>void}} actions */
+function mountBuddyView(ui, actions) {
+  const originalBuddy = /** @type {HTMLElement} */ (document.querySelector('#oto-buddy'))
+  const view = ref({
+    line: '', status: '', speaking: false, look: originalBuddy.dataset.look ?? '',
+    hideContinue: true, hideJoin: true, hideImitate: true,
+  }).value
+  createApp({
+    render: () => [
+      h('div', {class: 'talk-companion'}, [
+        h('div', {class: 'talk-face', 'aria-hidden': 'true', 'data-speaking': String(view.speaking)}, [
+          h('div', {class: 'talk-avatar', 'data-mood': 'idle', 'data-look': view.look}),
+        ]),
+        h('p', {class: 'talk-bubble'}, view.line),
+        h('button', {type: 'button', id: 'otto-continue', hidden: view.hideContinue, onClick: actions.keepPlaying}, 'もっと聴かせて！'),
+        h('button', {type: 'button', id: 'otto-join', hidden: view.hideJoin, onClick: actions.join}, '自分も弾く！'),
+        h('button', {type: 'button', id: 'otto-imitate', hidden: view.hideImitate, onClick: actions.imitate}, '真似してみて！'),
+      ]),
+      h('p', {id: 'buddy-status', class: 'sr-only', role: 'status', 'aria-live': 'polite'}, view.status),
+    ],
+  }).mount(ui)
+  const drawing = originalBuddy.querySelector('svg')
+  if (drawing) ui.querySelector('.talk-avatar')?.append(drawing.cloneNode(true))
+  new MutationObserver(() => { view.look = originalBuddy.dataset.look ?? '' })
+    .observe(originalBuddy, {attributes:true, attributeFilter:['data-look']})
+  return view
+}
+
 /** @typedef {ReturnType<typeof import('./music.js').melodyPalette>} Palette */
-/** @param {{progression:Progression,instrument:Instrument,drums:import('./rhythm.js').DrumSynth,getNotes:()=>Palette,notesAt:(bar:number,beat:number)=>Palette,reportNote:(midi:number)=>void,refreshTransport:()=>void,onModeChange:(mode:string)=>void,reveal:()=>void}} source */
-export function mountBuddy(source) {
+/** @param {{progression:Progression,instrument:Instrument,drums:import('./rhythm.js').DrumSynth,getNotes:()=>Palette,notesAt:(bar:number,beat:number)=>Palette,reportNote:(midi:number)=>void,refreshTransport:()=>void,onModeChange:(mode:string)=>void,reveal:()=>void}} source
+ * @param {typeof mountBuddyView} [mountView] */
+export function mountBuddy(source, mountView = mountBuddyView) {
   const panel = /** @type {HTMLElement} */ (document.querySelector('#detail-melody'))
   const ui = /** @type {HTMLElement} */ (document.querySelector('#buddy-inline'))
   const open = /** @type {HTMLButtonElement} */ (document.querySelector('#buddy-talk-open'))
-  const status = /** @type {HTMLElement} */ (ui.querySelector('#buddy-status'))
-  const face = /** @type {HTMLElement} */ (ui.querySelector('.talk-face'))
-  const avatar = /** @type {HTMLElement} */ (ui.querySelector('.talk-avatar'))
-  const originalBuddy = /** @type {HTMLElement} */ (document.querySelector('#oto-buddy'))
-  const drawing = originalBuddy.querySelector('svg')
-  if (drawing) avatar.append(drawing.cloneNode(true))
-  function syncAvatar() { avatar.dataset.look = originalBuddy.dataset.look ?? '' }
-  syncAvatar()
-  new MutationObserver(syncAvatar).observe(originalBuddy, {attributes:true, attributeFilter:['data-look']})
-  const bubble = /** @type {HTMLElement} */ (ui.querySelector('.talk-bubble'))
-  const continueButton = /** @type {HTMLButtonElement} */ (ui.querySelector('#otto-continue'))
-  const joinButton = /** @type {HTMLButtonElement} */ (ui.querySelector('#otto-join'))
-  const imitateButton = /** @type {HTMLButtonElement} */ (ui.querySelector('#otto-imitate'))
+  const view = mountView(ui, {join, imitate, keepPlaying})
   const pianoKeys = Array.from(document.querySelectorAll('#piano-keys [data-midi]'))
   const pads = Array.from(document.querySelectorAll('#pads button'))
   const transport = source.progression
@@ -266,9 +284,9 @@ export function mountBuddy(source) {
       /** @type {HTMLButtonElement} */ (pad).disabled = false
     })
     pianoKeys.forEach(key => key.removeAttribute('data-pc-playing'))
-    face.dataset.speaking = 'false'; bubble.textContent = selectedLine(); continueButton.hidden = true; joinButton.hidden = true; imitateButton.hidden = true
+    view.speaking = false; view.line = selectedLine(); view.hideContinue = true; view.hideJoin = true; view.hideImitate = true
     source.refreshTransport()
-    status.textContent = '再生すると、4拍数えて始まるよ。'
+    view.status = '再生すると、4拍数えて始まるよ。'
   }
   function selectedLine() {
     return Reflect.get(modeLines, mode) ?? '一緒に遊ぼう。'
@@ -316,8 +334,8 @@ export function mountBuddy(source) {
     }
     const beat = position()
     if (beat < 0) {
-      bubble.textContent = 'いち、に、さん、し…'
-      status.textContent = `カウントイン · ${Math.max(1, Math.min(4, Math.floor(beat + 4) + 1))} / 4`
+      view.line = 'いち、に、さん、し…'
+      view.status = `カウントイン · ${Math.max(1, Math.min(4, Math.floor(beat + 4) + 1))} / 4`
       return
     }
     if (listening) {
@@ -332,16 +350,16 @@ export function mountBuddy(source) {
         replyPlan = response
         response.forEach(note => { if (note.midi !== undefined) partner.playAt([note.midi], startTime + note.at * 60 / sessionBpm, note.duration * 60 / sessionBpm, note.level ?? .8) })
         answeringUntil = startTime + Math.max(0, ...response.map(note => note.at + note.duration)) * 60 / sessionBpm
-        bubble.textContent = 'こんな感じかな？'
+        view.line = 'こんな感じかな？'
       }
       if (answeringUntil && now >= answeringUntil) {
         listening = false; answeringUntil = 0; recorded = []; scheduled.clear()
         lastBlock = conversationTurn(beat, mode).block
       } else {
-        face.dataset.speaking = String(Boolean(answeringUntil))
+        view.speaking = Boolean(answeringUntil)
         panel.dataset.ottoPlaying = String(Boolean(answeringUntil))
-        continueButton.hidden = true; joinButton.hidden = !answeringUntil; imitateButton.hidden = true
-        if (!answeringUntil) bubble.textContent = 'うん、聴いてるよ！'
+        view.hideContinue = true; view.hideJoin = !answeringUntil; view.hideImitate = true
+        if (!answeringUntil) view.line = 'うん、聴いてるよ！'
         return
       }
     }
@@ -361,16 +379,16 @@ export function mountBuddy(source) {
       lastBlock = turn.block
     }
     const message = `${turn.pc ? 'Ottoの番' : 'あなたの番'} · ${turn.bar}/8小節 · ${Math.floor(turn.local % 4) + 1}拍`
-    if (status.textContent !== message) status.textContent = message
+    view.status = message
     const hideContinue = !turn.pc || mode === 'all-pc'
     const hideImitate = turn.pc || !recorded.length || held.size > 0
-    if (continueButton.hidden !== hideContinue) continueButton.hidden = hideContinue
-    if (joinButton.hidden !== !turn.pc) joinButton.hidden = !turn.pc
-    if (imitateButton.hidden !== hideImitate) imitateButton.hidden = hideImitate
+    view.hideContinue = hideContinue
+    view.hideJoin = !turn.pc
+    view.hideImitate = hideImitate
     const speaking = String(turn.pc)
-    if (face.dataset.speaking !== speaking) face.dataset.speaking = speaking
+    view.speaking = turn.pc
     const line = turn.pc ? (recorded.length ? 'そのフレーズ、こんなのはどう？' : '僕から弾いてみるね') : '君の番だよ'
-    if (bubble.textContent !== line) bubble.textContent = line
+    view.line = line
     if (panel.dataset.ottoPlaying !== speaking) panel.dataset.ottoPlaying = speaking
     if (panel.dataset.ottoInterruptible !== 'false') panel.dataset.ottoInterruptible = 'false'
     /** @type {Set<number>} */
@@ -411,7 +429,7 @@ export function mountBuddy(source) {
     transport.stop(); player.silence()
     const ticket = generation
     preparing = true; source.refreshTransport()
-    status.textContent = '音を準備しています…'
+    view.status = '音を準備しています…'
     sessionBpm = transport.bpm
     partner.setTimbre(player.timbre)
     partner.setVolume(player.volume)
@@ -434,10 +452,10 @@ export function mountBuddy(source) {
       })
       lastBlock = -1; active = true; preparing = false
       source.refreshTransport()
-      status.textContent = countIn ? 'カウントイン · 1 / 4' : '演奏スタート'
+      view.status = countIn ? 'カウントイン · 1 / 4' : '演奏スタート'
       timer = setInterval(tick, 25)
     } catch (error) {
-      if (ticket === generation) { stop(); status.textContent = error instanceof Error ? error.message : '音を準備できませんでした。もう一度試してね。' }
+      if (ticket === generation) { stop(); view.status = error instanceof Error ? error.message : '音を準備できませんでした。もう一度試してね。' }
     }
   }
   /** @param {number} step */
@@ -465,16 +483,16 @@ export function mountBuddy(source) {
     pad.append(hand)
   })
   open?.addEventListener('click', source.reveal)
-  joinButton.addEventListener('click', () => {
+  function join() {
     if (!active || !conversationTurn(Math.max(0, position()), mode).pc) return
     partner.silence(); scheduled.clear(); recorded = []; listening = false; answeringUntil = 0
     mode = 'all-you'; source.onModeChange(mode); lastBlock = -1
-    joinButton.hidden = true; continueButton.hidden = true
+    view.hideJoin = true; view.hideContinue = true; view.speaking = false
     panel.dataset.ottoPlaying = 'false'
     pads.forEach(pad => { /** @type {HTMLButtonElement} */ (pad).disabled = false })
-    bubble.textContent = '君のメロディ聞かせて'
-  })
-  imitateButton.addEventListener('click', () => {
+    view.line = '君のメロディ聞かせて'
+  }
+  function imitate() {
     if (!active || mode !== 'all-you' || !recorded.length || held.size) return
     listening = true; answeringUntil = 0
     mode = 'all-pc'; source.onModeChange(mode);
@@ -482,17 +500,17 @@ export function mountBuddy(source) {
     const first = recorded[0].at
     recorded = recorded.map(note => ({...note, at: Math.max(0, note.at - first)}))
     lastRelease = (player.context?.currentTime ?? 0) - 1.01
-    imitateButton.hidden = true
+    view.hideImitate = true
     tick()
-  })
-  continueButton.addEventListener('click', () => {
+  }
+  function keepPlaying() {
     if (!active || !conversationTurn(Math.max(0, position()), mode).pc) return
     mode = 'all-pc'
-    continueButton.hidden = true
+    view.hideContinue = true
     source.onModeChange(mode)
     const select = /** @type {HTMLSelectElement} */ (document.querySelector('#melody-mode'))
     select.dispatchEvent(new Event('change', {bubbles:true}))
-  })
+  }
   /** @param {string} value */
   function setMode(value) {
     if (!Object.hasOwn(modeLines,value)) throw new RangeError('Unknown session mode')
@@ -508,11 +526,11 @@ export function mountBuddy(source) {
       lastBlock = turn.block
       tick()
     }
-    bubble.textContent = selectedLine(); source.onModeChange(value)
+    view.line = selectedLine(); source.onModeChange(value)
   }
   window.addEventListener('blur', () => { if (active || preparing) stop() })
   document.addEventListener('visibilitychange', () => { if (document.hidden && (active || preparing)) stop() })
-  bubble.textContent = selectedLine()
+  view.line = selectedLine()
   function timbreChanged() {
     if (partner.timbre === player.timbre) return
     partner.silence()

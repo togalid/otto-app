@@ -1,3 +1,5 @@
+import { mountBassDetail } from './bass-detail.js'
+import { mountStyleChoices, mountPresetChoices } from './arrangement-selects.js'
 import { mountMobileChordEditor } from './mobile-chord-editor.js'
 import { mountBasicParts, mountReferenceControls } from './main-controls.js'
 import { createApp, h } from './vendor/vue.runtime.esm-browser.prod.js'
@@ -10,23 +12,21 @@ import { mountChordMonitor } from './chord-monitor.js'
 import { createMelodyView } from './melody-view.js'
 import { mountReferencePlayer } from './reference-player.js'
 mountBasicParts()
-mountReferenceControls()
-mountReferencePlayer()
+mountReferencePlayer(mountReferenceControls())
+const { style: genreSelect, choose: chooseStyle } = mountStyleChoices()
+const { preset: presetSelect, set: setPreset, choose: choosePreset } = mountPresetChoices()
 import { OrnamentPlayer } from './ornament-audio.js'
 import { mountOrnaments } from './ornament-ui.js'
 import {
-  presetLevel,
   notes,
   keys,
   presets,
-  presetGroups,
   presetSlots,
   presetBeatSlots,
   melodyPalette,
   melodyRole,
   displayChordParts,
   rootPitch,
-  bassHarmonyNotes,
   changeRoot,
   defaultChord,
   chordConfig,
@@ -38,7 +38,7 @@ import { chordBackingPatterns } from './backing.js'
 import { Instrument, chordWeights } from './audio.js'
 import { DrumSynth, rhythmPatterns } from './rhythm.js'
 import { Progression } from './progression.js'
-import { BassSynth, genres, genreProgressions, createPartMixer, swungBassBeat, bassEvents, bassFeelEvents, bassToneOffset, bassArticulation } from './groove.js'
+import { BassSynth, genres, genreProgressions, createPartMixer, swungBassBeat } from './groove.js'
 
 /** @type {ReturnType<typeof mountBuddy> | undefined} */
 let buddyController
@@ -231,6 +231,7 @@ const progression = new Progression(
   drums,
   bass,
 )
+const refreshBassDetail = mountBassDetail(progression)
 const drumGrid = mountDrumGrid(hits => {
   progression.drumSteps = hits
   renderDrumSteps()
@@ -304,7 +305,7 @@ const slotElements = mountChordGrid(progression.slots.length, {
     if (beat === 0 && chord) progression.slots[bar] = chord
     else if (beat > 0) progression.beatSlots[bar][beat] = chord
     if (chord) qualityOrigins[bar][beat] = chord
-    presetSelect.value = 'custom'
+    setPreset('custom')
     refreshLabels()
   },
   quality(bar, beat, select) {
@@ -316,7 +317,7 @@ const slotElements = mountChordGrid(progression.slots.length, {
     else progression.beatSlots[bar][beat] = chord
     if (quality === 'maj' && ['7', '9', 'b9', 'b9_13', 's9_13'].includes(extension))
       qualityOrigins[bar][beat] = chord
-    presetSelect.value = 'custom'
+    setPreset('custom')
     refreshLabels(select)
   },
   openQuality: openQualityMenu,
@@ -441,6 +442,7 @@ function refreshLabels(keepOptions = null) {
     activeKey = progression.keyForBar(0)
   }
   refreshMelody()
+  refreshBassDetail()
   if (progressionStatus) progressionStatus.textContent = ''
 }
 notation.addEventListener('change', () => refreshLabels())
@@ -457,61 +459,6 @@ for (const [selector, step] of [['#key-down', -1], ['#key-up', 1]]) {
 }
 updateTransport()
 
-const presetSelect = /** @type {HTMLSelectElement} */ (
-  document.querySelector('#preset')
-)
-const presetGroupSelect = /** @type {HTMLSelectElement} */ (
-  document.querySelector('#preset-group')
-)
-for (const group of presetGroups) {
-  const option = document.createElement('option')
-  option.value = group.id
-  option.textContent = group.label
-  presetGroupSelect.append(option)
-}
-/** @param {string} selectedId */
-function populatePresets(selectedId) {
-  presetSelect.replaceChildren()
-  const placeholder = document.createElement('option')
-  placeholder.value = ''
-  placeholder.textContent = '進行を選択'
-  placeholder.disabled = true
-  presetSelect.append(placeholder)
-  /** @type {Map<string, HTMLOptGroupElement>} */
-  const families = new Map()
-  for (const preset of orderedPresets()) {
-    const level = `Lv.${presetLevel(preset)}`
-    let family = families.get(level)
-    if (!family) {
-      family = document.createElement('optgroup')
-      family.label = level
-      families.set(level, family)
-      presetSelect.append(family)
-    }
-    const option = document.createElement('option')
-    option.value = preset.id
-    const labels = ['1','♭2','2','♭3','3','4','♯4','5','♭6','6','♭7','7']
-    const degrees = preset.pattern.map(chord => labels[rootPitch(chord)]).join(' → ')
-    const tags = [`Lv.${presetLevel(preset)}`]
-    if (preset.modulation.some(value => value !== 0)) tags.push('転調あり')
-    if (preset.pattern.filter(chord => /9|11|13/.test(chord)).length >= 3) tags.push('テンション多め')
-    option.textContent = `${degrees} 〔${tags.join('・')}〕`
-    option.title = preset.name
-    family.append(option)
-  }
-  const customOption = document.createElement('option')
-  customOption.value = 'custom'
-  customOption.textContent = 'カスタム'
-  customOption.disabled = true
-  presetSelect.append(customOption)
-  presetSelect.value = Array.from(presetSelect.options).some((option) => option.value === selectedId) ? selectedId : ''
-}
-presetGroupSelect.addEventListener('change', () => {
-  const first = presets.find((item) => item.group === presetGroupSelect.value)
-  if (!first) return
-  populatePresets(first.id)
-  presetSelect.dispatchEvent(new Event('change', { bubbles: true }))
-})
 /** @param {string} id */
 function applyPreset(id) {
   const selected = presets.find((item) => item.id === id)
@@ -530,35 +477,6 @@ presetSelect.addEventListener('change', () => {
   applyPreset(presetSelect.value)
   buddyController?.harmonyChanged()
 })
-presetGroupSelect.value = '4'
-populatePresets('royal')
-const presetPrev = /** @type {HTMLButtonElement} */ (document.querySelector('#preset-prev'))
-const presetNext = /** @type {HTMLButtonElement} */ (document.querySelector('#preset-next'))
-function orderedPresets() {
-  return [...presets].sort((a, b) => presetLevel(a) - presetLevel(b))
-}
-function updatePresetButtons() {
-  const options = orderedPresets()
-  const index = options.findIndex(item => item.id === presetSelect.value)
-  presetPrev.disabled = index === 0
-  presetNext.disabled = index === options.length - 1
-}
-for (const [button, direction] of /** @type {[HTMLButtonElement, number][]} */ ([[presetPrev, -1], [presetNext, 1]])) {
-  button.addEventListener('click', () => {
-    const options = orderedPresets()
-    const index = options.findIndex(item => item.id === presetSelect.value)
-    const next = index < 0
-      ? options[0]
-      : options[index + /** @type {number} */ (direction)]
-    if (!next) return
-    presetGroupSelect.value = next.group
-    populatePresets(next.id)
-    presetSelect.dispatchEvent(new Event('change', { bubbles: true }))
-  })
-}
-presetSelect.addEventListener('change', updatePresetButtons)
-updatePresetButtons()
-
 /** @param {string} chord @param {number} [key] */
 function displayParts(chord, key = progression.key) {
   const mode =
@@ -636,63 +554,17 @@ backingSelect.addEventListener('change', () => {
   progression.backing = backingSelect.value
 })
 
-const genreSelect = /** @type {HTMLSelectElement} */ (
-  document.querySelector('#genre')
-)
 const swing = /** @type {HTMLInputElement} */ (document.querySelector('#swing'))
 const bassTimbre = /** @type {HTMLSelectElement} */ (
   document.querySelector('#bass-timbre')
 )
-const genreGroup = /** @type {HTMLSelectElement} */ (document.querySelector('#genre-group'))
-for (const group of new Set(genres.map(genre => genre.group))) {
-  const option = document.createElement('option')
-  option.value = group
-  option.textContent = group
-  genreGroup.append(option)
-}
-function populateGenreStyles() {
-  genreSelect.replaceChildren()
-  for (const genre of genres.filter(genre => genre.group === genreGroup.value)) {
-    const option = document.createElement('option')
-    option.value = genre.id
-    option.textContent = genre.label
-    genreSelect.append(option)
-  }
-}
-populateGenreStyles()
-const stylePrev = /** @type {HTMLButtonElement} */ (document.querySelector('#style-prev'))
-const styleNext = /** @type {HTMLButtonElement} */ (document.querySelector('#style-next'))
-function updateStyleButtons() {
-  stylePrev.disabled = genreGroup.selectedIndex === 0 && genreSelect.selectedIndex <= 0
-  styleNext.disabled = genreGroup.selectedIndex === genreGroup.options.length - 1 && genreSelect.selectedIndex >= genreSelect.options.length - 1
-}
-for (const [button, direction] of [[stylePrev, -1], [styleNext, 1]]) {
-  /** @type {HTMLButtonElement} */ (button).addEventListener('click', () => {
-    const next = genreSelect.selectedIndex + /** @type {number} */ (direction)
-    if (next < 0 || next >= genreSelect.options.length) {
-      genreGroup.selectedIndex += /** @type {number} */ (direction)
-      populateGenreStyles()
-      genreSelect.selectedIndex = /** @type {number} */ (direction) < 0 ? genreSelect.options.length - 1 : 0
-    } else {
-      genreSelect.selectedIndex = next
-    }
-    genreSelect.dispatchEvent(new Event('change', { bubbles: true }))
-  })
-}
-updateStyleButtons()
-genreGroup.addEventListener('change', () => {
-  populateGenreStyles()
-  genreSelect.dispatchEvent(new Event('change', { bubbles: true }))
-})
 genreSelect.addEventListener('change', () => {
-  updateStyleButtons()
   const genre = genres.find((item) => item.id === genreSelect.value)
   if (!genre) return
   const presetId = genreProgressions[/** @type {keyof typeof genreProgressions} */ (genre.id)]
   const recommended = presets.find(item => item.id === presetId)
   if (recommended) {
-    presetGroupSelect.value = recommended.group
-    populatePresets(recommended.id)
+    setPreset(recommended.id)
     applyPreset(recommended.id)
   }
   progression.genre = genre.id
@@ -721,7 +593,6 @@ genreSelect.addEventListener('change', () => {
   swing.value = String(genre.swing)
   tempoNumber.value = tempo.value
   renderSwing()
-  updatePresetButtons()
   buddyController?.styleChanged()
 })
 bassTimbre.addEventListener('change', () => {
@@ -733,6 +604,7 @@ swing.addEventListener('input', () => {
   renderSwing()
 })
 function renderSwing() {
+  refreshBassDetail()
   document.querySelector('#swing-print .offbeats')?.setAttribute('transform', `translate(${18 * (swungBassBeat(1, Number(swing.value)) - 0.5)} 0)`)
   const output = document.querySelector('#swing-value')
   if (output) output.textContent = `${swing.value}%`
@@ -803,6 +675,7 @@ const bassPattern = /** @type {HTMLSelectElement} */ (
 bassPattern.addEventListener('change', () => {
   progression.bassPattern = bassPattern.value
   if (bassPattern.value === 'off') bass.silence()
+  refreshBassDetail()
 })
 const drumTimbre = /** @type {HTMLSelectElement} */ (
   document.querySelector('#drum-timbre')
@@ -813,26 +686,6 @@ drumTimbre.addEventListener('change', () => {
 })
 
 const trackButtons = Array.from(document.querySelectorAll('.track-select:not(.ornament-select)'))
-for (const input of Array.from(document.querySelectorAll('input[name="bass-feel"]'))) {
-  input.addEventListener('change', () => { progression.bassFeel = /** @type {HTMLInputElement} */ (input).value })
-}
-for (const [id, property] of [['bass-length', 'bassLength'], ['bass-dynamics', 'bassDynamics']]) {
-  const input = /** @type {HTMLInputElement} */ (document.getElementById(id))
-  const output = /** @type {HTMLOutputElement} */ (document.getElementById(`${id}-value`))
-  input.addEventListener('input', () => {
-    if (property === 'bassLength') progression.bassLength = Number(input.value)
-    else progression.bassDynamics = Number(input.value)
-    output.value = `${input.value}%`
-  })
-}
-const bassSlide = /** @type {HTMLInputElement} */ (document.getElementById('bass-slide'))
-bassSlide.addEventListener('change', () => { progression.bassSlide = bassSlide.checked })
-for (const input of Array.from(document.querySelectorAll('#detail-bass .bass-tones input[type="checkbox"]:not(#bass-slide)'))) {
-  input.addEventListener('change', () => {
-    progression.bassTones = Array.from(document.querySelectorAll('#detail-bass .bass-tones input[type="checkbox"]:not(#bass-slide):checked'))
-      .map((item) => /** @type {HTMLInputElement} */ (item).value)
-  })
-}
 for (const button of trackButtons) {
   button.addEventListener('click', () => {
     const selected = /** @type {HTMLElement} */ (button).dataset.track
@@ -910,42 +763,6 @@ function updatePartIcons() {
   }
 }
 updatePartIcons()
-
-/** Render the first bar from the same pattern and articulation used in playback. */
-function renderBassPhrase() {
-  const svg = document.querySelector('#bass-phrase')
-  if (!svg) return
-  const events = bassFeelEvents(bassEvents(progression.bassPattern, 0, 0), progression.bassFeel)
-  const chords = [{ beat: 0, id: progression.slots[0] }]
-  progression.beatSlots[0].forEach((id, beat) => { if (id && beat) chords.push({ beat, id }) })
-  let lastChord = '', noteIndex = 0
-  const shapes = events.map((event, index) => {
-    const beat = swungBassBeat(event.pulse, progression.swing)
-    const chord = chords.filter(change => change.beat <= beat).at(-1) || chords[0]
-    const harmony = bassHarmonyNotes(chord.id, progression.keyForBar(0))
-    if (lastChord !== chord.id) { lastChord = chord.id; noteIndex = 0 }
-    const offset = progression.bassTones.length
-      ? bassToneOffset(noteIndex, progression.bassTones, harmony)
-      : event.tone === 'root' ? 0 : bassToneOffset(1, [event.tone], harmony)
-    noteIndex++
-    const pitch = 36 + ((harmony[0] % 12 + 12) % 12) + event.midi + offset
-    const duration = bassArticulation(event.duration, event.velocity, progression.bassLength, progression.bassDynamics)
-    const nextBeat = events[index + 1] ? swungBassBeat(events[index + 1].pulse, progression.swing) : 4
-    const nextChord = chords.find(change => change.beat > beat)?.beat ?? 4
-    return { x: beat * 80, width: Math.max(3, Math.min(duration.duration, nextBeat - beat, nextChord - beat, 4 - beat) * 80 - 2), pitch, velocity: duration.velocity }
-  })
-  const pitches = shapes.map(shape => shape.pitch)
-  const low = Math.min(...pitches, 36), high = Math.max(...pitches, 48)
-  svg.innerHTML = [0, 1, 2, 3, 4].map(i => `<path class="bass-grid" d="M${i * 80} 0v56"/>`).join('') +
-    shapes.map(shape => `<rect class="bass-note" x="${shape.x}" y="${44 - (shape.pitch - low) / Math.max(12, high - low) * 36}" width="${shape.width}" height="8" rx="3" opacity="${Math.max(.4, shape.velocity)}"/>`).join('')
-}
-document.addEventListener('input', event => {
-  if (event.target instanceof Element && event.target.closest('#detail-bass, #swing')) renderBassPhrase()
-})
-document.addEventListener('change', event => {
-  if (event.target instanceof Element && event.target.closest('#detail-bass, #bass-pattern, #genre, #chord-slots, #preset, #preset-group, #key')) renderBassPhrase()
-})
-renderBassPhrase()
 
 function renderDrumSteps() {
   drumGrid.hits.value = progression.drumSteps ?? rhythmPatterns.find(pattern => pattern.id === progression.rhythm)?.hits ?? []
@@ -1169,6 +986,7 @@ async function loadArrangement(file) {
       const el = /** @type {HTMLInputElement} */ (element)
       const item = data.controls.find((/** @type {{id:string}} */ item) => item.id === el.id)
       if (!item || typeof item.value !== 'string' || typeof item.checked !== 'boolean') throw new Error('control')
+      if (el.id === 'genre' && !genres.some(itemGenre => itemGenre.id === item.value && itemGenre.group === data.controls.find((/** @type {{id:string}} */ entry) => entry.id === 'genre-group')?.value)) throw new Error('style')
       if (el instanceof HTMLSelectElement && el.id !== 'genre' && !(el.id === 'bass-pattern' && item.value === '') && !Array.from(el.options).some(o => o.value === item.value)) throw new Error('option')
       if (el.type === 'range' || el.type === 'number') {
         const n = Number(item.value)
@@ -1182,6 +1000,8 @@ async function loadArrangement(file) {
     for (const element of savedControls) {
       const el = /** @type {HTMLInputElement} */ (element)
       const item = data.controls.find((/** @type {{id:string}} */ item) => item.id === el.id)
+      if (el.id === 'genre-group') continue
+      if (el.id === 'genre') { await chooseStyle(item.value); continue }
       el.value = item.value; el.checked = item.checked
       el.dispatchEvent(new Event(el.type === 'range' || el.type === 'number' ? 'input' : 'change', {bubbles:true}))
     }
@@ -1218,9 +1038,7 @@ document.addEventListener('reference-preset', event => {
   const id = /** @type {CustomEvent<string>} */ (event).detail
   const selected = presets.find(p => p.id === id)
   if (!selected) return
-  presetGroupSelect.value = selected.group; populatePresets(id)
-  presetSelect.dispatchEvent(new Event('change', {bubbles:true}))
-  updatePresetButtons()
+  choosePreset(id)
 })
 
 mountTimbreSteppers()

@@ -20,6 +20,8 @@ The browser loads authored native ES modules from `dist/`. The transport, score,
 | Synth/mono/timbre | `audio.js`, `tone-engine.js`, `timbres.js` | `mono-line`, `tone-engine`, timbre tests |
 | Basic accompaniment | `backing.js`, `groove.js`, `rhythm.js` | matching tests |
 | Ornament arrangement | `ornaments.js`, `ornament-audio.js`, `style-ornaments.js` | matching tests |
+| Style and progression selectors | `arrangement-selects.js`, arrangement handlers in `app.js` | browser |
+| Bass detail and phrase preview | `bass-detail.js`, `groove.js` | browser |
 | Basic parts and reference controls | `main-controls.js` | browser |
 | Mobile score editor | `mobile-chord-editor.js`, `chord-grid.js` | browser |
 | Reference audio | `reference-player.js`, `reference-analysis.js` and worker modules | `reference-player`, analysis tests |

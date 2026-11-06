@@ -93,20 +93,6 @@
               aria-label="ベースの詳細"
               hidden
             >
-              <h2 class="track-detail-title">ベースの動きをつくってみよう。</h2>
-              <div class="bass-preview" aria-label="ベースの1小節目のフレーズ"><span>1小節目のフレーズ</span><svg id="bass-phrase" viewBox="0 0 320 56" role="img" aria-label="ベースフレーズのプレビュー"></svg></div>
-              <fieldset class="bass-tones">
-                <legend>フレーズに使う音</legend>
-                <label><input type="checkbox" value="octave" /><span>オクターブ</span></label>
-                <label><input type="checkbox" value="fifth" /><span>5th</span></label>
-                <label><input type="checkbox" value="third" /><span>3rd</span></label>
-                <label><input id="bass-slide" type="checkbox" /><span>スライド</span></label>
-              </fieldset>
-              <div class="bass-expression">
-                <fieldset class="bass-feel"><legend>拍の位置</legend><div class="bass-feel-segments"><label><input type="radio" name="bass-feel" value="straight" checked /><span>表</span></label><label><input type="radio" name="bass-feel" value="offbeat" /><span>裏</span></label></div></fieldset>
-                <label class="bass-range" for="bass-length"><span>音の長さ</span><span class="bass-range-value"><input id="bass-length" type="range" min="0" max="100" step="1" value="50" /><output id="bass-length-value" for="bass-length">50%</output></span></label>
-                <label class="bass-range" for="bass-dynamics"><span>強弱</span><span class="bass-range-value"><input id="bass-dynamics" type="range" min="0" max="100" step="1" value="50" /><output id="bass-dynamics-value" for="bass-dynamics">50%</output></span></label>
-              </div>
             </div>
             <div
               id="detail-chord"
@@ -164,10 +150,7 @@
         </section>
         <section id="detail-melody" class="instrument" aria-labelledby="instrument-title" hidden>
           <div class="melody-heading"><h2 id="instrument-title" class="track-detail-title">Ottoとセッション。</h2><div class="melody-chord"><span>いまのコード</span><strong id="melody-current-chord"></strong></div></div>
-          <div id="buddy-inline" class="buddy-inline">
-      <div class="talk-companion"><div class="talk-face" aria-hidden="true"><div class="talk-avatar" data-mood="idle"></div></div><p class="talk-bubble">一緒に遊ぼう。</p><button type="button" id="otto-continue" hidden>もっと聴かせて！</button><button type="button" id="otto-join" hidden>自分も弾く！</button><button type="button" id="otto-imitate" hidden>真似してみて！</button></div>
-      <p id="buddy-status" class="sr-only" role="status" aria-live="polite"></p>
-          </div>
+          <div id="buddy-inline" class="buddy-inline"></div>
           <div class="melody-legend"><span class="legend-chord">コードトーン</span><span class="legend-tension">テンション</span><span>同じ音も、コードが変わると違う響きに。</span></div>
           <div class="melody-view" role="group" aria-label="演奏する鍵盤"><button type="button" data-melody-view="pads" aria-pressed="true">8 Pad</button><button type="button" data-melody-view="piano" aria-pressed="false">3オクターブ鍵盤</button></div>
           <div id="piano-scroll" class="piano-scroll" hidden><div id="piano-keys" role="group" aria-label="C3からC6の鍵盤。押したまま滑らせてグライド。矢印キーで移動、スペースかEnterで演奏。"></div></div>

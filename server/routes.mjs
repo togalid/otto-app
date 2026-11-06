@@ -1,6 +1,6 @@
 // Explicit public files: server code, configuration, and user files are never exposed.
 export const routes = new Map([
-  ...['mobile-chord-editor.js', 'main-controls.js', 'part-steppers.js', 'chord-grid.js', 'choice-menu.js', 'transport-view.js', 'drum-grid.js', 'chord-monitor.js', 'appearance-dialog.js', 'song-dialog.js', 'melody-view.js', 'reference-player.js', 'reference-analysis.js', 'reference-analysis-worker.js', 'reference-analysis-client.js', 'ornaments.js', 'ornament-audio.js', 'ornament-ui.js', 'style-ornaments.js', 'otto-style.js'].map(file => [`/${file}`, [file, 'text/javascript']]),
+  ...['arrangement-selects.js', 'bass-detail.js', 'mobile-chord-editor.js', 'main-controls.js', 'part-steppers.js', 'chord-grid.js', 'choice-menu.js', 'transport-view.js', 'drum-grid.js', 'chord-monitor.js', 'appearance-dialog.js', 'song-dialog.js', 'melody-view.js', 'reference-player.js', 'reference-analysis.js', 'reference-analysis-worker.js', 'reference-analysis-client.js', 'ornaments.js', 'ornament-audio.js', 'ornament-ui.js', 'style-ornaments.js', 'otto-style.js'].map(file => [`/${file}`, [file, 'text/javascript']]),
   ['/keyboard.js', ['keyboard.js', 'text/javascript']],
   ['/buddy.js', ['buddy.js', 'text/javascript']],
   ['/vendor/vue.runtime.esm-browser.prod.js', ['vendor/vue.runtime.esm-browser.prod.js', 'text/javascript']],

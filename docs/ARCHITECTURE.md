@@ -1,0 +1,40 @@
+# oto architecture and change map
+
+## Runtime
+
+The browser loads authored native ES modules from `dist/`. No framework hydration, bundle build, database, external fonts, remote LLM, or remote sample fetch is needed. Tone.js is a local, lazy-loaded synthesis dependency (about 340 KiB); keep its existing promise deduplication. Replacing it would change the instruments and has no measured justification.
+
+`app.js` composes controls, instruments, progression, and Otto. Musical events use the AudioContext clock and look-ahead scheduling. Visual work must never become the audio clock. Reference playback has its own transport. Large reference analysis belongs off the UI thread; worker output is accepted only for the current file/selection.
+
+## Ownership
+
+| Change | Read first | Focused tests |
+| --- | --- | --- |
+| Harmony, chord labels | `music.js`, `presets.js` | `music`, `presets` |
+| Transport, live updates | `progression.js` | `progression` |
+| Otto phrase/interaction | `buddy.js`, `otto-style.js` | `buddy`, `otto-style` |
+| Melody pad feedback | `melody-view.js`, relevant `app.js` handler | `melody-view` |
+| Synth/mono/timbre | `audio.js`, `tone-engine.js`, `timbres.js` | `mono-line`, `tone-engine`, timbre tests |
+| Basic accompaniment | `backing.js`, `groove.js`, `rhythm.js` | matching tests |
+| Ornament arrangement | `ornaments.js`, `ornament-audio.js`, `style-ornaments.js` | matching tests |
+| Reference audio | `reference-player.js`, `reference-analysis.js` and worker modules | `reference-player`, analysis tests |
+| File serving/stems | `server.mjs`, `server/` | server tests |
+| Appearance | `index.html`, `style.css`, `skins.css` | browser |
+| Portable settings | end of `app.js` | temporary JSON round trip |
+
+Test names are `tests/<name>.test.mjs`. Sources referenced above live under `dist/` unless noted. Keep public analysis exports compatible with existing consumers.
+
+## Costs and invalidation
+
+- A melody note updates feedback; pad labels/palette change only when key/chord changes. The view retains one current palette, not an accumulating cache.
+- Quality choices regenerate only when their original/current chord ids change, rather than allocating and serializing all choices to discover no change.
+- Otto candidate evaluation can share scores inside one phrase computation; never carry harmony-sensitive results across score/style changes without a full key.
+- Static assets use browser revalidation; changed files must still become visible immediately. Stem responses must never enter the public asset cache.
+- Audio buffers and separated stems remain in memory for the selected reference. Replacement and stale results must release references. Do not persist or log uploaded audio.
+- Local Demucs is the expensive AI computation. It runs on explicit user analysis, not render, playback, startup, or tests. There is no paid inference API in the app. Coding-agent cost is reduced by this change map, narrow reads, and focused checks, not by deleting correctness tests.
+
+## Compatibility and remaining boundaries
+
+Version-1 settings retain control IDs and musical IDs. UI labels may change independently. No dependency migration or musical preset rewrite is part of the performance refactor.
+
+`app.js` still owns substantial composition and settings wiring; split future features at real ownership boundaries instead of mechanically splitting by line count. CSS has historical overrides: removing them needs computed-style comparison across skins and screen sizes. Audio-node counts and real-device latency still require browser profiling; unit timing is not a latency guarantee.

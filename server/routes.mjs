@@ -1,0 +1,23 @@
+// Explicit public files: server code, configuration, and user files are never exposed.
+export const routes = new Map([
+  ...['melody-view.js', 'reference-player.js', 'reference-analysis.js', 'reference-analysis-worker.js', 'reference-analysis-client.js', 'ornaments.js', 'ornament-audio.js', 'ornament-ui.js', 'style-ornaments.js', 'otto-style.js'].map(file => [`/${file}`, [file, 'text/javascript']]),
+  ['/keyboard.js', ['keyboard.js', 'text/javascript']],
+  ['/buddy.js', ['buddy.js', 'text/javascript']],
+  ['/vendor/tone.js', ['vendor/tone.js', 'text/javascript']],
+  ['/vendor/TONE-LICENSE.txt', ['vendor/TONE-LICENSE.txt', 'text/plain']],
+  ['/tone-engine.js', ['tone-engine.js', 'text/javascript']],
+  ['/groove.js', ['groove.js', 'text/javascript']],
+  ['/timbres.js', ['timbres.js', 'text/javascript']],
+  ['/backing.js', ['backing.js', 'text/javascript']],
+  ['/rhythm.js', ['rhythm.js', 'text/javascript']],
+  ['/progression.js', ['progression.js', 'text/javascript']],
+  ['/', ['index.html', 'text/html']],
+  ['/index.html', ['index.html', 'text/html']],
+  ['/style.css', ['style.css', 'text/css']],
+  ['/skins.css', ['skins.css', 'text/css']],
+  ['/skins.js', ['skins.js', 'text/javascript']],
+  ['/app.js', ['app.js', 'text/javascript']],
+  ['/audio.js', ['audio.js', 'text/javascript']],
+  ['/music.js', ['music.js', 'text/javascript']],
+  ['/presets.js', ['presets.js', 'text/javascript']],
+])

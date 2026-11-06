@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f7f2" />
+    <meta
+      name="description"
+      content="音楽理論はいりません。カラフルなパッドをタップして、音で遊ぶ小さな音楽の実験室。"
+    />
+    <title>oto — 音であそぼう</title>
+    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./skins.css" />
+    <script type="module" src="./app.js"></script>
+    <script type="module" src="./skins.js"></script>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <a class="logo" href="./" aria-label="oto ホーム">oto<span>●</span></a
+        ><div class="buddy-guide"><button id="oto-buddy" type="button" aria-label="Otto（オットー）にあいさつ" title="やあ。" data-mood="idle">
+          <svg viewBox="0 0 28 28" aria-hidden="true" focusable="false">
+            <circle class="buddy-case" cx="14" cy="14" r="11"/>
+            <path class="record-grooves" d="M5.5 10A9 9 0 0 1 12 5.5M22.5 18A9 9 0 0 1 16 22.5"/>
+            <path class="buddy-eyes" d="M10.5 12v3m7-3v3"/>
+            <circle class="record-center" cx="14" cy="15" r="1.2"/>
+            <path class="buddy-error-eyes" d="m9 12 3 3m0-3-3 3m7-3 3 3m0-3-3 3"/>
+            <path class="buddy-error-mouth" d="M12 19h4"/>
+            <path class="record-fringe" d="M8 9q3-5 10-1l2 3q-5-3-12-2z"/>
+            <path class="record-spikes" d="M6 10C7 6 12 4 18 6L22 9L17 8L18 11L13 8L13 11L10 9L8 12Z"/>
+            <path class="record-lashes" d="m9 12-2-1m3 0-1-2m9 3 2-1m-3 0 1-2"/>
+            <g class="record-glasses"><circle cx="10" cy="13" r="3"/><circle cx="18" cy="13" r="3"/><path d="M13 13h2"/></g>
+            <path class="record-beret" d="M5 7q0-6 12-4l1-2 1 1-1 2q6 2 5 5z"/>
+            <path class="record-bow" d="M20 5q-6-6-5 1l5 1q7 4 5-3z"/>
+            <g class="record-headphones"><path d="M3 14V11a11 11 0 0 1 22 0v3"/><rect x="1" y="11" width="4" height="8" rx="2"/><rect x="23" y="11" width="4" height="8" rx="2"/></g>
+          </svg>
+        </button><p id="buddy-message" class="buddy-message" role="status" aria-live="polite">スタイルを選んで再生してみよう。鳴らしながら各パートの奏法を変えると、曲の表情が変わるよ。</p></div>
+        <button id="song-open" class="appearance-open" type="button" aria-haspopup="dialog" aria-controls="song-dialog">設定保存／ロード</button>
+        <button id="appearance-open" class="appearance-open" type="button" aria-haspopup="dialog" aria-controls="appearance-dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5zM5 10h14M10 10v9"/></svg>外観</button>
+      </header>
+      <main>
+        <details id="reference-player" class="instrument reference-player">
+          <summary>お手本 · MP3を読み込む</summary>
+          <label class="reference-drop" id="ref-drop"><input id="ref-file" type="file" accept="audio/*,.mp3"><span>音声ファイルをここにドロップ<br>またはクリックして選択</span></label>
+          <p id="ref-status" role="status"></p>
+          <fieldset disabled>
+            <legend class="sr-only">お手本の再生</legend>
+            <div class="reference-row"><button id="ref-region" type="button">再生位置を8小節の頭に</button><label>頭（秒） <input id="ref-head" type="number" min="0" step="0.001" value="0"></label><button id="ref-apply" type="button" disabled>合わせる</button></div>
+            <div class="reference-row"><output id="ref-bpm-result" role="status"></output><output id="ref-split-status" role="status"></output></div>
+            <div id="ref-stems" class="reference-row" style="display:none">
+              <label><input type="checkbox" checked> 歌</label>
+              <label><input type="checkbox" checked> ドラム</label>
+              <label><input type="checkbox" checked> ベース</label>
+              <label><input type="checkbox" checked> その他</label>
+            </div><div class="reference-ruler"><output id="ref-region-label"></output><div class="reference-timeline"><div id="ref-band" hidden aria-hidden="true"></div><input id="ref-ruler" type="range" min="0" max="1" step="0.001" value="0" aria-label="8小節の開始位置"></div></div><div class="reference-row"><button id="ref-play" type="button">▶ お手本を再生</button><input id="ref-seek" type="range" min="0" max="1" step="0.01" value="0" aria-label="お手本の再生位置"><output id="ref-clock">0:00.0 / 0:00.0</output><label>原曲の音量 <input id="ref-volume" type="range" min="0" max="1" step="0.01" value="0.5"></label></div>
+          </fieldset>
+        </details>
+        <section
+          class="instrument groove progression"
+          aria-label="リズム設定"
+        >
+          <div class="transport"><label class="count-in-option"><input id="count-in" type="checkbox" checked> カウントイン</label><button id="progression-play" type="button" aria-keyshortcuts="Space" title="スペースキーで再生・停止"><span class="transport-label">▶ 再生</span><span class="beat-strip" aria-hidden="true"><i></i><i></i><i></i><i></i></span></button></div>
+          <div class="genre-row" role="group" aria-label="ジャンルを選択">
+            <label class="groove-field">ジャンル<select id="genre-group" aria-label="ジャンルの大分類"></select></label>
+            <div class="groove-field style-field"><label for="genre">スタイル</label><div class="style-picker"><select id="genre" aria-label="ジャンルのスタイル"></select><div class="style-stepper" role="group" aria-label="スタイルを切り替え"><button id="style-prev" type="button" aria-label="前のスタイル">←</button><button id="style-next" type="button" aria-label="次のスタイル">→</button></div></div></div>
+          </div>
+          <div class="groove-settings">
+            <div class="groove-timing">
+              <label class="timing-control" for="tempo"
+                >テンポ
+                <input
+                  id="tempo"
+                  type="range"
+                  min="40"
+                  max="200"
+                  value="100"
+                  step="0.1"
+                /><input id="tempo-value" type="number" inputmode="decimal" min="40" max="200" step="0.1" value="100" aria-label="テンポを数値で入力" /></label
+              >
+              <label class="timing-control swing-control" for="swing"
+                ><span class="swing-caption">ノリ <svg id="swing-print" viewBox="0 0 37 8" aria-hidden="true" focusable="false"><path d="M1 1v6m18-6v6m17-6v6"/><path class="offbeats" d="M10 3v4m18-4v4"/></svg></span>
+                <input
+                  id="swing"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="0"
+                  step="1"
+                /><output id="swing-value" for="swing">0%</output></label
+              >
+            </div>
+          </div>
+          <div id="track-grid" class="track-grid" aria-label="パートの設定">
+            <div class="drum-controls" role="group" aria-label="ドラムパート">
+              <button
+                class="part-heading track-select"
+                type="button"
+                data-track="drums"
+                aria-controls="detail-drums"
+                aria-label="ドラムの詳細を表示"
+                title="ドラムの設定を表示"
+                aria-pressed="false"
+              >
+                <svg class="part-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="stamp" d="M3 9q9 5 18 0l-2 9q-7 5-14 0z"/><ellipse class="print" cx="12" cy="7" rx="9" ry="3"/><path class="cut" d="m6 12 2 5 3-4m3 0 2 4 2-5"/></svg><span class="track-name" aria-hidden="true">ドラム</span>
+              </button>
+              <label class="select-control"
+                ><span class="sr-only">ドラムの音色</span
+                ><select id="drum-timbre">
+                  <option value="acoustic">生ドラム</option>
+                  <option value="electronic">電子ドラム</option><option value="chip">8bit ノイズ</option>
+                </select></label
+              >
+              <label
+                class="select-control"
+                for="rhythm-pattern"
+                title="ドラムパターン"
+                ><span class="sr-only">ドラムパターン</span>
+                <select id="rhythm-pattern"></select
+              ></label>
+              <div class="part-mix" role="group" aria-label="ドラムのミックス"><button type="button" class="mix-button" id="drum-mute" aria-label="ドラムをミュート" aria-pressed="false" title="ミュート">M</button><button type="button" class="mix-button" id="drum-solo" aria-label="ドラムをソロ" aria-pressed="false" title="ソロ">S</button><label class="volume-knob" title="ドラムの音量"><input id="drum-volume" type="range" min="0" max="100" value="35" aria-label="ドラムの音量" /><span aria-hidden="true"></span></label></div>
+            </div>
+            <div class="bass-controls" role="group" aria-label="ベースパート">
+              <button
+                class="part-heading track-select"
+                type="button"
+                data-track="bass"
+                aria-controls="detail-bass"
+                aria-label="ベースの詳細を表示"
+                title="ベースの設定を表示"
+                aria-pressed="false"
+              >
+                <svg class="part-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="stamp" d="m13 9 6-7 3 2-7 8q2 4-2 8-4 4-8 1t-2-8q2-4 6-3z"/><path class="print" d="m5 15 4 4 2-2-4-4z"/><path class="cut" d="m10 14 8-9"/></svg><span class="track-name" aria-hidden="true">ベース</span>
+              </button>
+              <label
+                class="select-control"
+                for="bass-timbre"
+                title="ベースの音色"
+                ><span class="sr-only">ベースの音色</span
+                ><select id="bass-timbre">
+                  <option value="acoustic">アコースティック</option>
+                  <option value="electric" selected>
+                    エレクトリックベース
+                  </option>
+                  <option value="synth">シンセベース</option>
+                </select></label
+              >
+              <label class="select-control"
+                ><span class="sr-only">ベースパターン</span
+                ><select id="bass-pattern">
+                  <optgroup label="ストレート">
+                    <option value="straight4">4分刻み</option>
+                    <option value="straight8" selected>8分刻み</option>
+                    <option value="straight16">16分刻み</option>
+                  </optgroup>
+                  <optgroup label="ベースライン">
+                    <option value="line_walk">ウォーキング</option>
+                    <option value="line_sing">メロディック</option>
+                    <option value="line_hook">跳ねるオクターブ</option>
+                    <option value="line_relay">階段フレーズ</option>
+                    <option value="line_octave">オクターブ・ライン</option>
+                  </optgroup>
+                  <optgroup label="コードプログレッション">
+                    <option value="support_hold">ロングトーン</option>
+                    <option value="support_half">2拍ずつ</option>
+                    <option value="support_pulse">ゆったりパルス</option>
+                  </optgroup>
+                  <option value="off">なし</option>
+                </select></label
+              >
+              <div class="part-mix" role="group" aria-label="ベースのミックス"><button type="button" class="mix-button" id="bass-mute" aria-label="ベースをミュート" aria-pressed="false" title="ミュート">M</button><button type="button" class="mix-button" id="bass-solo" aria-label="ベースをソロ" aria-pressed="false" title="ソロ">S</button><label class="volume-knob" title="ベースの音量"><input id="bass-volume" type="range" min="0" max="100" value="50" aria-label="ベースの音量" /><span aria-hidden="true"></span></label></div>
+            </div>
+          <div
+            class="chord-sound-controls part-controls"
+            role="group"
+            aria-label="コードの音色とバッキング"
+          >
+            <button
+              class="part-heading track-select"
+              type="button"
+              data-track="chord"
+              aria-controls="detail-chord"
+              aria-label="コードの詳細を表示"
+              title="コードの設定を表示"
+              aria-pressed="true"
+            >
+              <svg class="part-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect class="stamp" x="1" y="4" width="22" height="16" rx="2"/><path class="cut" d="M7 10v8m5-8v8m5-8v8"/><path class="print" d="M5 4h3v8H5zm10 0h3v8h-3z"/></svg><span class="track-name" aria-hidden="true">コード</span>
+            </button>
+            <label class="select-control" for="chord-timbre"
+              ><span class="sr-only">コードの音色</span
+              ><select id="chord-timbre"></select
+            ></label>
+            <label class="select-control" for="chord-backing"
+              ><span class="sr-only">コードのバッキング</span
+              ><select id="chord-backing"></select
+            ></label>
+            <div class="part-mix" role="group" aria-label="コードのミックス"><button type="button" class="mix-button" id="chord-mute" aria-label="コードをミュート" aria-pressed="false" title="ミュート">M</button><button type="button" class="mix-button" id="chord-solo" aria-label="コードをソロ" aria-pressed="false" title="ソロ">S</button><label class="volume-knob" title="コードの音量"><input id="chord-volume" type="range" min="0" max="100" value="40" aria-label="コードの音量" /><span aria-hidden="true"></span></label></div>
+          </div>
+            <div class="melody-controls" role="group" aria-label="メロディパート">
+              <button class="part-heading track-select melody-track" type="button" data-track="melody" aria-controls="detail-melody" aria-label="メロディの詳細を表示" title="メロディの設定を表示" aria-pressed="false">
+                <svg class="part-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="stamp" d="M8 5 21 2v15c0 4-8 6-8 2 0-2 3-4 6-4V7l-9 2v10c0 4-8 6-8 2 0-2 3-4 6-4z"/><path class="print" d="m8 5 13-3v3L8 8z"/></svg><span class="track-name" aria-hidden="true">メロディ</span>
+              </button>
+              <label class="select-control" for="melody-timbre"><span class="sr-only">メロディの音色</span><select id="melody-timbre"></select></label>
+              <label class="select-control" for="melody-mode"><span class="sr-only">メロディの演奏方法</span><select id="melody-mode"><option value="all-you">自分が弾く</option><option value="all-pc">Ottoが弾く</option></select></label>
+              <div class="part-mix" role="group" aria-label="メロディのミックス"><button type="button" class="mix-button" id="melody-mute" aria-label="メロディをミュート" aria-pressed="false" title="ミュート">M</button><button type="button" class="mix-button" id="melody-solo" aria-label="メロディをソロ" aria-pressed="false" title="ソロ">S</button><label class="volume-knob" title="メロディの音量"><input id="melody-volume" type="range" min="0" max="100" value="40" aria-label="メロディの音量" /><span aria-hidden="true"></span></label></div>
+            </div>
+          </div>
+          <p id="progression-status" role="status"></p>
+        </section>
+        <section class="instrument track-details" aria-label="トラックの詳細">
+            <div
+              id="detail-drums"
+              class="drum-detail"
+              role="region"
+              aria-label="ドラムの詳細"
+              hidden
+            ><h2 class="track-detail-title">好きなリズムを作ってみよう。</h2><div id="drum-sequencer" class="drum-sequencer" role="group" aria-label="16ステップのドラムシーケンサー"></div></div>
+            <div
+              id="detail-bass"
+              class="bass-detail"
+              role="region"
+              aria-label="ベースの詳細"
+              hidden
+            >
+              <h2 class="track-detail-title">ベースの動きをつくってみよう。</h2>
+              <div class="bass-preview" aria-label="ベースの1小節目のフレーズ"><span>1小節目のフレーズ</span><svg id="bass-phrase" viewBox="0 0 320 56" role="img" aria-label="ベースフレーズのプレビュー"></svg></div>
+              <fieldset class="bass-tones">
+                <legend>フレーズに使う音</legend>
+                <label><input type="checkbox" value="octave" /><span>オクターブ</span></label>
+                <label><input type="checkbox" value="fifth" /><span>5th</span></label>
+                <label><input type="checkbox" value="third" /><span>3rd</span></label>
+                <label><input id="bass-slide" type="checkbox" /><span>スライド</span></label>
+              </fieldset>
+              <div class="bass-expression">
+                <fieldset class="bass-feel"><legend>拍の位置</legend><div class="bass-feel-segments"><label><input type="radio" name="bass-feel" value="straight" checked /><span>表</span></label><label><input type="radio" name="bass-feel" value="offbeat" /><span>裏</span></label></div></fieldset>
+                <label class="bass-range" for="bass-length"><span>音の長さ</span><span class="bass-range-value"><input id="bass-length" type="range" min="0" max="100" step="1" value="50" /><output id="bass-length-value" for="bass-length">50%</output></span></label>
+                <label class="bass-range" for="bass-dynamics"><span>強弱</span><span class="bass-range-value"><input id="bass-dynamics" type="range" min="0" max="100" step="1" value="50" /><output id="bass-dynamics-value" for="bass-dynamics">50%</output></span></label>
+              </div>
+            </div>
+            <div
+              id="detail-chord"
+              role="region"
+              aria-label="コード進行"
+            >
+              <div class="chord-heading"><h2 class="track-detail-title">コードをつなげてみよう。</h2><div class="backing-display"><div id="backing-monitor" role="img" aria-label="バッキングの鍵盤表示"></div></div></div>
+              <div class="chord-settings">
+                <div class="chord-field chord-start" hidden><label for="preset-group">開始度数</label><select id="preset-group" aria-label="プリセットの開始度数" aria-controls="preset"></select></div>
+                <div class="chord-field chord-preset"><label for="preset">コード進行</label><div class="preset-picker"><select id="preset" aria-label="コード進行プリセット"></select><div class="style-stepper" role="group" aria-label="コード進行を切り替え"><button id="preset-prev" type="button" aria-label="前のコード進行">←</button><button id="preset-next" type="button" aria-label="次のコード進行">→</button></div></div></div>
+                <div class="chord-field chord-key"><label for="key">キー</label><div class="key-control" role="group" aria-label="キー">
+                  <select id="key" aria-label="キー（メジャー）"></select>
+                  <div class="key-stepper" role="group" aria-label="キーを半音ずつ変更">
+                    <button id="key-down" type="button" aria-label="キーを半音下げる">−</button>
+                    <button id="key-up" type="button" aria-label="キーを半音上げる">＋</button>
+                  </div>
+                </div>
+                </div>
+                <div class="chord-field chord-notation"><span class="chord-field-label">表示</span><fieldset id="notation" class="segmented-control">
+                  <legend class="sr-only">コードの表示形式</legend>
+                  <label
+                    ><input
+                      type="radio"
+                      name="notation"
+                      value="number"
+                      checked
+                    /><span>数字</span></label
+                  >
+                  <label
+                    ><input type="radio" name="notation" value="roman" /><span
+                      >ローマ字</span
+                    ></label
+                  >
+                  <label
+                    ><input type="radio" name="notation" value="chord" /><span
+                      >コード</span
+                    ></label
+                  >
+                </fieldset></div>
+              </div>
+              <div
+                class="chord-grid-scroll"
+                tabindex="0"
+                role="region"
+                aria-label="コード進行（横スクロール可能）"
+              >
+                <div
+                  id="chord-slots"
+                  class="chord-slots"
+                  role="group"
+                  aria-label="8小節のコード進行"
+                ></div>
+              </div>
+            </div>
+        </section>
+        <section id="detail-melody" class="instrument" aria-labelledby="instrument-title" hidden>
+          <div class="melody-heading"><h2 id="instrument-title" class="track-detail-title">Ottoとセッション。</h2><div class="melody-chord"><span>いまのコード</span><strong id="melody-current-chord"></strong></div></div>
+          <div id="buddy-inline" class="buddy-inline">
+      <div class="talk-companion"><div class="talk-face" aria-hidden="true"><div class="talk-avatar" data-mood="idle"></div></div><p class="talk-bubble">一緒に遊ぼう。</p><button type="button" id="otto-continue" hidden>もっと聴かせて！</button><button type="button" id="otto-join" hidden>自分も弾く！</button><button type="button" id="otto-imitate" hidden>真似してみて！</button></div>
+      <p id="buddy-status" class="sr-only" role="status" aria-live="polite"></p>
+          </div>
+          <div class="melody-legend"><span class="legend-chord">コードトーン</span><span class="legend-tension">テンション</span><span>同じ音も、コードが変わると違う響きに。</span></div>
+          <div class="melody-view" role="group" aria-label="演奏する鍵盤"><button type="button" data-melody-view="pads" aria-pressed="true">8 Pad</button><button type="button" data-melody-view="piano" aria-pressed="false">3オクターブ鍵盤</button></div>
+          <div id="piano-scroll" class="piano-scroll" hidden><div id="piano-keys" role="group" aria-label="C3からC6の鍵盤。押したまま滑らせてグライド。矢印キーで移動、スペースかEnterで演奏。"></div></div>
+          <div
+            id="pads"
+            class="pads"
+            role="group"
+            aria-label="8つの音のパッド"
+          ></div>
+          <p id="melody-feedback" class="melody-feedback" aria-live="polite"></p>
+          <p id="status" role="status"></p>
+        </section>
+      </main>
+    </div>
+    <dialog id="song-dialog" class="appearance-dialog" aria-labelledby="song-title"><div class="dialog-heading"><h2 id="song-title">設定保存／ロード</h2><button id="song-close" class="dialog-close" type="button" aria-label="閉じる">×</button></div><div class="reference-row"><button id="song-save" type="button">設定を保存</button><button id="song-load" type="button">設定を読み込む</button></div><input id="song-file" type="file" accept=".json,application/json" hidden><p id="song-status" role="status"></p></dialog>
+    <dialog id="appearance-dialog" class="appearance-dialog" aria-labelledby="appearance-title" aria-describedby="appearance-description">
+      <div class="dialog-heading"><div><h2 id="appearance-title">今日の、音の道具。</h2><p id="appearance-description">好きな色と手ざわりで、遊ぼう。<br>スキンはすぐに反映され、次回も引き継がれます。</p></div><button id="appearance-close" class="dialog-close" type="button" aria-label="外観設定を閉じる">×</button></div>
+      <fieldset class="skin-options">
+        <legend class="sr-only">スキンを選択</legend>
+        <label class="skin-choice"><input type="radio" name="skin" value="milk" /><span class="skin-preview milk" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><strong>ミルク</strong><small>乳白色のキーと朱色の再生ボタン</small></label>
+        <label class="skin-choice"><input type="radio" name="skin" value="natural" /><span class="skin-preview natural" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><strong>ナチュラル</strong><small>明るい白木色の筐体、白いキー、蜂蜜色のアクセント</small></label>
+        <label class="skin-choice"><input type="radio" name="skin" value="bauhaus" /><span class="skin-preview bauhaus" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><strong>バウハウス</strong><small>深い赤・青・黄。積み木のような落ち着いた原色</small></label>
+        <label class="skin-choice"><input type="radio" name="skin" value="toy" /><span class="skin-preview toy" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><strong>トイ</strong><small>赤・青・黄色の、にぎやかな音のおもちゃ</small></label>
+      </fieldset>
+    </dialog>
+  </body>
+</html>

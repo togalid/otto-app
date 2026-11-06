@@ -1,0 +1,1105 @@
+/* Milk: warm resin, porcelain keys, printed ink. */
+:root, .skin-preview.milk {
+  --oto-page: #e9e8e2; --oto-case: #f7f6ef; --oto-case-low: #eae8df;
+  --oto-key: #fffef9; --oto-key-low: #f5f3eb; --oto-ink: #272e2b;
+  --oto-muted: #525b55; --oto-accent: #d53d10; --oto-accent-low: #b4330d;
+  --oto-display: #e1e6db; --oto-display-ink: #29372f; --oto-secondary: #294e3d;
+  --oto-selection: #d8e1d6; --oto-selection-ink: #293e32;
+  --oto-seam: #999e94; --oto-shadow: #33392f1c;
+}
+
+:root {
+  color: var(--oto-ink); background: var(--oto-page);
+  --control-bg: var(--oto-key); --control-border: transparent; --control-hover: var(--oto-key-low);
+  --oto-raised: inset 0 1px 0 #ffffffa6, 0 2px 0 var(--oto-seam), 0 4px 6px var(--oto-shadow);
+  --oto-recess: inset 0 2px 4px #242c2320, 0 1px 0 #ffffff80;
+}
+body { background: var(--oto-page); color: var(--oto-ink); }
+.shell { max-width: 1220px; padding: 0 28px; }
+header { border: 0; min-height: 100px; gap: 22px; }
+.logo { font-size: 48px; color: var(--oto-ink); letter-spacing: -4px; }
+.logo span { color: var(--oto-accent); }
+.header-note, footer, .below, .track-detail-hint { color: var(--oto-muted); }
+.header-note { font-size: 11px; letter-spacing: .1em; }
+main { padding-top: 8px; }
+.instrument, .track-details.instrument {
+  border: 0; border-radius: 18px; padding: 28px;
+  background: linear-gradient(150deg, var(--oto-case), var(--oto-case-low));
+  box-shadow: inset 0 1px 0 #ffffff99, 0 3px 0 var(--oto-seam), 0 12px 28px var(--oto-shadow);
+}
+.track-details.instrument, #detail-melody { margin-top: 24px; }
+.track-detail-title { color: var(--oto-ink); font-size: 14px; letter-spacing: .05em; margin-bottom: 16px; }
+.groove .groove-field, .groove .timing-control, .bass-tones legend, .bass-feel legend { color: var(--oto-muted); font-size: 11px; letter-spacing: .04em; }
+.groove .select-control select, .groove .groove-field select,
+.track-details .chord-settings > select, #melody-mode {
+  appearance: none; border: 0; border-radius: 7px; min-height: 40px;
+  padding: 8px 24px 8px 12px; color: var(--oto-display-ink);
+  background-color: var(--oto-display); box-shadow: var(--oto-recess);
+  font-size: 12px; font-weight: 550;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='m1 1 4 4 4-4' fill='none' stroke='%23767b6b' stroke-width='1.3'/%3E%3C/svg%3E");
+  background-position: right 9px center; background-repeat: no-repeat;
+}
+select option, select optgroup { background: var(--oto-key); color: #34372f; }
+button { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible {
+  outline: 2px solid var(--oto-accent); outline-offset: 4px;
+}
+.groove .track-grid { gap: 14px 26px; padding-top: 14px; }
+.groove .track-grid .track-select {
+  width: 46px; height: 52px; border: 0; border-radius: 7px;
+  background: linear-gradient(var(--oto-key), var(--oto-key-low));
+  color: var(--oto-display-ink); box-shadow: var(--oto-raised);
+}
+.groove .track-select[aria-pressed='true'] {
+  background: var(--oto-secondary); color: #fff8e8;
+  box-shadow: inset 0 1px 3px #0003, 0 1px 0 #ffffff80;
+}
+.groove .track-select[aria-pressed='true'] .track-name { color: inherit; }
+.groove .track-select .track-name { font-size: 8px; letter-spacing: .02em; }
+.groove .part-icon { width: 23px; height: 23px; }
+.groove.progression > .transport { top: 28px; right: 28px; }
+.groove.progression #progression-play {
+  border: 0; border-radius: 8px; min-height: 44px; min-width: 100px;
+  background: linear-gradient(var(--oto-accent), var(--oto-accent-low));
+  color: #fff9ec; box-shadow: inset 0 1px 0 #ffffff45, 0 2px 5px #5e25191f;
+  font-size: 15px; font-weight: 650;
+}
+.groove.progression #progression-play[aria-pressed='true'] { background: var(--oto-secondary); }
+.mute-toggle, .mute-toggle[aria-pressed='true'] { color: var(--oto-muted); }
+.mute-toggle:hover { background: var(--oto-key-low); }
+.mute-toggle[aria-pressed='true']::after { box-shadow: none; }
+input[type='range'] { appearance: none; background: transparent; accent-color: var(--oto-accent); cursor: pointer; }
+input[type='range']::-webkit-slider-runnable-track { height: 5px; background: var(--oto-seam); border-radius: 4px; box-shadow: inset 0 1px 2px #0003, 0 1px 0 #fff8; }
+input[type='range']::-webkit-slider-thumb { appearance: none; width: 19px; height: 19px; margin-top: -7px; border: 0; border-radius: 50%; background: linear-gradient(var(--oto-key),var(--oto-key-low)); box-shadow: inset 0 1px 0 #fff, 0 2px 3px #0004; }
+input[type='range']::-moz-range-track { height: 5px; background: var(--oto-seam); border-radius: 4px; }
+input[type='range']::-moz-range-thumb { width: 19px; height: 19px; border: 0; border-radius: 50%; background: var(--oto-key); box-shadow: 0 2px 3px #0004; }
+.groove .timing-control output { color: var(--oto-ink); font-variant-numeric: tabular-nums; font-size: 14px; }
+.track-layout-bar { border: 0; padding-top: 10px; }
+.track-layout-choice, .segmented-control { background: var(--oto-case-low); border: 0; box-shadow: var(--oto-recess); border-radius: 8px; }
+.track-layout-choice legend { color: var(--oto-muted); }
+.track-layout-choice input:checked + span, .segmented-control input:checked + span { background: var(--oto-key); color: var(--oto-display-ink); border: 0; box-shadow: var(--oto-raised); border-radius: 5px; }
+.track-layout-choice span, .segmented-control label span { color: var(--oto-muted); }
+.track-details .chord-settings { gap: 12px; margin-top: 0; }
+.chord-grid-scroll { border: 0; }
+.modulation-bar { background: var(--oto-case-low); border: 0; border-radius: 7px; color: var(--oto-muted); padding: 4px 6px; min-height: 36px; }
+.modulation-bar button, .modulation-bar .key-control #key, .modulation-bar .key-stepper,
+.modulation-bar .bar-play-controls button { border: 0; border-radius: 5px; color: var(--oto-display-ink); background: var(--oto-key); box-shadow: var(--oto-raised); }
+.modulation-bar .bar-play-controls button:hover { background: var(--oto-key-low); }
+.modulation-bar .key-control #key { background: var(--oto-display); box-shadow: var(--oto-recess); }
+.modulation-bar .key-stepper button { box-shadow: none; background: transparent; }
+.chord-grid-scroll .chord-slot, .chord-grid-scroll .chord-slot.first-in-pair,
+.chord-grid-scroll .chord-slot:not(.first-in-pair) { border: 0; border-radius: 6px; }
+.chord-grid-scroll .chord-slot:not(.first-in-pair) { box-shadow: inset 1px 0 var(--oto-seam); }
+.chord-grid-scroll .chord-slot.current { background: var(--oto-display); color: var(--oto-display-ink); }
+#chord-slots .beat-chord .quality-select, #chord-slots .root-display { color: inherit; }
+#chord-slots .beat-chord .root-select { color: transparent; }
+#chord-slots .beat-chord.is-empty .root-display { color: var(--oto-muted); opacity: .65; }
+@media (hover: hover) {
+  #chord-slots .beat-chord.is-empty:hover .root-display { opacity: 1; }
+}
+#chord-slots .beat-chord.is-empty:focus-within .root-display { opacity: 1; }
+.chord-slot .chord-preview, .chord-slot .bar-number { color: var(--oto-muted); }
+.bass-tones label, .bass-feel label { border: 0; background: var(--oto-key); box-shadow: var(--oto-raised); border-radius: 7px; color: var(--oto-display-ink); font-size: 13px; }
+.bass-tones input, .bass-feel input { accent-color: var(--oto-secondary); }
+.quality-menu { background: var(--oto-key); border: 0; box-shadow: 0 10px 35px #0003; color: var(--oto-display-ink); }
+.quality-menu button { color: var(--oto-display-ink); }
+.pads { gap: 9px; padding: 9px; border: 0; border-radius: 12px; background: var(--oto-case-low); box-shadow: var(--oto-recess); }
+.pad { border: 0; border-radius: 7px !important; background: linear-gradient(var(--oto-key),var(--oto-key-low)) !important; color: var(--oto-display-ink); box-shadow: var(--oto-raised); }
+.pad:nth-child(4n+1) { background: linear-gradient(var(--oto-accent),var(--oto-accent-low)) !important; color: #fff8e8; }
+.pad.playing { box-shadow: inset 0 2px 6px #0003; filter: brightness(.95); }
+.pad kbd { border: 0; color: inherit; background: #00000008; box-shadow: inset 0 1px 2px #0002; }
+.pad .pad-number { color: inherit; opacity: 1; }
+footer { border: 0; font-size: 10px; }
+.appearance-open { margin-left: auto; display: flex; align-items: center; gap: 7px; border: 0; border-radius: 7px; padding: 9px 12px; color: var(--oto-ink); background: var(--oto-case); box-shadow: var(--oto-raised); cursor: pointer; font-size: 11px; }
+.appearance-open svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+.appearance-dialog { width: min(640px, calc(100% - 32px)); max-height: calc(100dvh - 40px); padding: 28px; border: 0; border-radius: 18px; color: var(--oto-ink); background: var(--oto-case); box-shadow: 0 20px 80px #0004; }
+.appearance-dialog::backdrop { background: #28271f55; backdrop-filter: blur(5px); }
+.appearance-dialog .dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.appearance-dialog h2 { margin: 3px 0 8px; font-size: 24px; letter-spacing: -.04em; }
+.appearance-dialog p { font-size: 12px; line-height: 1.8; color: var(--oto-muted); }
+.dialog-close { border: 0; border-radius: 50%; width: 32px; height: 32px; background: var(--oto-key); color: var(--oto-display-ink); box-shadow: var(--oto-raised); cursor: pointer; font-size: 20px; }
+.skin-options { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; border: 0; padding: 4px; margin: 16px -4px 0; }
+.skin-choice { position: relative; display: block; padding: 10px; border-radius: 12px; background: var(--oto-case-low); cursor: pointer; }
+.skin-choice input { position: absolute; opacity: 0; }
+.skin-choice:has(input:checked) { box-shadow: 0 0 0 2px var(--oto-accent); }
+.skin-choice:has(input:focus-visible) { outline: 2px solid var(--oto-ink); outline-offset: 5px; }
+.skin-choice strong { display: block; margin: 12px 0 2px; font-size: 13px; font-weight: 650; }
+.skin-choice small { color: var(--oto-muted); font-size: 10px; }
+.skin-preview { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; padding: 14px; border-radius: 8px; background: #e9e0cd; box-shadow: inset 0 1px 0 #fff9, 0 3px 4px #0002; }
+.skin-preview::before { content: 'oto'; grid-column: 1/-1; height: 30px; margin-bottom: 5px; background: #cbd2b9; color: #35432e; padding: 5px 9px; border-radius: 3px; font-size: 18px; line-height: 20px; font-weight: 750; box-shadow: inset 0 2px 3px #0002; }
+.skin-preview i { height: 23px; background: #f8f0dd; border-radius: 3px; box-shadow: inset 0 1px 0 #fffb, 0 2px 0 #a89b83, 0 3px 3px #0002; }
+.skin-preview { background: var(--oto-case-low); }
+.skin-preview::before { background: var(--oto-display); color: var(--oto-display-ink); }
+.skin-preview i { background: var(--oto-key); }
+.skin-preview i:first-of-type { background: var(--oto-accent); }
+@media (max-width: 700px) {
+  .shell { padding: 0 16px; } header { min-height: 82px; gap: 12px; }.header-note { font-size: 9px; letter-spacing: 0; }
+  .instrument, .track-details.instrument { padding: 20px; border-radius: 14px; }
+  .groove.progression > .transport { position: static; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+.groove #rhythm-pattern { background-color: var(--oto-display); color: var(--oto-display-ink); }
+.groove .track-select:active, .appearance-open:active, .dialog-close:active { box-shadow: var(--oto-recess); }
+.groove.progression #progression-play:active { box-shadow: inset 0 2px 4px #0003, 0 1px 0 var(--oto-accent-low); }
+header .logo, header .header-note { color: var(--oto-display-ink); }
+#notation.segmented-control { background: var(--oto-case-low); border: 0; box-shadow: var(--oto-recess); }
+#notation.segmented-control input:checked + span { background: var(--oto-key); color: var(--oto-display-ink); border: 0; box-shadow: var(--oto-raised); }
+#notation.segmented-control label span { color: var(--oto-muted); }
+#chord-slots .beat-chord { color: var(--oto-ink); }
+#chord-slots .current .beat-chord { color: var(--oto-display-ink); }
+
+/* Focus feels like a lit or pressed surface, without a browser-style ring. */
+select:focus, input:focus, .track-layout-choice input:focus-visible + span,
+#notation input:focus-visible + span, .skin-choice:has(input:focus-visible) {
+  outline: none !important;
+}
+.groove .select-control select:focus-visible,
+.groove .groove-field select:focus-visible,
+.track-details .chord-settings > select:focus-visible,
+#melody-mode:focus-visible, .modulation-bar .key-control #key:focus-visible {
+  background-color: var(--oto-key);
+  box-shadow: inset 0 2px 5px #242c232a, inset 0 -3px 0 var(--oto-accent);
+}
+#chord-slots .beat-chord select:focus-visible {
+  box-shadow: inset 0 -3px 0 var(--oto-accent);
+  border-radius: 4px;
+}
+.track-layout-choice input:focus-visible + span,
+#notation input:focus-visible + span {
+  background: var(--oto-key);
+  box-shadow: inset 0 -3px 0 var(--oto-accent), var(--oto-raised);
+}
+.skin-choice:has(input:focus-visible) {
+  box-shadow: inset 0 -4px 0 var(--oto-accent);
+}
+input[type='range']:focus-visible::-webkit-slider-thumb {
+  background: var(--oto-accent);
+}
+input[type='range']:focus-visible::-moz-range-thumb {
+  background: var(--oto-accent);
+}
+.bass-tones label:focus-within, .bass-feel label:focus-within {
+  box-shadow: inset 0 -3px 0 var(--oto-accent), var(--oto-raised);
+}
+/* Chord cells are light key surfaces in every skin. */
+#chord-slots .beat-chord { color: var(--oto-display-ink); }
+.modulation-bar .modulation-value { color: var(--oto-ink); }
+
+/* Controls read as touchable keys; keep the instrument's palette in the housing. */
+.groove .select-control select,
+.groove .groove-field select,
+.track-details .chord-settings > select,
+.groove #melody-mode,
+.groove #rhythm-pattern,
+.modulation-bar .key-control #key {
+  background-color: var(--oto-key);
+  color: var(--oto-display-ink);
+  box-shadow: var(--oto-raised);
+  font-weight: 500;
+}
+.groove .select-control select:focus-visible,
+.groove .groove-field select:focus-visible,
+.track-details .chord-settings > select:focus-visible,
+.groove #melody-mode:focus-visible,
+.groove #rhythm-pattern:focus-visible,
+.modulation-bar .key-control #key:focus-visible {
+  background-color: var(--oto-key-low);
+  box-shadow: inset 0 2px 4px #242c2320, inset 0 -2px 0 var(--oto-accent);
+}
+.groove .track-grid .track-select[aria-pressed='true'] {
+  color: var(--oto-display-ink);
+  background: var(--oto-key-low);
+  box-shadow: inset 0 2px 4px #242c232d, inset 0 -2px 0 var(--oto-seam), 0 1px 0 #ffffff80;
+}
+.groove .track-select[aria-pressed='true'] .track-name { color: var(--oto-display-ink); }
+header { min-height: 78px; }
+main { padding-top: 2px; }
+.instrument, .track-details.instrument { padding: 22px 26px; }
+.groove.progression > .transport { top: 22px; right: 26px; }
+.groove .track-grid { gap: 8px 20px; padding-top: 14px; }
+.track-layout-bar { margin-top: -4px; padding-top: 2px; }
+.track-details.instrument, #detail-melody { margin-top: 14px; }
+.track-detail-title { margin-bottom: 12px; }
+@media (max-width: 700px) {
+  header { min-height: 70px; }
+  .instrument, .track-details.instrument { padding: 18px; }
+  .track-layout-bar { margin-top: 4px; }
+}
+
+/* The raised surface indicates that these controls can be pressed. */
+.groove .track-grid .select-control select,
+.modulation-bar .key-control #key {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: none;
+}
+
+#detail-melody .pads { margin-top: 0; }
+
+/* Compact mix buttons sit alongside each part's sound and pattern. */
+.groove .track-grid .drum-controls,
+.groove .track-grid .bass-controls,
+.groove .track-grid .chord-sound-controls.part-controls,
+.groove .track-grid .melody-controls {
+  grid-template-columns: 46px minmax(0, 1fr) minmax(0, 1fr) 58px;
+}
+.part-mix { display: flex; gap: 4px; justify-content: end; }
+.part-mix .mix-button {
+  display: grid; place-items: center; width: 27px; height: 27px;
+  border: 0; border-radius: 5px; padding: 0;
+  color: var(--oto-display-ink); background: var(--oto-key);
+  box-shadow: var(--oto-raised); font-size: 11px; font-weight: 700; cursor: pointer;
+}
+.part-mix .mix-button[aria-pressed='true'] {
+  color: var(--oto-display-ink); background: var(--oto-key-low);
+  box-shadow: inset 0 2px 4px #242c232d, inset 0 -2px 0 var(--oto-accent);
+}
+#status:empty { display: none; }
+#status { color: var(--oto-ink); font-size: 12px; margin: 12px 0 0; }
+@media (max-width: 480px) {
+  .groove .track-grid .drum-controls,
+  .groove .track-grid .bass-controls,
+  .groove .track-grid .chord-sound-controls.part-controls,
+  .groove .track-grid .melody-controls {
+    grid-template-columns: 46px minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .part-mix { grid-column: 2 / 4; }
+}
+
+/* Independent tone toggles and a grouped, single-choice beat selector. */
+.bass-tones label, .bass-feel label { position: relative; user-select: none; }
+.bass-tones input, .bass-feel input {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+.bass-tones label { gap: 7px; min-height: 36px; }
+.bass-tones label::before {
+  content: ''; position: absolute; top: 2px; right: 4px;
+  color: var(--oto-secondary); font-size: 9px; line-height: 1; font-weight: 700;
+  opacity: 0; pointer-events: none;
+}
+.bass-tones label:has(input:checked) {
+  background: var(--oto-key-low);
+  box-shadow: inset 0 2px 4px #242c2327, inset 0 -2px 0 var(--oto-seam), 0 1px 0 #ffffff80;
+}
+.bass-tones label:has(input:checked)::before { content: '✓'; opacity: 1; }
+.bass-tones label:has(input:focus-visible), .bass-feel label:has(input:focus-visible) {
+  box-shadow: inset 0 -2px 0 var(--oto-accent), var(--oto-raised);
+}
+.bass-feel { display: block; }
+.bass-feel-segments {
+  display: inline-flex; gap: 2px; padding: 3px; border-radius: 8px;
+  background: var(--oto-case-low); box-shadow: var(--oto-recess);
+}
+.bass-feel label {
+  display: grid; place-items: center; min-width: 48px; min-height: 30px;
+  padding: 5px 12px; border: 0; border-radius: 5px;
+  background: transparent; box-shadow: none; color: var(--oto-muted);
+}
+.bass-feel label:has(input:checked) {
+  background: var(--oto-key); color: var(--oto-display-ink); box-shadow: var(--oto-raised);
+}
+
+/* Align the bass expression labels above the controls they describe. */
+.bass-expression { align-items: end; gap: 12px 18px; }
+.bass-range { display: grid; gap: 6px; width: 160px; min-width: 0; color: var(--oto-muted); font-size: 12px; }
+.bass-range-value { display: grid; grid-template-columns: minmax(0, 1fr) 4ch; align-items: center; gap: 8px; height: 36px; }
+.bass-range-value input { width: 100%; min-width: 0; margin: 0; }
+.bass-range-value output { color: var(--oto-ink); text-align: right; font-variant-numeric: tabular-nums; }
+.modulation-bar .modulation-value {
+  display: grid; place-items: center; width: 64px; min-width: 64px; height: 25px;
+  border-radius: 5px; color: var(--oto-display-ink); background: var(--oto-key); box-shadow: var(--oto-raised);
+}
+.modulation-bar .modulation-stepper { display: inline-flex; overflow: hidden; }
+.modulation-bar .modulation-stepper button { width: 26px; height: 25px; box-shadow: none; background: transparent; }
+.modulation-bar .modulation-stepper button + button { border-left: 1px solid var(--oto-seam); }
+
+/* Filled keys make active controls easy to distinguish. */
+.bass-tones label:has(input:checked),
+.part-mix .mix-button[aria-pressed='true'],
+.groove .track-grid .track-select[aria-pressed='true'] {
+  color: #fff;
+  background: var(--oto-accent);
+  box-shadow: inset 0 1px 0 #ffffff45, 0 1px 3px #5e251920;
+}
+.bass-tones label:has(input:checked)::before { content: none; }
+.bass-tones label:has(input:checked),
+.groove .track-grid .track-select[aria-pressed='true'] {
+  color: var(--oto-selection-ink);
+  background: var(--oto-selection);
+  box-shadow: inset 0 -3px 0 var(--oto-secondary), var(--oto-raised);
+}
+.groove .track-select[aria-pressed='true'] .track-name { color: inherit; }
+.bass-tones label:has(input:focus-visible) {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--oto-secondary), var(--oto-raised);
+}
+
+.groove .groove-field, .groove .timing-control, .bass-tones legend, .bass-feel legend { font-size: 12px; }
+.groove .track-select .track-name { font-size: 10px; letter-spacing: 0; }
+input[type='range']::-webkit-slider-runnable-track { background: #747c72; }
+input[type='range']::-moz-range-track { background: #747c72; }
+.skin-choice:has(input:focus-visible) { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Two inks on the existing keys, like a screen-printed instrument panel. */
+.part-icon .stamp { fill: currentColor; stroke: none; }
+.part-icon .print { fill: var(--oto-accent); stroke: none; }
+.part-icon .cut { stroke: var(--oto-key); stroke-width: 1.3; }
+.swing-caption { display: inline-flex; align-items: center; gap: 6px; }
+#swing-print { width: 37px; height: 8px; stroke: currentColor; stroke-width: 1.5; }
+#swing-print .offbeats { stroke: var(--oto-accent); }
+#progression-play { position: relative; }
+.beat-strip { position: absolute; bottom: 4px; inset-inline: 0; display: flex; justify-content: center; gap: 3px; pointer-events: none; }
+.beat-strip i { width: 6px; height: 2px; border-radius: 1px; background: currentColor; opacity: .24; }
+#progression-play[data-beat='0'] i:nth-child(1),
+#progression-play[data-beat='1'] i:nth-child(2),
+#progression-play[data-beat='2'] i:nth-child(3),
+#progression-play[data-beat='3'] i:nth-child(4) { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .beat-strip { display: none; } }
+
+.octave-control { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: var(--oto-muted); font-size: 12px; }
+.octave-control output { min-width: 2ch; text-align: center; color: var(--oto-ink); font-variant-numeric: tabular-nums; }
+.octave-control .key-stepper { display: inline-flex; overflow: hidden; border-radius: 5px; background: var(--oto-key); box-shadow: var(--oto-raised); }
+.octave-control button { width: 30px; height: 30px; border: 0; background: transparent; color: var(--oto-ink); font-size: 19px; }
+.octave-control button + button { border-left: 1px solid var(--oto-seam); }
+.octave-control button:disabled { opacity: .35; }
+@media (max-width: 700px) { .octave-control { margin-left: 0; } }
+
+.select-menu {
+  position: fixed; margin: 0; padding: 6px; overflow-y: auto;
+  border: 0; border-radius: 9px; background: var(--oto-key);
+  color: var(--oto-display-ink); box-shadow: 0 10px 30px #0003;
+}
+.select-menu::backdrop { background: transparent; }
+.select-menu-heading { padding: 9px 10px 4px; color: var(--oto-muted); font-size: 11px; font-weight: 700; }
+.select-menu button {
+  display: block; width: 100%; min-height: 36px; padding: 8px 10px;
+  border: 0; border-radius: 5px; background: transparent; box-shadow: none;
+  color: var(--oto-display-ink); text-align: left; font: inherit; cursor: pointer;
+}
+.select-menu button:hover, .select-menu button:focus-visible { outline: none; background: var(--oto-case-low); }
+.select-menu button[aria-current='true'] { background: var(--oto-selection); color: var(--oto-selection-ink); font-weight: 700; }
+
+@media (max-width: 700px) {
+  .groove.progression > .transport { position: absolute; top: 20px; right: 20px; margin: 0; }
+  .groove.progression .groove-settings { padding-right: 0; }
+  .groove .genre-field { width: min(160px, calc(100% - 110px)); }
+}
+
+/* Match the key selector and stepper to the modulation controls below. */
+.modulation-bar .key-control #key {
+  width: 64px;
+  min-width: 64px;
+  height: 25px;
+  border-radius: 5px;
+  background: var(--oto-key);
+  color: var(--oto-display-ink);
+  box-shadow: var(--oto-raised);
+}
+.modulation-bar .key-control .key-stepper button + button {
+  border-left: 1px solid var(--oto-seam);
+}
+
+@media (max-width: 700px) {
+  .groove.progression > .transport { top: 36px; }
+}
+
+.groove .track-grid .drum-controls,
+.groove .track-grid .bass-controls,
+.groove .track-grid .chord-sound-controls.part-controls,
+.groove .track-grid .melody-controls { grid-template-columns: 46px minmax(0, .7fr) minmax(0, 1.3fr) 96px; }
+.part-mix { align-items: center; }
+.volume-knob { position: relative; display: inline-grid; place-items: center; width: 30px; height: 30px; flex: none; cursor: ew-resize; }
+.volume-knob span { width: 25px; height: 25px; border-radius: 50%; background: linear-gradient(var(--oto-key), var(--oto-key-low)); box-shadow: var(--oto-raised); position: relative; pointer-events: none; }
+.volume-knob span::after { content: ''; position: absolute; inset: 3px 11px 12px; border-radius: 2px; background: var(--oto-secondary); transform-origin: 1.5px 9.5px; transform: rotate(var(--angle, 0deg)); }
+.volume-knob input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+.volume-knob:has(input:focus-visible) span { box-shadow: inset 0 0 0 2px var(--oto-secondary), var(--oto-raised); }
+.groove .timing-control #tempo-value { grid-column: 2; grid-row: 2; width: 4ch; min-width: 0; height: 32px; padding: 2px; border: 0; border-radius: 5px; background: transparent; color: var(--oto-ink); font: inherit; font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; appearance: textfield; }
+#tempo-value::-webkit-inner-spin-button, #tempo-value::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.groove .timing-control #tempo-value:focus-visible { outline: none; background: var(--oto-key); box-shadow: inset 0 -2px var(--oto-secondary); }
+@media (max-width: 480px) {
+  .groove .track-grid .drum-controls,
+  .groove .track-grid .bass-controls,
+  .groove .track-grid .chord-sound-controls.part-controls,
+  .groove .track-grid .melody-controls { grid-template-columns: 46px minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+.volume-knob input { touch-action: none; cursor: ns-resize; }
+
+/* Keep the progression controls on one compact row when space permits. */
+.track-details .chord-settings > select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: none;
+  padding-right: 12px;
+}
+.track-details .chord-settings #preset-group,
+.track-details .chord-settings #preset {
+  width: 150px;
+  flex: 0 1 150px;
+  min-width: 0;
+}
+@media (max-width: 850px) {
+  .track-details .octave-control { display: none; }
+}
+@media (max-width: 480px) {
+  .track-details .chord-settings #preset-group,
+  .track-details .chord-settings #preset { flex: 1 1 125px; width: auto; }
+}
+
+/* Group captions are labels, while the full-width rows remain choices. */
+.select-menu-heading {
+  margin: 6px 2px 3px;
+  padding: 5px 9px;
+  border-radius: 4px;
+  background: var(--oto-case-low);
+  color: var(--oto-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.select-menu-heading:first-child { margin-top: 2px; }
+
+/* Compact the beat cells while retaining room for their audition controls. */
+.groove #melody-mode { background-image: none; }
+#chord-slots .chord-slot .beat-chord {
+  min-height: 55px;
+  padding-top: 11px;
+}
+#chord-slots .beat-chord .chord-preview { top: -2px; }
+
+
+/* Each material uses the same readable control surfaces and shared geometry. */
+:root[data-skin='natural'], .skin-preview.natural {
+  --oto-page: #f1eee5; --oto-case: #f7edda; --oto-case-low: #eeddbb;
+  --oto-key: #fffefb; --oto-key-low: #f8f4e9; --oto-ink: #37342e;
+  --oto-muted: #625c51; --oto-display: #ede8df; --oto-display-ink: #37342e;
+  --oto-accent: #aa762f; --oto-accent-low: #936325; --oto-secondary: #4b6046;
+  --oto-selection: #f0dfb5; --oto-selection-ink: #473b24;
+  --oto-seam: #c5b28d; --oto-shadow: #69552d16;
+}
+:root[data-skin='bauhaus'], .skin-preview.bauhaus {
+  --oto-page: #e8e5dc; --oto-case: #f8f5eb; --oto-case-low: #ece6d6;
+  --oto-key: #faf6ec; --oto-key-low: #eee7d7; --oto-ink: #252c2b;
+  --oto-muted: #53584f; --oto-display: #dce1d6; --oto-display-ink: #253c31;
+  --oto-accent: #a52f2c; --oto-accent-low: #7f2424; --oto-secondary: #253f64;
+  --oto-selection: #e9c25e; --oto-selection-ink: #302c22;
+  --oto-seam: #97917e; --oto-shadow: #34312727;
+}
+:root[data-skin='toy'], .skin-preview.toy {
+  --oto-page: #eef5f8; --oto-case: #fffef3; --oto-case-low: #faf3d9;
+  --oto-key: #fffefa; --oto-key-low: #f7f3e6; --oto-ink: #172f49;
+  --oto-muted: #46596a; --oto-display: #e3eff3; --oto-display-ink: #173a5b;
+  --oto-accent: #e63132; --oto-accent-low: #cf292c; --oto-secondary: #1662b1;
+  --oto-selection: #ffdb4b; --oto-selection-ink: #273149;
+  --oto-seam: #a1a8a4; --oto-shadow: #284c7026;
+}
+.skin-preview.natural, .skin-preview.bauhaus, .skin-preview.toy { background: var(--oto-case-low); }
+.skin-preview.natural::before, .skin-preview.bauhaus::before, .skin-preview.toy::before { background: var(--oto-display); color: var(--oto-display-ink); }
+.skin-preview.natural i, .skin-preview.bauhaus i, .skin-preview.toy i { background: var(--oto-key); }
+.skin-preview i:nth-child(4n+1) { background: var(--oto-accent); }
+.skin-preview.bauhaus i:nth-child(4n+2), .skin-preview.toy i:nth-child(4n+2) { background: var(--oto-secondary); }
+.skin-preview.bauhaus i:nth-child(4n+3), .skin-preview.toy i:nth-child(4n+3) { background: var(--oto-selection); }
+:root[data-skin='bauhaus'] .track-select .part-icon .stamp { fill: #284931; }
+:root[data-skin='bauhaus'] .track-select[data-track='bass'] .part-icon .stamp { fill: #253f64; }
+:root[data-skin='toy'] .track-select[data-track='drums'] .part-icon .stamp { fill: #d92e32; }
+:root[data-skin='toy'] .track-select[data-track='bass'] .part-icon .stamp { fill: #1662b1; }
+:root[data-skin='toy'] .track-select[data-track='melody'] .part-icon .stamp { fill: #237044; }
+:root[data-skin='toy'] .part-mix .mix-button[aria-pressed='true'] { background: #1662b1; }
+:root[data-skin='toy'] .volume-knob span { background: #ffdb4b; }
+:root[data-skin='toy'] .volume-knob span::after { background: #173a5b; }
+:root[data-skin='toy'] .pad:nth-child(3n+1) { background: #fff2a9 !important; }
+:root[data-skin='toy'] .pad:nth-child(3n+2) { background: #dcecfb !important; }
+:root[data-skin='toy'] .pad:nth-child(3n) { background: #fbdedc !important; }
+
+/* Small oval caps give the timing faders a tactile, painted finish. */
+:root { --oto-fader: #dce5d9; --oto-fader-edge: #70836e; }
+:root[data-skin='natural'] { --oto-fader: #f0d49c; --oto-fader-edge: #aa8750; }
+:root[data-skin='bauhaus'] { --oto-fader: #eac45c; --oto-fader-edge: #a68530; }
+:root[data-skin='toy'] { --oto-fader: #ffdb4b; --oto-fader-edge: #ba962d; }
+.groove .groove-timing input[type='range']::-webkit-slider-thumb {
+  width: 25px; height: 18px; margin-top: -6.5px;
+  border-radius: 45%;
+  background: linear-gradient(var(--oto-fader), var(--oto-fader));
+  box-shadow: inset 0 1px 0 #ffffffa6, 0 1px 0 var(--oto-fader-edge), 0 2px 3px #26322930;
+}
+.groove .groove-timing input[type='range']::-moz-range-thumb {
+  width: 25px; height: 18px; border-radius: 45%;
+  background: var(--oto-fader);
+  box-shadow: inset 0 1px 0 #ffffffa6, 0 1px 0 var(--oto-fader-edge), 0 2px 3px #26322930;
+}
+
+/* Wider progression choices and compact, contrasting fader caps. */
+.track-details .chord-settings #preset-group,
+.track-details .chord-settings #preset {
+  width: 180px;
+  flex-basis: 180px;
+}
+.track-details .chord-settings #preset-group {
+  width: 110px;
+  flex-basis: 110px;
+}
+.preset-picker { display: flex; align-items: stretch; gap: 4px; flex: 0 1 240px; min-width: 0; }
+.track-details .chord-settings { display: grid; grid-template-columns: 90px minmax(180px, 1fr) 142px auto; align-items: end; gap: 12px; }
+.chord-field { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.chord-settings .chord-field > label, .chord-field-label { color: var(--oto-muted); font-size: 11px; font-weight: 400; letter-spacing: .04em; }
+.track-details .chord-settings .chord-field select { font: 500 12px/1.5 inherit; font-family: inherit; font-size: 12px; font-weight: 500; appearance: none; background: var(--oto-key); color: var(--oto-display-ink); border: 0; border-radius: 7px; box-shadow: var(--oto-raised); min-height: 40px; padding: 8px 12px; }
+.track-details .chord-settings .chord-start #preset-group { width: 100%; min-width: 0; flex: none; height: 40px; }
+.chord-preset .preset-picker { flex: none; }
+.chord-settings .chord-key .key-control { margin-left: 0; gap: 6px; }
+.chord-settings .chord-key #key { width: 48px; min-width: 48px; text-align: center; padding: 8px; }
+.chord-key .key-stepper { display: flex; align-self: stretch; }
+.chord-key .key-stepper button { width: 38px; min-height: 40px; font-size: 20px; }
+.chord-settings #notation label > span { font-size: 12px; font-weight: 500; }
+@media (max-width: 700px) {
+  .track-details .chord-settings { grid-template-columns: 90px minmax(0, 1fr); }
+  .chord-notation { align-items: flex-start; }
+}
+.track-details .chord-settings .preset-picker #preset {
+  width: 100%; min-width: 0; flex: 1 1 auto; appearance: none;
+  background-image: none; padding-right: 12px; background-color: var(--oto-key);
+  box-shadow: var(--oto-raised); border: 0;
+}
+.groove .groove-timing input[type='range']::-webkit-slider-thumb {
+  width: 19px;
+  height: 15px;
+  margin-top: -5px;
+  background: var(--oto-secondary);
+  box-shadow: inset 0 1px 0 #ffffff45, 0 1px 3px #26322940;
+}
+.groove .groove-timing input[type='range']::-moz-range-thumb {
+  width: 19px;
+  height: 15px;
+  background: var(--oto-secondary);
+  box-shadow: inset 0 1px 0 #ffffff45, 0 1px 3px #26322940;
+}
+@media (max-width: 480px) {
+  .track-details .chord-settings #preset-group,
+  .track-details .chord-settings #preset { flex: 1 1 125px; width: auto; }
+}
+
+/* Let the controls sit directly on the toy casing. */
+:root[data-skin='toy'] .modulation-bar,
+:root[data-skin='toy'] #notation.segmented-control {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+/* Modulation values are read-only status, not buttons. */
+.modulation-bar .modulation-value {
+  background: transparent;
+  box-shadow: none;
+  border: 0;
+}
+
+.bass-detail { position: relative; }
+.bass-preview { position: absolute; top: 38px; right: 0; width: min(38%, 320px); color: var(--oto-muted); font-size: 10px; }
+.bass-preview svg { display: block; width: 100%; height: 56px; margin-top: 5px; overflow: visible; }
+.bass-grid { stroke: var(--oto-seam); stroke-width: 1; opacity: .45; }
+.bass-note { fill: var(--oto-secondary); }
+@media (max-width: 850px) { .bass-preview { position: static; width: min(100%, 320px); margin-bottom: 14px; } }
+
+.drum-sequencer { display: grid; grid-template-columns: 52px repeat(16, minmax(22px, 1fr)); gap: 6px 4px; align-items: center; overflow-x: auto; padding: 3px 2px 8px; }
+.drum-step-label { text-align: center; color: var(--oto-muted); font-size: 10px; }
+.drum-row-label { color: var(--oto-muted); font-size: 11px; }
+.drum-step { display: grid; place-items: center; height: 32px; min-width: 22px; padding: 0; border: 0; border-radius: 6px; background: transparent; box-shadow: none; cursor: pointer; }
+.drum-step::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--oto-key); box-shadow: inset 0 0 0 1px var(--oto-seam); }
+.drum-step[aria-pressed='true']::before { background: var(--oto-secondary); box-shadow: inset 0 1px 0 #fff5, 0 1px 2px #0002; }
+.drum-step.beat-start { background: #7b81790b; }
+.drum-step.playing { background: var(--oto-selection); box-shadow: inset 0 0 0 1px var(--oto-secondary); }
+.drum-step:hover { background: var(--oto-selection); }
+.drum-step:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--oto-secondary); }
+
+/* Pastel toy pads need dark labels, including formerly accented root keys. */
+:root[data-skin='toy'] .pad { color: var(--oto-display-ink); }
+
+/* A dedicated family/style row leaves room for the genre library to grow. */
+.groove.progression .groove-settings { display: block; padding-right: 125px; }
+.groove .groove-timing { grid-template-columns: repeat(2, minmax(0, 160px)); }
+.genre-row { display: grid; grid-template-columns: minmax(120px, 180px) minmax(180px, 1fr); gap: 12px; margin-top: 14px; }
+.genre-row .groove-field select { width: 100%; min-width: 0; background-image: none; padding-right: 12px; }
+@media (max-width: 700px) {
+  .groove.progression > .transport { top: 36px; }
+  .groove.progression .groove-settings { padding-right: 115px; }
+  .groove .groove-timing { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .genre-row { grid-template-columns: minmax(90px, 1fr) minmax(0, 2fr); }
+}
+
+/* Genre, style and timing share one compact control row. */
+.groove.progression { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 12px; }
+.groove.progression > .genre-row { grid-column: 1; grid-row: 1; margin-top: 0; grid-template-columns: repeat(2, minmax(0, 180px)); }
+.groove.progression > .groove-settings { grid-column: 2; grid-row: 1; padding-right: 115px; }
+.groove.progression > .track-grid { grid-column: 1 / -1; }
+@media (max-width: 850px) {
+  .groove.progression > .genre-row { grid-column: 1 / -1; grid-row: 1; padding-right: 115px; grid-template-columns: repeat(2, minmax(0, 180px)); }
+  .groove.progression > .groove-settings { grid-column: 1 / -1; grid-row: 2; padding-right: 0; margin-top: 14px; }
+  .groove .groove-timing { grid-template-columns: repeat(2, minmax(0, 160px)); }
+}
+
+@media (min-width: 851px) {
+  .groove.progression { grid-template-columns: minmax(0, 372px) minmax(0, 1fr); gap: 0 12px; }
+  .groove.progression > .groove-settings { padding-right: 118px; }
+  .groove .groove-timing { grid-template-columns: repeat(2, minmax(0, 130px)); gap: 12px; }
+  .groove.progression > .transport { top: 34px; }
+}
+
+/* Both faders use identical tracks and value columns. */
+.groove .groove-timing .timing-control,
+.groove .groove-timing .swing-control {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 4ch;
+}
+.groove .groove-timing #tempo,
+.groove .groove-timing #swing { width: 100%; min-width: 0; }
+
+/* Compact navigation and spacing for comparing styles with the progression. */
+header { min-height: 60px; }
+.track-details.instrument { margin-top: 8px; }
+.style-field { min-width: 0; }
+.style-picker { display: flex; align-items: stretch; gap: 4px; min-width: 0; }
+.genre-row .style-picker select { flex: 1 1 auto; width: 0; min-width: 0; }
+.style-stepper { display: inline-flex; flex: none; overflow: hidden; border-radius: 5px; background: var(--oto-key); box-shadow: var(--oto-raised); }
+.style-stepper button { width: 30px; padding: 0; border: 0; border-radius: 0; color: var(--oto-ink); background: transparent; cursor: pointer; }
+.style-stepper button + button { border-left: 1px solid var(--oto-seam); }
+.style-stepper button:hover { background: var(--oto-key-low); }
+.style-stepper button:disabled { opacity: .4; cursor: default; }
+.style-stepper button:focus-visible { outline: 2px solid var(--oto-ink); outline-offset: 2px; }
+@media (max-width: 700px) { header { min-height: 60px; } }
+
+.chord-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 12px; }
+.chord-heading .track-detail-title { margin-bottom: 0; }
+.backing-display { display: flex; align-items: center; justify-content: flex-end; gap: 12px; width: 390px; max-width: 54%; }
+#backing-monitor[hidden] { display: none; }
+#backing-monitor { position: relative; width: 340px; max-width: calc(100% - 72px); height: 32px; flex-shrink: 0; }
+#backing-monitor i { position: absolute; top: 0; box-sizing: border-box; border-radius: 0 0 2px 2px; }
+.monitor-white { left: calc(var(--key-position) * 100% / 35); width: calc(100% / 35); height: 32px; background: var(--oto-key); border: 1px solid var(--oto-seam); }
+.monitor-black { left: calc(var(--key-position) * 100% / 35 - 0.8%); width: 1.6%; height: 20px; background: var(--oto-ink); z-index: 1; }
+#backing-monitor .sounding::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--oto-accent);
+  transform: translateX(-50%);
+}
+
+/* Main key controls share the raised treatment of the modulation stepper. */
+.chord-settings .key-control #key {
+  appearance: none;
+  background: var(--oto-key);
+  background-image: none;
+  border: 0;
+  border-radius: 5px;
+  box-shadow: var(--oto-raised);
+  color: var(--oto-display-ink);
+  text-align: center;
+  padding: 0 8px;
+}
+.chord-settings .key-control .key-stepper {
+  border: 0;
+  border-radius: 5px;
+  background: var(--oto-key);
+  box-shadow: var(--oto-raised);
+}
+.chord-settings .key-control .key-stepper button {
+  color: var(--oto-display-ink);
+  background: transparent;
+}
+.chord-settings .key-control .key-stepper button + button {
+  border-left: 1px solid var(--oto-seam);
+}
+
+#backing-monitor .sounding.root-note::after { box-shadow: 0 0 0 1px var(--oto-key), 0 0 0 2px var(--oto-accent); }
+
+.backing-display { width: 520px; }
+@media (max-width: 700px) { .chord-heading { flex-wrap: wrap; } .backing-display { max-width: 100%; width: 100%; } }
+
+/* Give longer style names more room while keeping the control row compact. */
+.groove.progression > .genre-row { grid-template-columns: minmax(0, 140px) minmax(0, 220px); }
+
+
+.groove .track-grid .drum-controls,
+.groove .track-grid .bass-controls,
+.groove .track-grid .chord-sound-controls.part-controls,
+.groove .track-grid .melody-controls { grid-template-columns: 46px minmax(0, 1fr) minmax(0, 1fr) 96px; }
+.part-pattern-picker { display: flex; align-items: stretch; gap: 4px; min-width: 0; }
+.part-pattern-picker > .select-control { flex: 1 1 auto; min-width: 0; }
+.part-pattern-stepper { flex: none; }
+.part-pattern-stepper button { min-width: 28px; }
+
+/* A single segmented switch, with a shared inset base in every theme. */
+#notation.segmented-control,
+:root[data-skin='toy'] #notation.segmented-control {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: color-mix(in srgb, var(--oto-ink) 9%, var(--oto-case));
+  border: 0;
+  border-radius: 8px;
+  box-shadow: var(--oto-recess);
+}
+#notation.segmented-control label { position: relative; flex: 1; cursor: pointer; }
+#notation.segmented-control label > span {
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  color: var(--oto-ink);
+  cursor: pointer;
+}
+#notation.segmented-control label + label::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 25%;
+  bottom: 25%;
+  width: 1px;
+  background: var(--oto-seam);
+  opacity: .45;
+}
+#notation.segmented-control label:has(input:checked)::before,
+#notation.segmented-control label:has(input:checked) + label::before { opacity: 0; }
+#notation.segmented-control input:checked + span {
+  background: var(--oto-key);
+  color: var(--oto-display-ink);
+  box-shadow: var(--oto-raised);
+}
+@media (hover: hover) {
+  #notation.segmented-control label:hover > span { background: var(--oto-key-low); }
+}
+
+/* Quiet, one-shot reactions inspired by early desktop objects and living books. */
+:is(#oto-buddy, .talk-avatar) { display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 2px; border: 0; border-radius: 6px; background: transparent; color: var(--oto-ink); cursor: pointer; }
+.buddy-guide { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.buddy-message { position: relative; margin: 0; padding: 7px 11px; border-radius: 9px; background: var(--oto-key); color: var(--oto-display-ink); font-size: 11px; line-height: 1.5; max-width: 440px; }
+.buddy-message::before { content: ''; position: absolute; left: -5px; top: 50%; transform: translateY(-50%) rotate(45deg); width: 10px; height: 10px; background: var(--oto-key); }
+@media (max-width: 600px) {
+  header { flex-wrap: wrap; padding: 10px 0; }
+  .buddy-guide { order: 3; flex-basis: 100%; }
+  .buddy-message { max-width: none; }
+}
+:is(#oto-buddy, .talk-avatar) { width: 44px; height: 44px; border-radius: 50%; }
+:is(#oto-buddy, .talk-avatar) svg { width: 40px; height: 40px; overflow: visible; }
+:is(#oto-buddy, .talk-avatar) .buddy-hair, :is(#oto-buddy, .talk-avatar) .buddy-shades { display: none; }
+:is(#oto-buddy, .talk-avatar)[data-look='cool'] .buddy-shades { display: block; fill: var(--oto-ink); }
+:is(#oto-buddy, .talk-avatar)[data-look='cool'] .buddy-eyes { visibility: hidden; }
+:is(#oto-buddy, .talk-avatar)[data-look='hair'] .buddy-hair { display: block; fill: var(--oto-ink); stroke-width: 1; }
+:is(#oto-buddy, .talk-avatar)[data-look='peach'] .buddy-case { fill: color-mix(in srgb, var(--oto-accent) 16%, var(--oto-key)); }
+:is(#oto-buddy, .talk-avatar)[data-look='mint'] .buddy-case { fill: color-mix(in srgb, var(--oto-secondary) 18%, var(--oto-key)); }
+:is(#oto-buddy, .talk-avatar)[data-mood='error'] .buddy-shades { display: none; }
+:is(#oto-buddy, .talk-avatar) .buddy-case { fill: var(--oto-key); stroke: currentColor; stroke-width: 1.4; }
+:is(#oto-buddy, .talk-avatar) path { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+:is(#oto-buddy, .talk-avatar) .buddy-eyes { transform-origin: 14px 12px; }
+:is(#oto-buddy, .talk-avatar) .buddy-error-eyes, :is(#oto-buddy, .talk-avatar) .buddy-error-mouth { display: none; }
+:is(#oto-buddy, .talk-avatar)[data-mood='error'] .buddy-eyes, :is(#oto-buddy, .talk-avatar)[data-mood='error'] .buddy-smile { display: none; }
+:is(#oto-buddy, .talk-avatar)[data-mood='error'] .buddy-error-eyes, :is(#oto-buddy, .talk-avatar)[data-mood='error'] .buddy-error-mouth { display: block; }
+:is(#oto-buddy, .talk-avatar)[data-mood='listening'] .buddy-smile { stroke: var(--oto-accent); stroke-width: 2.2; }
+#oto-buddy:hover { background: var(--oto-case-low); }
+#oto-buddy:focus-visible { outline: 2px solid var(--oto-accent); outline-offset: 2px; }
+.part-icon { transform-origin: center; }
+.part-mix .mix-button:active, .track-select:active, .key-stepper button:active,
+.style-stepper button:active, .dialog-close:active, .appearance-open:active,
+#notation label:active > span {
+  box-shadow: var(--oto-recess);
+  background: var(--oto-key-low);
+}
+.appearance-dialog[open] { animation: oto-window-open 150ms ease-out; }
+.select-menu[open] { animation: oto-menu-open 100ms ease-out; }
+@keyframes oto-window-open { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
+@keyframes oto-menu-open { from { opacity: .5; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .appearance-dialog[open], .select-menu[open] { animation: none; }
+}
+@media (max-width: 480px) { :is(#oto-buddy, .talk-avatar) { margin-left: -6px; } }
+
+
+/* Playable melody: pitch stays put, colour describes harmony rather than pad position. */
+.melody-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.melody-heading .track-detail-title { margin: 0; }
+.melody-chord { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+.melody-chord span { color: var(--oto-muted); font-size: 11px; }
+.melody-chord strong { font-size: 20px; font-weight: 600; }
+.melody-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; font-size: 11px; margin-bottom: 12px; }
+.legend-chord::before, .legend-tension::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; background: var(--oto-secondary); }
+.legend-tension::before { background: var(--oto-accent); }
+#detail-melody .pads { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 0; background: none; box-shadow: none; }
+#detail-melody .pad, :root[data-skin] #detail-melody .pad:nth-child(n) { min-height: 116px; padding: 12px 14px; gap: 4px; border-radius: 10px !important; background: var(--oto-key) !important; color: var(--oto-display-ink); }
+:root[data-skin] #detail-melody .pad[data-role='chord'], #detail-melody .pad[data-role='chord'] { background: color-mix(in srgb, var(--oto-secondary) 8%, var(--oto-key)) !important; }
+:root[data-skin] #detail-melody .pad[data-role='tension'], #detail-melody .pad[data-role='tension'] { background: color-mix(in srgb, var(--oto-accent) 7%, var(--oto-key)) !important; }
+#detail-melody .pad-note { font-size: 28px; line-height: 1.2; }
+#detail-melody .pad-number { font-size: 12px; }
+#detail-melody .pad-role { font-size: 10px; }
+#detail-melody .pad-clash .pad-role::before { content: '↔ '; }
+#detail-melody .pad kbd { position: absolute; bottom: 10px; right: 12px; }
+.melody-feedback { min-height: 18px; margin: 12px 0 0; font-size: 12px; }
+@media(max-width: 540px) { .melody-heading { align-items: flex-start; } .melody-chord { flex-direction: column; gap: 2px; } #detail-melody .pad { padding: 10px 8px; min-height: 106px; } #detail-melody .pad kbd { display: none; } }
+
+/* Record mascot accessories follow the selected genre. */
+:is(#oto-buddy, .talk-avatar) .buddy-case { fill: var(--oto-ink); stroke: none; }
+:is(#oto-buddy, .talk-avatar) .buddy-eyes, :is(#oto-buddy, .talk-avatar) .record-grooves, :is(#oto-buddy, .talk-avatar) .buddy-error-eyes, :is(#oto-buddy, .talk-avatar) .buddy-error-mouth { stroke: var(--oto-key); stroke-width: 1.35; }
+:is(#oto-buddy, .talk-avatar) .record-center { fill: var(--oto-accent); }
+:is(#oto-buddy, .talk-avatar) :where([class^='record-']:not(.record-center):not(.record-grooves)) { display: none; }
+:is(#oto-buddy, .talk-avatar)[data-look~='fringe'] .record-fringe, :is(#oto-buddy, .talk-avatar)[data-look~='spikes'] .record-spikes, :is(#oto-buddy, .talk-avatar)[data-look~='beret'] .record-beret { display: block; fill: var(--oto-key); stroke: var(--oto-ink); stroke-width: .65; }
+:is(#oto-buddy, .talk-avatar)[data-look~='lashes'] .record-lashes, :is(#oto-buddy, .talk-avatar)[data-look~='glasses'] .record-glasses { display: block; fill: none; stroke: var(--oto-key); stroke-width: 1.1; }
+:is(#oto-buddy, .talk-avatar)[data-look~='bow'] .record-bow { display: block; fill: var(--oto-accent); stroke: var(--oto-ink); stroke-width: .7; }
+:is(#oto-buddy, .talk-avatar)[data-look~='headphones'] .record-headphones { display: block; fill: var(--oto-key); stroke: var(--oto-ink); stroke-width: .8; }
+:is(#oto-buddy, .talk-avatar)[data-mood='error'] .record-glasses { display: none; }
+
+/* Phone controls keep the progression readable as eight compact rows. */
+.mobile-chord-edit, .mobile-options, .mobile-monitor, .mobile-position { display: none; }
+@media (max-width: 600px) {
+  .shell { width: 100%; padding: 0 12px 88px; }
+  header { gap: 10px; padding: 12px 0; }
+  .logo { font-size: 44px; }
+  .buddy-guide { min-width: 0; flex: 1; }
+  .buddy-message { font-size: 11px; padding: 8px; }
+  :is(#oto-buddy, .talk-avatar) { width: 38px; height: 38px; flex: none; }
+  .appearance-open { padding: 8px; font-size: 12px; }
+  main { padding-top: 0; }
+  .instrument { padding: 16px 12px; border-radius: 16px; }
+  .groove.progression { display: block; }
+  .groove.progression > .genre-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 8px; }
+  .groove.progression > .groove-settings { padding: 0; margin: 16px 0; }
+  .groove .groove-timing { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .groove.progression > .transport { position: fixed; top: auto; bottom: max(12px, env(safe-area-inset-bottom)); right: 16px; z-index: 10; margin: 0; }
+  #progression-play { min-width: 116px; min-height: 48px; }
+  .groove .track-grid .drum-controls,
+  .groove .track-grid .bass-controls,
+  .groove .track-grid .chord-sound-controls.part-controls,
+  .groove .track-grid .melody-controls { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; padding: 8px 0; margin: 0; }
+  .groove .track-grid .part-heading { grid-row: span 2; width: 44px; min-height: 88px; }
+  .groove .track-grid select { min-height: 44px; font-size: 14px; padding: 8px 10px; }
+  .groove .track-grid .part-pattern-picker { grid-column: 2; }
+  .groove .track-grid .part-mix { display: none; grid-column: 2; justify-content: flex-end; }
+  .groove .track-grid [role='group']:has(> .track-select[aria-pressed='true']) > .part-mix { display: flex; }
+  .style-stepper button { min-width: 38px; min-height: 44px; }
+  .track-detail-title { font-size: 16px; }
+  .chord-heading { gap: 10px; }
+  .backing-display { display: none; }
+  #detail-chord:has(.mobile-monitor[aria-expanded='true']) .backing-display { display: flex; }
+  .mobile-options, .mobile-monitor, .mobile-position { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 7px; background: var(--oto-key); color: var(--oto-ink); box-shadow: var(--oto-raised); font: inherit; font-size: 12px; }
+  .chord-settings { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .chord-settings .chord-field { min-width: 0; width: 100%; }
+  .chord-settings select { min-height: 44px; height: 44px; font-size: 14px; }
+  .chord-settings .chord-key, .chord-settings .chord-notation { display: none; }
+  #detail-chord:has(.mobile-options[aria-expanded='true']) .chord-key,
+  #detail-chord:has(.mobile-options[aria-expanded='true']) .chord-notation { display: flex; }
+  .chord-grid-scroll { overflow: visible; }
+  .chord-grid-scroll #chord-slots { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; width: 100%; gap: 6px; }
+  #chord-slots .modulation-bar { display: none; }
+  .chord-grid-scroll #chord-slots .chord-slot { display: grid; grid-template-columns: 20px repeat(4, minmax(0, 1fr)); position: relative; min-height: 58px; padding: 4px; width: 100%; border: 0; border-radius: 7px; box-shadow: none; }
+  #chord-slots .chord-slot .bar-label { position: static; align-self: center; font-size: 11px; }
+  #chord-slots .chord-slot .beat-chord { position: relative; display: flex; align-items: center; min-width: 0; min-height: 48px; margin: 0; padding: 0 3px; gap: 2px; }
+  #chord-slots .root-display { font-size: 20px; }
+  #chord-slots .quality-select { font-size: 10px; padding: 0; width: 100%; min-width: 0; pointer-events: none; }
+  #chord-slots .root-select, #chord-slots .chord-preview { display: none; }
+  #chord-slots .mobile-chord-edit { display: block; position: absolute; inset: 0; width: 100%; padding: 0; border: 0; background: transparent; box-shadow: none; z-index: 2; }
+  #chord-slots .current { background: var(--oto-selection); }
+  #chord-slots .beat-chord.current-beat::after { content: ''; position: absolute; bottom: 1px; left: calc(50% - 2px); width: 4px; height: 4px; border-radius: 50%; background: var(--oto-accent); }
+  #detail-melody .pads { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  #detail-melody .pad { min-height: 100px; padding: 8px 4px; }
+  #detail-melody .pad-note { font-size: 22px; }
+  .bass-expression { flex-wrap: wrap; }
+  .drum-sequencer { grid-template-columns: 42px repeat(16, 30px); }
+  .mobile-editor[open] { position: fixed; inset: auto 0 0; margin: 0; width: 100%; max-width: 100%; max-height: 80dvh; overflow: auto; padding: 20px 20px max(24px, env(safe-area-inset-bottom)); border: 0; border-radius: 18px 18px 0 0; background: var(--oto-case); color: var(--oto-ink); }
+  .mobile-editor label { display: grid; gap: 8px; margin: 16px 0; }
+  .mobile-editor select, .mobile-editor button { min-height: 44px; font: inherit; color: var(--oto-ink); background: var(--oto-key); border: 0; border-radius: 7px; padding: 8px 12px; box-shadow: var(--oto-raised); }
+  .mobile-editor select { width: 100%; }
+  .mobile-editor-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+}
+
+@media (max-width: 600px) {
+  .groove.progression > .genre-row .groove-field { width: 100%; min-width: 0; max-width: none; }
+  .groove.progression > .genre-row select { width: 100%; min-width: 0; max-width: none; font-size: 14px; }
+  .groove.progression > .genre-row .style-picker { flex-wrap: nowrap; height: 44px; }
+  .groove.progression > .genre-row .style-picker select { flex: 1 1 0; width: 0; }
+  .groove.progression > .genre-row .style-stepper { margin-left: auto; }
+  .chord-settings .chord-field { grid-column: 1; }
+  .chord-heading .track-detail-title { flex-basis: 100%; }
+  .groove .track-grid .part-heading { grid-column: 1; }
+}
+
+@media (max-width: 600px) {
+  .groove.progression > .genre-row { padding-right: 0; align-items: start; }
+  .groove.progression > .genre-row .groove-field { display: grid; grid-template-rows: auto 44px; gap: 10px; align-content: start; }
+  .groove.progression > .genre-row .groove-field > select,
+  .groove.progression > .genre-row .style-picker > select { height: 44px; min-height: 44px; margin: 0; align-self: start; }
+  .groove.progression > .genre-row .style-stepper button { min-width: 30px; width: 30px; min-height: 44px; }
+}
+
+@media (max-width: 600px) {
+  .track-details .chord-settings { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 14px; }
+  .track-details .chord-settings .chord-field { grid-column: 1 / -1; width: 100%; gap: 6px; }
+  .track-details .chord-settings .preset-picker { display: flex; width: 100%; min-width: 0; height: 44px; }
+  .track-details .chord-settings .preset-picker #preset { flex: 1 1 0; width: 0; min-width: 0; height: 44px; font-size: 14px; }
+  .track-details .chord-settings .chord-start #preset-group { width: 100%; height: 44px; font-size: 14px; }
+  .track-details .chord-settings .chord-key .key-control { width: 100%; justify-content: flex-start; }
+  .track-details .chord-settings .chord-key #key { width: 64px; min-width: 64px; height: 44px; }
+  .track-details .chord-settings .chord-key .key-stepper button { min-width: 44px; height: 44px; }
+  .track-details .chord-settings #notation { width: 100%; }
+  .track-details .chord-heading { justify-content: flex-start; gap: 8px; }
+  .track-details .chord-heading .track-detail-title { width: 100%; }
+  .mobile-score-hint { display: block; margin: 12px 0 8px; font-size: 12px; color: var(--oto-muted); }
+}
+@media (min-width: 601px) { .mobile-score-hint { display: none; } }
+
+@media (max-width: 600px) {
+  .track-details .chord-heading { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; }
+  .track-details .chord-heading .track-detail-title { width: auto; font-size: 15px; }
+  .track-details .chord-heading .mobile-options { display: none; }
+  .track-details .chord-heading .mobile-monitor { grid-column: 2; grid-row: 1; padding: 8px; width: 44px; }
+  .track-details .chord-heading .backing-display { grid-column: 1 / -1; }
+  .track-details .chord-settings { grid-template-columns: minmax(0, 1fr) auto; gap: 12px 8px; }
+  .track-details .chord-settings .chord-start { display: none; }
+  .track-details .chord-settings .chord-preset { grid-column: 1 / -1; }
+  .track-details .chord-settings .chord-key,
+  #detail-chord:has(.mobile-options[aria-expanded='true']) .chord-key { display: flex; grid-column: 1; width: auto; }
+  .track-details .chord-settings .chord-notation,
+  #detail-chord:has(.mobile-options[aria-expanded='true']) .chord-notation { display: flex; grid-column: 2; width: auto; }
+  .track-details .chord-settings .chord-key #key { width: 48px; min-width: 48px; }
+  .track-details .chord-settings .chord-key .key-stepper button { width: 36px; min-width: 36px; }
+  .track-details .chord-settings #notation { width: auto; gap: 0; }
+  .track-details .chord-settings #notation label > span { font-size: 0; width: 36px; min-height: 38px; padding: 6px 0; }
+  .track-details .chord-settings #notation label > span::after { font-size: 13px; }
+  #notation label:has(input[value='number']) > span::after { content: '123'; }
+  #notation label:has(input[value='roman']) > span::after { content: 'Ⅰ'; }
+  #notation label:has(input[value='chord']) > span::after { content: 'C'; }
+}
+
+@media (max-width: 600px) {
+  .groove .groove-timing .swing-control { display: none; }
+  .groove .groove-timing { grid-template-columns: minmax(0, 1fr); }
+  .groove .groove-timing .timing-control { display: grid; grid-template-columns: auto minmax(0, 1fr) 4ch; align-items: center; gap: 12px; min-height: 44px; }
+  .groove .groove-timing .timing-control > span { grid-column: 1; grid-row: 1; margin: 0; }
+  .groove .groove-timing #tempo { grid-column: 2; grid-row: 1; margin: 0; }
+  .groove .groove-timing #tempo-value { grid-column: 3; grid-row: 1; margin: 0; }
+  .groove.progression > .groove-settings { margin: 8px 0; }
+  .groove .track-grid { gap: 6px; }
+  .groove .track-grid .drum-controls,
+  .groove .track-grid .bass-controls,
+  .groove .track-grid .chord-sound-controls.part-controls,
+  .groove .track-grid .melody-controls { padding: 4px 0; row-gap: 6px; }
+  .groove .track-grid .part-heading { min-height: 94px; }
+  .groove .track-grid .part-mix { margin: 0; padding: 0; min-height: 32px; }
+}
+
+/* The conversation lives on the existing melody instrument. */
+.buddy-inline { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; margin-bottom:20px; }
+.talk-companion { display:flex; align-items:center; gap:16px; grid-column:1; grid-row:1; min-height:64px; }
+.talk-face { flex:none; width:56px; height:56px; display:grid; place-items:center; }
+:is(#oto-buddy, .talk-avatar).talk-avatar { width:56px; height:56px; padding:0; background:transparent; cursor:default; border-radius:0; color:var(--oto-ink); transform-origin:center; }
+:is(#oto-buddy, .talk-avatar).talk-avatar svg { width:56px; height:56px; overflow:visible; }
+.talk-bubble { position:relative; margin:0; padding:10px 14px; border-radius:7px; background:var(--oto-display); color:var(--oto-display-ink); font-size:14px; font-weight:650; min-width:7em; }
+.talk-bubble::before { content:''; position:absolute; left:-8px; top:14px; border-top:7px solid transparent; border-bottom:7px solid transparent; border-right:9px solid var(--oto-display); }
+.talk-order { border:0; display:flex; flex-wrap:wrap; align-items:center; gap:14px; padding:0; margin:0; color:var(--oto-muted); font-size:12px; grid-column:1; grid-row:2; }
+.talk-order label { display:flex; align-items:center; gap:6px; cursor:pointer; }
+.talk-order input { accent-color:var(--oto-secondary); }
+#pads .pad { position:relative; touch-action:manipulation; }
+.talk-pad-hand { position:absolute; width:46px; height:46px; right:8px; top:8px; opacity:0; transform:translateY(-8px); pointer-events:none; z-index:1; }
+.talk-pad-hand path { fill:var(--oto-key); stroke:var(--oto-secondary); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
+.talk-pad-hand path + path { fill:none; }
+#pads .pad[data-pc-playing] .talk-pad-hand { opacity:1; transform:translateY(6px); }
+#pads .pad[data-playing] { box-shadow:var(--oto-recess); }
+#pads .pad:disabled { cursor:default; opacity:1; }
+.talk-face[data-speaking="true"] .talk-avatar { animation:talk-listen 600ms ease-in-out infinite alternate; }
+@keyframes talk-listen { from { transform:rotate(-3deg); } to { transform:rotate(3deg); } }
+@media (prefers-reduced-motion:reduce) { .talk-face[data-speaking="true"] .talk-avatar { animation:none; } }
+@media (max-width:700px) {
+  .buddy-inline { grid-template-columns:minmax(0,1fr); gap:12px; }
+  .talk-companion { grid-column:1; grid-row:1; }
+  .talk-order { grid-column:1; grid-row:2; gap:12px; }
+  .talk-pad-hand { width:36px; height:36px; right:2px; top:4px; }
+}
+
+/* Both harmonic roles are bright, raised keys; colour lives in the printed accent. */
+#detail-melody .pad, :root[data-skin] #detail-melody .pad:nth-child(n) { box-shadow:var(--oto-raised); border:0; }
+#detail-melody .pad[data-role='chord'] .pad-number, #detail-melody .pad[data-role='chord'] .pad-role { color:var(--oto-secondary); font-weight:650; }
+#detail-melody .pad[data-role='tension'] .pad-number, #detail-melody .pad[data-role='tension'] .pad-role { color:var(--oto-accent-low); font-weight:650; }
+#detail-melody .pad:hover { filter:brightness(1.025); }
+#detail-melody .pad:active, #detail-melody .pad[data-playing], #detail-melody .pad.playing { box-shadow:var(--oto-recess); }
+:root[data-skin] #detail-melody .pad:nth-child(n):active,
+:root[data-skin] #detail-melody .pad:nth-child(n)[data-playing],
+:root[data-skin] #detail-melody .pad:nth-child(n).playing { box-shadow:var(--oto-recess); }
+#detail-melody .pad-number { border-bottom:2px solid currentColor; padding-bottom:2px; }
+/* Let the bottom row keep its raised edge instead of clipping it at the grid boundary. */
+#detail-melody .pads { overflow:visible; }
+.melody-view { display:flex; gap:10px; margin:0 0 16px; }
+.melody-view button { border:0; border-radius:7px; padding:10px 14px; color:var(--oto-ink); background:var(--oto-key); box-shadow:var(--oto-raised); cursor:pointer; }
+.melody-view button[aria-pressed='true'] { color:var(--oto-secondary); box-shadow:var(--oto-recess); }
+#pads[hidden],.piano-scroll[hidden] { display:none; }
+.piano-scroll { overflow-x:auto; padding:4px 3px 10px; }
+#piano-keys { --piano-width:36px; --piano-black-width:23px; height:174px; position:relative; touch-action:none; user-select:none; }
+.piano-key { position:absolute; top:0; border:0; border-radius:0 0 7px 7px; cursor:pointer; touch-action:none; padding:0; }
+.piano-key span { position:absolute; bottom:12px; left:0; right:0; font-size:10px; pointer-events:none; }
+.piano-white { width:calc(var(--piano-width) - 2px); height:164px; background:var(--oto-key); color:var(--oto-ink); box-shadow:var(--oto-raised); }
+.piano-black { z-index:2; width:var(--piano-black-width); height:102px; background:var(--oto-ink); color:var(--oto-key); box-shadow:var(--oto-raised); }
+.piano-key[data-held],.piano-key[data-pc-playing] { background:var(--oto-secondary); color:var(--oto-key); box-shadow:var(--oto-recess); }
+#detail-melody[data-otto-playing='true'] #piano-keys { pointer-events:none; }
+
+/* Two banks share exactly the same four physical rows. */
+.genre-caption { display:flex; align-items:center; justify-content:space-between; gap:4px; height:16px; white-space:nowrap; }
+.part-bank { display:inline-flex; gap:2px; }
+.part-bank button { border:0; padding:1px 5px; border-radius:4px; background:transparent; color:var(--oto-muted); box-shadow:none; font:inherit; font-size:10px; line-height:14px; cursor:pointer; }
+.part-bank button[aria-pressed='true'] { background:var(--oto-selection); color:var(--oto-ink); }
+.groove .track-grid > [hidden] { display:none!important; }
+.groove .track-grid .ornament-controls { display:grid; grid-template-columns:46px minmax(0,1fr) minmax(0,1fr) 96px; gap:8px; align-items:center; min-width:0; margin:0; padding:0; border:0; }
+.ornament-icon { display:block; font-size:23px; line-height:26px; color:var(--oto-accent); }
+@media(max-width:600px) {
+  .groove .track-grid .ornament-controls { grid-template-columns:44px minmax(0,1fr); gap:8px; padding:8px 0; }
+}
+@media(max-width:600px) {
+  .groove .track-grid .ornament-controls { padding:4px 0; row-gap:6px; }
+}
+.count-in-option { display:flex; align-items:center; justify-content:center; gap:4px; margin-bottom:4px; font-size:10px; color:var(--oto-muted); white-space:nowrap; cursor:pointer; }
+.count-in-option input { accent-color:var(--oto-secondary); }
+:is(#otto-continue, #otto-join, #otto-imitate) { border:0; border-radius:7px; padding:9px 12px; color:var(--oto-ink); background:var(--oto-key); box-shadow:var(--oto-raised); font:inherit; font-size:12px; white-space:nowrap; cursor:pointer; }
+:is(#otto-continue, #otto-join, #otto-imitate)[hidden] { display:none; }
+@media(max-width:600px) { .talk-companion { flex-wrap:wrap; } }
+/* Keep the count-in within the playback control's footprint. */
+.groove.progression > .transport { flex-direction:column; align-items:stretch; }
+.count-in-option { margin:0 0 3px; line-height:16px; }
+@media (max-width:600px) {
+  .count-in-option { padding:4px 6px; border-radius:6px; background:var(--oto-case); }
+}
+#detail-melody[data-otto-playing='true'][data-otto-interruptible='true'] #piano-keys { pointer-events:auto; }
+@media (min-width:601px) {
+  .groove.progression > .transport { flex-direction:row; }
+  .count-in-option { position:absolute; right:0; bottom:calc(100% + 4px); margin:0; line-height:16px; }
+}
+
+/* Compact, optional reference loop player; uses the existing Milk tokens. */
+.reference-player.instrument { margin-bottom: 20px; padding: 16px 20px; }
+.reference-player summary { cursor: pointer; font-weight: 650; }
+.reference-file { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px; }
+.reference-file input { max-width: 100%; min-width: 0; }
+.reference-player p { font-size: 12px; color: var(--oto-muted); overflow-wrap: anywhere; }
+.reference-player fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.reference-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 12px; }
+.reference-row label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.reference-row button, .reference-row input[type=number] { border: 0; border-radius: 7px; padding: 10px; background: var(--oto-key); color: var(--oto-ink); box-shadow: var(--oto-raised); }
+.reference-row input[type=number] { width: 100px; }
+.reference-row input[type=range] { accent-color: var(--oto-secondary); min-width: 80px; }
+#ref-seek { flex: 1; }
+#ref-clock { font-size: 12px; font-variant-numeric: tabular-nums; }
+.reference-player fieldset:disabled { opacity: .5; }
+.reference-drop { position: relative; display: flex; align-items: center; justify-content: center; text-align: center; min-height: 90px; margin-top: 16px; padding: 16px; border: 2px dashed var(--oto-seam); border-radius: 10px; background: var(--oto-key); color: var(--oto-muted); cursor: pointer; font-size: 13px; }
+.reference-drop.dragging, .reference-drop:focus-within { border-color: var(--oto-secondary); background: var(--oto-display); }
+.reference-drop input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.reference-player p:empty, #song-status:empty { display: none; }
+.reference-ruler { margin-top: 14px; padding: 8px 0; color: var(--oto-secondary); }
+.reference-ruler input { display: block; width: 100%; accent-color: var(--oto-secondary); }
+.reference-ruler output { font-size: 12px; font-variant-numeric: tabular-nums; }
+#ref-progressions { max-width: 100%; padding: 10px; background: var(--oto-key); color: var(--oto-ink); border: 0; border-radius: 7px; }
+.timbre-picker { display:flex; width:100%; min-width:0; align-items:stretch; }
+.groove .track-grid .timbre-picker select { min-width:0; width:100%; flex:1; }
+.timbre-picker button { flex:none; width:26px; border:0; background:var(--oto-key); color:var(--oto-ink); box-shadow:var(--oto-raised); cursor:pointer; }
+.groove .track-grid .drum-controls, .groove .track-grid .bass-controls, .groove .track-grid .chord-sound-controls.part-controls, .groove .track-grid .melody-controls, .groove .track-grid .ornament-controls { grid-template-columns:46px minmax(110px,.45fr) minmax(0,1fr) 58px; }
+.track-details .chord-settings .chord-start[hidden] { display: none; }
+@media (min-width: 761px) {
+  .track-details .chord-settings { grid-template-columns: minmax(0, 1fr) auto auto; }
+}
+.reference-timeline { position: relative; padding-top: 15px; background: linear-gradient(var(--oto-display), var(--oto-display)) top / 100% 14px no-repeat; }
+#ref-band { position: absolute; top: 0; height: 14px; background: repeating-linear-gradient(to right, transparent 0 calc(12.5% - 1px), var(--oto-key) calc(12.5% - 1px) 12.5%), var(--oto-secondary); border-radius: 3px; }
+.reference-timeline input { margin-inline: 0; }

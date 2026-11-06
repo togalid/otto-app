@@ -1,5 +1,16 @@
+import { mountMobileChordEditor } from './mobile-chord-editor.js'
+import { mountBasicParts, mountReferenceControls } from './main-controls.js'
+import { createApp, h } from './vendor/vue.runtime.esm-browser.prod.js'
+import { mountPartSteppers, mountTimbreSteppers } from './part-steppers.js'
+import { mountChordGrid } from './chord-grid.js'
+import { createChoiceMenu } from './choice-menu.js'
+import { mountTransport } from './transport-view.js'
+import { mountDrumGrid } from './drum-grid.js'
+import { mountChordMonitor } from './chord-monitor.js'
 import { createMelodyView } from './melody-view.js'
 import { mountReferencePlayer } from './reference-player.js'
+mountBasicParts()
+mountReferenceControls()
 mountReferencePlayer()
 import { OrnamentPlayer } from './ornament-audio.js'
 import { mountOrnaments } from './ornament-ui.js'
@@ -33,7 +44,6 @@ import { BassSynth, genres, genreProgressions, createPartMixer, swungBassBeat, b
 let buddyController
 const instrument = new Instrument()
 instrument.setTimbre('lead-round')
-const pads = document.querySelector('#pads')
 const status = document.querySelector('#status')
 /** @type {HTMLButtonElement[]} */
 const buttons = []
@@ -83,40 +93,32 @@ async function play(index, hold = false) {
   }
 }
 
-notes.forEach((note, index) => {
-  const button = document.createElement('button')
-  button.className = 'pad'
-  button.type = 'button'
-  button.style.setProperty('--pad-color', note.color)
-  button.setAttribute(
-    'aria-label',
-    `${note.label} ${index >= 5 ? '高い音' : ''}を鳴らす（${note.key.toUpperCase()}キー）`,
-  )
-  const number = document.createElement('span')
-  number.className = 'pad-number'
-  number.textContent = String(index + 1).padStart(2, '0')
-  const label = document.createElement('span')
-  label.className = 'pad-note'
-  label.textContent = note.label
-  const key = document.createElement('kbd')
-  key.textContent = note.key.toUpperCase()
-  const role = document.createElement('span')
-  role.className = 'pad-role'
-  button.append(number, label, role, key)
-  button.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0) return
-    button.setPointerCapture(event.pointerId)
-    void play(index, true)
-  })
-  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'])
-    button.addEventListener(type, () => releasePad(index))
-  // Native keyboard and assistive-technology activation.
-  button.addEventListener('click', (event) => {
-    if (event.detail === 0) { void play(index); buddyController?.release(index) }
-  })
-  buttons.push(button)
-  pads?.append(button)
-})
+createApp({
+  render: () => notes.map((note, index) => h('button', {
+    class: 'pad',
+    type: 'button',
+    style: { '--pad-color': note.color },
+    'aria-label': `${note.label} ${index >= 5 ? '高い音' : ''}を鳴らす（${note.key.toUpperCase()}キー）`,
+    onPointerdown: (/** @type {PointerEvent} */ event) => {
+      if (event.button !== 0) return
+      const button = /** @type {HTMLButtonElement} */ (event.currentTarget)
+      button.setPointerCapture(event.pointerId)
+      void play(index, true)
+    },
+    onPointerup: () => releasePad(index),
+    onPointercancel: () => releasePad(index),
+    onLostpointercapture: () => releasePad(index),
+    onClick: (/** @type {MouseEvent} */ event) => {
+      if (event.detail === 0) { void play(index); buddyController?.release(index) }
+    },
+  }, [
+    h('span', { class: 'pad-number' }, String(index + 1).padStart(2, '0')),
+    h('span', { class: 'pad-note' }, note.label),
+    h('span', { class: 'pad-role' }),
+    h('kbd', note.key.toUpperCase()),
+  ])),
+}).mount('#pads')
+buttons.push(...Array.from(document.querySelectorAll('#pads button'), button => /** @type {HTMLButtonElement} */ (button)))
 
 document.addEventListener('keydown', (event) => {
   if (event.target instanceof Element && event.target.closest('dialog[open], #reference-player')) return
@@ -152,6 +154,7 @@ const drums = new DrumSynth(chordInstrument)
 const bass = new BassSynth(chordInstrument)
 const slotContainer = document.querySelector('#chord-slots')
 const progressionStatus = document.querySelector('#progression-status')
+const transportView = mountTransport(togglePlayback)
 const startButton = /** @type {HTMLButtonElement} */ (
   document.querySelector('#progression-play')
 )
@@ -164,8 +167,6 @@ document.addEventListener('keydown', (event) => {
   if (!event.repeat) startButton.click()
 }, true)
 const tempo = /** @type {HTMLInputElement} */ (document.querySelector('#tempo'))
-/** @type {HTMLElement[]} */
-const slotElements = []
 const notation = /** @type {HTMLFieldSetElement} */ (
   document.querySelector('#notation')
 )
@@ -180,10 +181,7 @@ function notationMode() {
   )
 }
 function updateTransport() {
-  const label = startButton.querySelector('.transport-label')
-  const running = progression.running || Boolean(buddyController?.active)
-  if (label) label.textContent = running ? '■ 停止' : '▶ 再生'
-  startButton.setAttribute('aria-pressed', String(running))
+  transportView.running.value = progression.running || Boolean(buddyController?.active)
 }
 const melodyMode = /** @type {HTMLSelectElement} */ (
   document.querySelector('#melody-mode')
@@ -205,7 +203,7 @@ let displayedBeat = -1
 const progression = new Progression(
   chordInstrument,
   (index, chord, key, beat) => {
-    startButton.dataset.beat = index < 0 ? '' : String(beat)
+    transportView.beat.value = index < 0 ? '' : String(beat)
     if (displayedBar !== index || displayedBeat !== beat) {
       const previous = slotElements[displayedBar]
       previous?.querySelectorAll('.beat-chord')[displayedBeat]?.classList.remove('current-beat')
@@ -233,6 +231,12 @@ const progression = new Progression(
   drums,
   bass,
 )
+const drumGrid = mountDrumGrid(hits => {
+  progression.drumSteps = hits
+  renderDrumSteps()
+})
+progression.onDrumPosition = drumGrid.showPosition
+renderDrumSteps()
 progression.melody = instrument
 melodyMode.addEventListener('change', () => {
   progression.melodyPattern = ''
@@ -242,219 +246,87 @@ melodyMode.addEventListener('change', () => {
 })
 
 const qualityOrigins = progression.slots.map((chord) => [chord, chord, chord, chord])
-const qualityMenu = document.createElement('dialog')
-qualityMenu.className = 'quality-menu'
-qualityMenu.setAttribute('aria-label', 'コードの響きを選択')
-document.body.append(qualityMenu)
-/** @type {HTMLSelectElement | null} */
-let qualityMenuSource = null
-qualityMenu.addEventListener('click', (event) => {
-  if (event.target === qualityMenu) qualityMenu.close()
-})
-qualityMenu.addEventListener('close', () => {
-  qualityMenuSource?.focus({ preventScroll: true })
-  qualityMenuSource = null
-})
+const qualityMenu = createChoiceMenu('quality')
+/** @param {number} bar @param {number} beat @param {string} chord */
+async function previewChord(bar, beat, chord) {
+  try {
+    await chordInstrument.ready()
+    if (chordInstrument.context) {
+      const notes = progression.notesForBar(chord, bar, beat)
+      chordInstrument.playAt(notes, chordInstrument.context.currentTime, 1.2, 1, chordWeights(notes, chord, progression.keyForBar(bar)))
+    }
+    if (progressionStatus) progressionStatus.textContent = ''
+  } catch (error) {
+    if (progressionStatus) progressionStatus.textContent = error instanceof Error ? error.message : 'コードを試聴できませんでした。'
+  }
+}
+
 /** @param {HTMLSelectElement} select @param {number} bar @param {number} beat */
 function openQualityMenu(select, bar, beat) {
-  if (qualityMenu.open) return
+  if (qualityMenu.busy) return
   refreshLabels()
-  qualityMenuSource = select
-  qualityMenu.replaceChildren()
-  for (const group of Array.from(select.querySelectorAll('optgroup'))) {
-    const heading = document.createElement('div')
-    heading.className = 'quality-menu-heading'
-    heading.textContent = group.label
-    qualityMenu.append(heading)
-    for (const option of Array.from(group.querySelectorAll('option'))) {
-      const row = document.createElement('div')
-      row.className = 'quality-menu-row'
-      const button = document.createElement('button')
-      button.type = 'button'
-      button.textContent = option.textContent
-      button.className = 'quality-menu-option'
-      if (option.value === select.value) button.setAttribute('aria-current', 'true')
-      button.addEventListener('click', () => {
-        select.value = option.value
-        select.dispatchEvent(new Event('change', { bubbles: true }))
-        qualityMenu.close()
-      })
-      const preview = document.createElement('button')
-      preview.type = 'button'
-      preview.className = 'quality-menu-preview'
-      preview.setAttribute('aria-label', `${option.textContent || 'コード'}を試聴`)
-      preview.title = 'コードを試聴'
-      preview.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 10h4l5-4v12l-5-4H4zM16 9c1.5 1.5 1.5 4.5 0 6M19 6c3.5 3 3.5 9 0 12" /></svg>'
-      preview.addEventListener('click', async () => {
+  const groups = Array.from(select.querySelectorAll('optgroup'), group => ({
+    heading: group.label,
+    choices: Array.from(group.querySelectorAll('option'), option => ({
+      label: option.textContent || '',
+      value: option.value,
+      selected: option.value === select.value,
+      preview: () => {
         const current = beat === 0 ? progression.slots[bar] : progression.beatSlots[bar][beat]
         if (!current) return
         const [quality, extension] = option.value.split(':')
-        const chord = customChord({ ...chordConfig(current), quality, extension })
-        try {
-          await chordInstrument.ready()
-          if (chordInstrument.context) {
-            const notes = progression.notesForBar(chord, bar, beat)
-            chordInstrument.playAt(notes, chordInstrument.context.currentTime, 1.2, 1, chordWeights(notes, chord, progression.keyForBar(bar)))
-          }
-          if (progressionStatus) progressionStatus.textContent = ''
-        } catch (error) {
-          if (progressionStatus) progressionStatus.textContent = error instanceof Error ? error.message : 'コードを試聴できませんでした。'
-        }
-      })
-      row.append(button, preview)
-      qualityMenu.append(row)
-    }
-  }
+        void previewChord(bar, beat, customChord({ ...chordConfig(current), quality, extension }))
+      },
+    })),
+  }))
   const rect = select.getBoundingClientRect()
   const width = Math.min(240, window.innerWidth - 16)
   const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
-  // Keep the first recommendation close to the clicked chord, even when
-  // there is not enough room below it for the full list.
   const minHeight = Math.min(150, window.innerHeight - 16)
   const top = Math.max(8, Math.min(rect.top - 30, window.innerHeight - minHeight - 8))
   const height = Math.min(260, window.innerHeight - top - 8)
-  qualityMenu.style.left = `${left}px`
-  qualityMenu.style.top = `${top}px`
-  qualityMenu.style.width = `${width}px`
-  qualityMenu.style.maxHeight = `${height}px`
-  qualityMenu.showModal()
-  qualityMenu.scrollTop = 0
-  qualityMenu.querySelector('button')?.focus({ preventScroll: true })
+  void qualityMenu.open(select, 'コードの響きを選択', groups, { left, top, width, height })
 }
-progression.slots.forEach((_, bar) => {
-  if (bar % 2 === 0) {
-    const section = bar / 2
-    const modulation = document.createElement('div')
-    modulation.className = 'modulation-bar'
-    modulation.setAttribute('role', 'group')
-    modulation.setAttribute('aria-label', `${bar + 1}〜${bar + 2}小節の設定`)
-    const playControls = document.createElement('div')
-    playControls.className = 'bar-play-controls'
-    for (let index = 0; index < 2; index++) {
-      const play = document.createElement('button')
-      play.type = 'button'
-      play.textContent = '▶'
-      play.setAttribute('aria-label', `${bar + index + 1}小節の先頭から再生`)
-      play.title = `${bar + index + 1}小節の先頭から再生`
-      play.addEventListener('click', () => {
-        if (!tempo.reportValidity()) return
-        if (progressionStatus) progressionStatus.textContent = ''
-        progression.bpm = Number(tempo.value)
-        void progression.start(bar + index, 0)
-        updateTransport()
-      })
-      playControls.append(play)
-    }
-    modulation.append(playControls)
-    const label = document.createElement('span')
-    label.textContent = '転調'
-    const down = document.createElement('button')
-    down.type = 'button'
-    down.textContent = '−'
-    down.className = 'modulation-down'
-    down.setAttribute('aria-label', `${bar + 1}〜${bar + 2}小節のキーを半音下げる`)
-    const value = document.createElement('output')
-    value.className = 'modulation-value'
-    value.setAttribute('aria-live', 'polite')
-    const up = document.createElement('button')
-    up.type = 'button'
-    up.textContent = '＋'
-    up.className = 'modulation-up'
-    up.setAttribute('aria-label', `${bar + 1}〜${bar + 2}小節のキーを半音上げる`)
-    /** @param {number} amount */
-    function changeModulation(amount) {
-      progression.modulation[section] = Math.max(-11, Math.min(11, progression.modulation[section] + amount))
-      refreshLabels()
-    }
-    down.addEventListener('click', () => changeModulation(-1))
-    up.addEventListener('click', () => changeModulation(1))
-    const stepper = document.createElement('div')
-    stepper.className = 'key-stepper modulation-stepper'
-    stepper.setAttribute('role', 'group')
-    stepper.setAttribute('aria-label', `${bar + 1}〜${bar + 2}小節のキーを半音ずつ変更`)
-    stepper.append(down, up)
-    modulation.append(label, value, stepper)
-    slotContainer?.append(modulation)
-  }
-  const box = document.createElement('div')
-  box.className = `chord-slot${bar % 2 === 0 ? ' first-in-pair' : ''}`
-  const barLabel = document.createElement('span')
-  barLabel.className = 'bar-label'
-  barLabel.textContent = `${bar + 1}`
-  box.append(barLabel)
-  for (let beat = 0; beat < 4; beat++) {
-    const main = document.createElement('div')
-    main.className = 'base-chord beat-chord'
-    const root = document.createElement('select')
-    root.className = 'root-select'
-    const rootWrapper = document.createElement('span')
-    rootWrapper.className = 'root-wrapper'
-    const rootDisplay = document.createElement('span')
-    rootDisplay.className = 'root-display'
-    rootDisplay.setAttribute('aria-hidden', 'true')
-    rootWrapper.append(rootDisplay, root)
-    root.setAttribute('aria-label', `${bar + 1}小節 ${beat + 1}拍目のルート`)
-    root.addEventListener('change', () => {
-      const chord = root.value === '' ? null : defaultChord(Number(root.value))
-      if (beat === 0 && chord) progression.slots[bar] = chord
-      else if (beat > 0) progression.beatSlots[bar][beat] = chord
-      if (chord) qualityOrigins[bar][beat] = chord
-      presetSelect.value = 'custom'
-      refreshLabels()
-    })
-    const quality = document.createElement('select')
-    quality.className = 'quality-select'
-    quality.addEventListener('change', () => {
-      const current = beat === 0 ? progression.slots[bar] : progression.beatSlots[bar][beat]
-      if (!current) return
-      const [qualityName, extension] = quality.value.split(':')
-      const chord = customChord({ ...chordConfig(current), quality: qualityName, extension })
-      if (beat === 0) progression.slots[bar] = chord
-      else progression.beatSlots[bar][beat] = chord
-      if (qualityName === 'maj' && ['7', '9', 'b9', 'b9_13', 's9_13'].includes(extension))
-        qualityOrigins[bar][beat] = chord
-      presetSelect.value = 'custom'
-      refreshLabels(quality)
-    })
-    quality.addEventListener('blur', () => refreshLabels())
-    quality.addEventListener('pointerdown', (event) => {
-      event.preventDefault()
-      openQualityMenu(quality, bar, beat)
-    })
-    quality.addEventListener('keydown', (event) => {
-      if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
-        event.preventDefault()
-        openQualityMenu(quality, bar, beat)
-      }
-    })
-    main.append(rootWrapper, quality)
-    const preview = document.createElement('button')
-    preview.type = 'button'
-    preview.className = 'chord-preview'
-    preview.setAttribute('aria-label', `${bar + 1}小節 ${beat + 1}拍目のコードを試聴`)
-    preview.title = 'コードを試聴'
-    preview.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 10h4l5-4v12l-5-4H4zM16 9c1.5 1.5 1.5 4.5 0 6M19 6c3.5 3 3.5 9 0 12" /></svg>'
-    preview.addEventListener('click', async () => {
-      const chord = beat === 0 ? progression.slots[bar] : progression.beatSlots[bar][beat]
-      if (!chord) return
-      try {
-        await chordInstrument.ready()
-        if (chordInstrument.context) {
-          const notes = progression.notesForBar(chord, bar, beat)
-          chordInstrument.playAt(notes, chordInstrument.context.currentTime, 1.2, 1, chordWeights(notes, chord, progression.keyForBar(bar)))
-        }
-        if (progressionStatus) progressionStatus.textContent = ''
-      } catch (error) {
-        if (progressionStatus) progressionStatus.textContent = error instanceof Error ? error.message : 'コードを試聴できませんでした。'
-      }
-    })
-    main.append(preview)
-    box.append(main)
-  }
-  slotElements.push(box)
-  slotContainer?.append(box)
+const slotElements = mountChordGrid(progression.slots.length, {
+  play(bar) {
+    if (!tempo.reportValidity()) return
+    if (progressionStatus) progressionStatus.textContent = ''
+    progression.bpm = Number(tempo.value)
+    void progression.start(bar, 0)
+    updateTransport()
+  },
+  modulate(section, amount) {
+    progression.modulation[section] = Math.max(-11, Math.min(11, progression.modulation[section] + amount))
+    refreshLabels()
+  },
+  root(bar, beat, value) {
+    const chord = value === '' ? null : defaultChord(Number(value))
+    if (beat === 0 && chord) progression.slots[bar] = chord
+    else if (beat > 0) progression.beatSlots[bar][beat] = chord
+    if (chord) qualityOrigins[bar][beat] = chord
+    presetSelect.value = 'custom'
+    refreshLabels()
+  },
+  quality(bar, beat, select) {
+    const current = beat === 0 ? progression.slots[bar] : progression.beatSlots[bar][beat]
+    if (!current) return
+    const [quality, extension] = select.value.split(':')
+    const chord = customChord({ ...chordConfig(current), quality, extension })
+    if (beat === 0) progression.slots[bar] = chord
+    else progression.beatSlots[bar][beat] = chord
+    if (quality === 'maj' && ['7', '9', 'b9', 'b9_13', 's9_13'].includes(extension))
+      qualityOrigins[bar][beat] = chord
+    presetSelect.value = 'custom'
+    refreshLabels(select)
+  },
+  openQuality: openQualityMenu,
+  refresh: () => refreshLabels(),
+  preview(bar, beat) {
+    const chord = beat === 0 ? progression.slots[bar] : progression.beatSlots[bar][beat]
+    if (chord) void previewChord(bar, beat, chord)
+  },
 })
-startButton.addEventListener('click', () => {
+function togglePlayback() {
   if (buddyController?.active) { buddyController.stop(); return }
   if (progression.running) {
     progression.stop()
@@ -466,7 +338,7 @@ startButton.addEventListener('click', () => {
   if (buddyController) void buddyController.start()
   else void progression.start()
   updateTransport()
-})
+}
 const tempoNumber = /** @type {HTMLInputElement} */ (document.querySelector('#tempo-value'))
 tempo.addEventListener('input', () => {
   progression.bpm = Number(tempo.value)
@@ -495,6 +367,7 @@ keys.forEach((key, index) => {
 })
 /** @param {HTMLSelectElement | null} [keepOptions] */
 function refreshLabels(keepOptions = null) {
+  const mode = notationMode()
   slotContainer?.querySelectorAll('.modulation-bar').forEach((element, index) => {
     const section = index
     const offset = progression.modulation[section]
@@ -511,7 +384,7 @@ function refreshLabels(keepOptions = null) {
       const id = beat === 0 ? progression.slots[bar] : progression.beatSlots[bar][beat]
       const root = /** @type {HTMLSelectElement} */ (beatElement.querySelector('.root-select'))
       const barKey = progression.keyForBar(bar)
-      const signature = `${barKey}:${notationMode()}:${beat}`
+      const signature = `${barKey}:${mode}:${beat}`
       if (root.dataset.signature !== signature) {
         root.replaceChildren()
         if (beat > 0) {
@@ -978,56 +851,28 @@ for (const button of trackButtons) {
 
 // Keep the native selects as the source of truth while presenting their choices
 // in the same tactile menu as the rest of the instrument.
-const selectMenu = document.createElement('dialog')
-selectMenu.className = 'select-menu'
-document.body.append(selectMenu)
-/** @type {HTMLSelectElement | null} */
-let menuSelect = null
-selectMenu.addEventListener('click', event => {
-  if (event.target === selectMenu) selectMenu.close()
-})
-selectMenu.addEventListener('close', () => {
-  menuSelect?.focus({ preventScroll: true })
-  menuSelect = null
-})
+const selectMenu = createChoiceMenu('select')
 /** @param {HTMLSelectElement} select */
 function openSelectMenu(select) {
-  if (select.disabled || selectMenu.open) return
-  menuSelect = select
-  selectMenu.replaceChildren()
-  selectMenu.setAttribute('aria-label', select.getAttribute('aria-label') || select.closest('label')?.childNodes[0]?.textContent?.trim() || '選択肢')
-  for (const child of Array.from(select.children)) {
-    if (child instanceof HTMLOptGroupElement) {
-      const heading = document.createElement('div')
-      heading.className = 'select-menu-heading'
-      heading.textContent = child.label
-      selectMenu.append(heading)
+  if (select.disabled || selectMenu.busy) return
+  const groups = Array.from(select.children, child => {
+    const group = child instanceof HTMLOptGroupElement ? child : null
+    const options = group ? Array.from(group.children) : [child]
+    return {
+      heading: group?.label,
+      choices: options.flatMap(option => {
+        if (!(option instanceof HTMLOptionElement) || option.disabled || option.hidden || group?.disabled) return []
+        return [{ label: option.textContent || '', value: option.value, selected: option.selected }]
+      }),
     }
-    const options = child instanceof HTMLOptGroupElement ? Array.from(child.children) : [child]
-    for (const option of options) {
-      if (!(option instanceof HTMLOptionElement) || option.disabled || option.hidden || option.parentElement instanceof HTMLOptGroupElement && option.parentElement.disabled) continue
-      const button = document.createElement('button')
-      button.type = 'button'
-      button.textContent = option.textContent
-      if (option.selected) button.setAttribute('aria-current', 'true')
-      button.addEventListener('click', () => {
-        select.value = option.value
-        select.dispatchEvent(new Event('change', { bubbles: true }))
-        selectMenu.close()
-      })
-      selectMenu.append(button)
-    }
-  }
+  })
+  const label = select.getAttribute('aria-label') || select.closest('label')?.childNodes[0]?.textContent?.trim() || '選択肢'
   const rect = select.getBoundingClientRect()
   const width = Math.min(Math.max(rect.width, 180), window.innerWidth - 16)
-  selectMenu.style.width = `${width}px`
-  selectMenu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
   const height = Math.min(320, window.innerHeight - 16)
-  selectMenu.style.top = `${Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - height - 8))}px`
-  selectMenu.style.maxHeight = `${height}px`
-  selectMenu.showModal()
-  const selected = /** @type {HTMLButtonElement | null} */ (selectMenu.querySelector('[aria-current="true"]'))
-  ;(selected || selectMenu.querySelector('button'))?.focus()
+  const top = Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - height - 8))
+  void selectMenu.open(select, label, groups, { left, top, width, height })
 }
 document.addEventListener('pointerdown', event => {
   const select = event.target instanceof Element ? event.target.closest('select') : null
@@ -1102,144 +947,21 @@ document.addEventListener('change', event => {
 })
 renderBassPhrase()
 
-let currentDrumPosition = -1
-/** @param {number} step */
-progression.onDrumPosition = step => {
-  currentDrumPosition = step
-  document.querySelectorAll('#drum-sequencer .drum-step').forEach(button => {
-    button.classList.toggle('playing', Number(button.getAttribute('data-step')) === step)
-  })
-}
-
 function renderDrumSteps() {
-  const grid = document.querySelector('#drum-sequencer')
-  if (!grid) return
-  const hits = progression.drumSteps ?? rhythmPatterns.find(pattern => pattern.id === progression.rhythm)?.hits ?? []
-  grid.replaceChildren()
-  const corner = document.createElement('span')
-  grid.append(corner)
-  for (let step = 0; step < 16; step++) {
-    const label = document.createElement('span')
-    label.className = 'drum-step-label'
-    label.textContent = step % 4 === 0 ? String(step / 4 + 1) : '·'
-    grid.append(label)
-  }
-  for (const [sound, name] of [['hat', 'ハット'], ['snare', 'スネア'], ['kick', 'キック']]) {
-    const label = document.createElement('span')
-    label.className = 'drum-row-label'
-    label.textContent = name
-    grid.append(label)
-    for (let step = 0; step < 16; step++) {
-      const button = document.createElement('button')
-      button.type = 'button'
-      button.className = 'drum-step'
-      button.dataset.step = String(step)
-      button.classList.toggle('playing', step === currentDrumPosition)
-      if (step % 4 === 0) button.classList.add('beat-start')
-      const matches = hits.filter(hit => hit.sound === sound && Math.round(hit.pulse * 2) % 16 === step)
-      button.setAttribute('aria-label', `${name}、${Math.floor(step / 4) + 1}拍目の${step % 4 + 1}ステップ`)
-      button.setAttribute('aria-pressed', String(matches.length > 0))
-      button.addEventListener('click', () => {
-        const current = progression.drumSteps ?? [...hits]
-        progression.drumSteps = matches.length
-          ? current.filter(hit => !(hit.sound === sound && Math.round(hit.pulse * 2) % 16 === step))
-          : [...current, { sound, pulse: step / 2, velocity: sound === 'hat' ? 0.3 : 0.9 }].sort((a, b) => a.pulse - b.pulse)
-        renderDrumSteps()
-        const buttons = grid.querySelectorAll('button')
-        const row = sound === 'hat' ? 0 : sound === 'snare' ? 1 : 2
-        buttons[row * 16 + step]?.focus({ preventScroll: true })
-      })
-      grid.append(button)
-    }
-  }
+  drumGrid.hits.value = progression.drumSteps ?? rhythmPatterns.find(pattern => pattern.id === progression.rhythm)?.hits ?? []
 }
-renderDrumSteps()
 
-const backingMonitor = document.querySelector('#backing-monitor')
-const monitorKeys = new Map()
-for (let midi = 36; midi <= 95; midi++) {
-  const key = document.createElement('i')
-  const black = [1, 3, 6, 8, 10].includes(midi % 12)
-  key.className = black ? 'monitor-black' : 'monitor-white'
-  key.style.setProperty('--key-position', String((Math.floor(midi / 12) - 3) * 7 + [0, 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6][midi % 12]))
-  backingMonitor?.append(key)
-  monitorKeys.set(midi, key)
-}
-/** @type {Set<number>} */
-let monitorNotes = new Set()
-let monitorRoot = -1
+const setChordMonitor = mountChordMonitor()
 /** @param {number} bar @param {string} chord @param {number} beat */
 function updateChordMonitor(bar, chord, beat) {
   let chordBeat = Math.floor(beat)
   while (chordBeat > 0 && !progression.beatSlots[bar][chordBeat]) chordBeat--
-  const nextNotes = new Set(progression.notesForBar(chord, bar, chordBeat))
   const root = (rootPitch(chord) + progression.keyForBar(bar) + 12) % 12
-  const lowestRoot = Math.min(...[...nextNotes].filter(note => note % 12 === root))
-  for (const midi of monitorNotes) {
-    if (!nextNotes.has(midi)) monitorKeys.get(midi)?.classList.remove('sounding')
-  }
-  for (const midi of nextNotes) {
-    if (!monitorNotes.has(midi)) monitorKeys.get(midi)?.classList.add('sounding')
-  }
-  if (monitorRoot !== lowestRoot) {
-    monitorKeys.get(monitorRoot)?.classList.remove('root-note')
-    monitorKeys.get(lowestRoot)?.classList.add('root-note')
-    monitorRoot = lowestRoot
-  }
-  const label = `コードの構成音 MIDI ${[...nextNotes].join(', ')}`
-  if (backingMonitor?.getAttribute('aria-label') !== label) backingMonitor?.setAttribute('aria-label', label)
-  monitorNotes = nextNotes
+  setChordMonitor(progression.notesForBar(chord, bar, chordBeat), root)
 }
 updateChordMonitor(0, progression.slots[0], 0)
 
-// Place sequential controls next to each part's pattern selector.
-for (const [id, label] of [
-  ['rhythm-pattern', 'ドラムパターン'],
-  ['bass-pattern', 'ベースパターン'],
-  ['chord-backing', 'コードのバッキング'],
-  ['melody-mode', 'メロディの演奏方法'],
-  ['bell-pattern', 'ベルパターン'], ['pluck-pattern', 'プラックパターン'],
-  ['phrase-pattern', 'フレーズパターン'], ['fx-pattern', '展開FXパターン'],
-]) {
-  const select = /** @type {HTMLSelectElement} */ (document.getElementById(id))
-  const control = select.closest('.select-control')
-  if (!control) continue
-  const wrapper = document.createElement('div')
-  wrapper.className = 'part-pattern-picker'
-  control.before(wrapper)
-  wrapper.append(control)
-  const stepper = document.createElement('div')
-  stepper.className = 'style-stepper part-pattern-stepper'
-  stepper.setAttribute('role', 'group')
-  stepper.setAttribute('aria-label', `${label}を切り替え`)
-  const previous = document.createElement('button')
-  const next = document.createElement('button')
-  for (const [button, direction, text] of [[previous, -1, '←'], [next, 1, '→']]) {
-    const step = /** @type {number} */ (direction)
-    const target = /** @type {HTMLButtonElement} */ (button)
-    target.type = 'button'
-    target.textContent = String(text)
-    target.setAttribute('aria-label', `${step < 0 ? '前' : '次'}の${label}`)
-    target.addEventListener('click', () => {
-      const options = Array.from(select.options).filter(option => !option.disabled && !option.parentElement?.hasAttribute('disabled'))
-      const index = options.indexOf(select.selectedOptions[0])
-      const choice = options[index + step]
-      if (!choice) return
-      select.value = choice.value
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-    })
-    stepper.append(target)
-  }
-  function updateStepper() {
-    const options = Array.from(select.options).filter(option => !option.disabled && !option.parentElement?.hasAttribute('disabled'))
-    const index = options.indexOf(select.selectedOptions[0])
-    previous.disabled = index <= 0
-    next.disabled = index < 0 || index >= options.length - 1
-  }
-  select.addEventListener('change', updateStepper)
-  wrapper.append(stepper)
-  updateStepper()
-}
+mountPartSteppers()
 
 // Short responses belong to the object that the user just touched.
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -1349,85 +1071,7 @@ document.addEventListener('change', event => {
   }
 })
 
-// Phone editing reuses the same select change handlers as the score.
-const phoneEditor = document.createElement('dialog')
-phoneEditor.className = 'mobile-editor'
-phoneEditor.setAttribute('aria-label', 'コードを編集')
-document.body.append(phoneEditor)
-/** @type {HTMLButtonElement | undefined} */
-let phoneEditorSource
-phoneEditor.addEventListener('close', () => phoneEditorSource?.focus({ preventScroll: true }))
-phoneEditor.addEventListener('click', event => {
-  if (event.target === phoneEditor) phoneEditor.close()
-})
-slotElements.forEach((slot, bar) => {
-  slot.querySelectorAll('.beat-chord').forEach((cell, beat) => {
-    const edit = document.createElement('button')
-    edit.type = 'button'
-    edit.className = 'mobile-chord-edit'
-    edit.setAttribute('aria-label', `${bar + 1}小節 ${beat + 1}拍目を編集`)
-    edit.addEventListener('click', () => {
-      phoneEditorSource = edit
-      refreshLabels()
-      const heading = document.createElement('h2')
-      heading.textContent = `${bar + 1}小節 · ${beat + 1}拍目`
-      const close = document.createElement('button')
-      close.textContent = '完了'
-      close.addEventListener('click', () => phoneEditor.close())
-      const root = /** @type {HTMLSelectElement} */ (cell.querySelector('.root-select'))
-      const quality = /** @type {HTMLSelectElement} */ (cell.querySelector('.quality-select'))
-      const rootCopy = document.createElement('select')
-      const qualityCopy = document.createElement('select')
-      const sync = () => {
-        for (const [source, target] of [[root, rootCopy], [quality, qualityCopy]]) {
-          target.innerHTML = source.innerHTML
-          target.value = source.value
-        }
-        qualityCopy.disabled = quality.hidden
-      }
-      for (const [name, source, copy] of [['ルート', root, rootCopy], ['響き・テンション', quality, qualityCopy]]) {
-        const label = document.createElement('label')
-        label.textContent = /** @type {string} */ (name)
-        const target = /** @type {HTMLSelectElement} */ (copy)
-        const original = /** @type {HTMLSelectElement} */ (source)
-        label.append(target)
-        target.setAttribute('aria-label', /** @type {string} */ (name))
-        target.addEventListener('change', () => {
-          original.value = target.value
-          original.dispatchEvent(new Event('change', { bubbles: true }))
-          sync()
-        })
-        if (source === root) phoneEditor.replaceChildren(heading, label)
-        else phoneEditor.append(label)
-      }
-      sync()
-      const actions = document.createElement('div')
-      actions.className = 'mobile-editor-actions'
-      const preview = document.createElement('button')
-      preview.textContent = '▶ 試聴'
-      preview.addEventListener('click', () => /** @type {HTMLButtonElement} */ (cell.querySelector('.chord-preview')).click())
-      const modulationLabel = document.createElement('span')
-      modulationLabel.textContent = `${Math.floor(bar / 2) * 2 + 1}〜${Math.floor(bar / 2) * 2 + 2}小節の転調`
-      actions.append(preview, modulationLabel)
-      for (const [text, selector] of [['−', '.modulation-down'], ['＋', '.modulation-up']]) {
-        const button = document.createElement('button')
-        button.textContent = text
-        button.setAttribute('aria-label', `${modulationLabel.textContent}を半音${text === '−' ? '下げる' : '上げる'}`)
-        button.addEventListener('click', () => {
-          const bars = document.querySelectorAll('.modulation-bar')
-          const control = /** @type {HTMLButtonElement} */ (bars[Math.floor(bar / 2)].querySelector(selector))
-          control.click()
-          sync()
-        })
-        actions.append(button)
-      }
-      phoneEditor.append(actions, close)
-      phoneEditor.showModal()
-      rootCopy.focus()
-    })
-    cell.append(edit)
-  })
-})
+mountMobileChordEditor(slotElements, refreshLabels)
 const chordDetail = document.querySelector('#detail-chord')
 for (const [className, label] of [['mobile-options', 'キー・表示'], ['mobile-monitor', '鍵盤・指板']]) {
   const button = document.createElement('button')
@@ -1499,9 +1143,7 @@ genreSelect.dispatchEvent(new Event('change', {bubbles:true}))
 const savedControls = Array.from(document.querySelectorAll('.groove input[id], .groove select[id], #track-grid input[id], #track-grid select[id], #detail-bass input[id], #key, #count-in'))
   .filter(element => element instanceof HTMLInputElement || element instanceof HTMLSelectElement)
 const savedMix = Array.from(document.querySelectorAll('#track-grid button[id][aria-pressed]'))
-const saveStatus = /** @type {HTMLElement} */ (document.querySelector('#song-status'))
-const songFile = /** @type {HTMLInputElement} */ (document.querySelector('#song-file'))
-document.querySelector('#song-save')?.addEventListener('click', () => {
+function saveArrangement() {
   tempoNumber.blur()
   const data = {format:'oto-arrangement', version:1,
     controls:savedControls.map(element => { const el = /** @type {HTMLInputElement} */ (element); return {id:el.id,value:el.value,checked:el.checked ?? false} }),
@@ -1511,11 +1153,10 @@ document.querySelector('#song-save')?.addEventListener('click', () => {
   const url = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)], {type:'application/json'}))
   const link = document.createElement('a'); link.href=url; link.download='oto-style.json'; link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
-  saveStatus.textContent = '設定ファイルを書き出しました。'
-})
-document.querySelector('#song-load')?.addEventListener('click', () => songFile.click())
-songFile.addEventListener('change', async () => {
-  const file = songFile.files?.[0]; if (!file) return
+  return '設定ファイルを書き出しました。'
+}
+/** @param {File} file */
+async function loadArrangement(file) {
   try {
     if (file.size > 1024 * 1024) throw new Error('size')
     const data = JSON.parse(await file.text())
@@ -1528,7 +1169,7 @@ songFile.addEventListener('change', async () => {
       const el = /** @type {HTMLInputElement} */ (element)
       const item = data.controls.find((/** @type {{id:string}} */ item) => item.id === el.id)
       if (!item || typeof item.value !== 'string' || typeof item.checked !== 'boolean') throw new Error('control')
-      if (el instanceof HTMLSelectElement && el.id !== 'genre' && !Array.from(el.options).some(o => o.value === item.value)) throw new Error('option')
+      if (el instanceof HTMLSelectElement && el.id !== 'genre' && !(el.id === 'bass-pattern' && item.value === '') && !Array.from(el.options).some(o => o.value === item.value)) throw new Error('option')
       if (el.type === 'range' || el.type === 'number') {
         const n = Number(item.value)
         if (!Number.isFinite(n) || n < Number(el.min) || n > Number(el.max)) throw new Error('range')
@@ -1551,16 +1192,27 @@ songFile.addEventListener('change', async () => {
     progression.slots = data.slots; progression.beatSlots = data.beatSlots; progression.modulation = data.modulation
     progression.bassFeel = data.bassFeel; progression.bassTones = data.bassTones; progression.drumSteps = data.drumSteps
     refreshLabels(); renderDrumSteps(); refreshMelody(); buddyController?.styleChanged()
-    saveStatus.textContent = '保存した設定を読み込みました。'
-  } catch { saveStatus.textContent = '読み込めませんでした。otoで保存した設定ファイルを選んでください。' }
-  finally { songFile.value = '' }
-})
+    return '保存した設定を読み込みました。'
+  } catch { return '読み込めませんでした。otoで保存した設定ファイルを選んでください。' }
+}
 
-const songDialog = /** @type {HTMLDialogElement} */ (document.querySelector('#song-dialog'))
 const songOpen = /** @type {HTMLButtonElement} */ (document.querySelector('#song-open'))
-songOpen.addEventListener('click', () => songDialog.showModal())
-document.querySelector('#song-close')?.addEventListener('click', () => songDialog.close())
-songDialog.addEventListener('close', () => songOpen.focus())
+/** @type {Promise<ReturnType<import('./song-dialog.js').mountSongDialog>> | undefined} */
+let songDialogPromise
+songOpen.addEventListener('click', async () => {
+  songOpen.disabled = true
+  try {
+    songDialogPromise ??= import('./song-dialog.js').then(({ mountSongDialog }) =>
+      mountSongDialog({ save: saveArrangement, load: loadArrangement, onClose: () => songOpen.focus() }))
+    const dialog = await songDialogPromise
+    dialog.open()
+  } catch {
+    songDialogPromise = undefined
+    if (progressionStatus) progressionStatus.textContent = '設定画面を開けませんでした。もう一度お試しください。'
+  } finally {
+    songOpen.disabled = false
+  }
+})
 
 document.addEventListener('reference-preset', event => {
   const id = /** @type {CustomEvent<string>} */ (event).detail
@@ -1571,28 +1223,4 @@ document.addEventListener('reference-preset', event => {
   updatePresetButtons()
 })
 
-// Sound buttons share the same change handlers as the selects.
-for (const select of Array.from(document.querySelectorAll('#track-grid select[id$="-timbre"]'))) {
-  if (!(select instanceof HTMLSelectElement) || !select.parentElement) continue
-  const picker = document.createElement('div')
-  picker.className = 'timbre-picker'
-  const parent = select.parentElement
-  parent.replaceChild(picker, select)
-  picker.append(select)
-  Array.from(select.options).forEach((option, index) => {
-    const name = option.textContent || ''
-    option.title = name
-    option.textContent = String(index + 1).padStart(2, '0')
-  })
-  for (const [label, direction] of [['←', -1], ['→', 1]]) {
-    const button = document.createElement('button')
-    button.type = 'button'
-    button.textContent = String(label)
-    button.setAttribute('aria-label', `${select.getAttribute('aria-label') || '音色'} ${direction === -1 ? '前へ' : '次へ'}`)
-    button.addEventListener('click', () => {
-      select.selectedIndex = (select.selectedIndex + Number(direction) + select.options.length) % select.options.length
-      select.dispatchEvent(new Event('change', {bubbles:true}))
-    })
-    picker.append(button)
-  }
-}
+mountTimbreSteppers()

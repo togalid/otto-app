@@ -1103,3 +1103,5 @@ header { min-height: 60px; }
 .reference-timeline { position: relative; padding-top: 15px; background: linear-gradient(var(--oto-display), var(--oto-display)) top / 100% 14px no-repeat; }
 #ref-band { position: absolute; top: 0; height: 14px; background: repeating-linear-gradient(to right, transparent 0 calc(12.5% - 1px), var(--oto-key) calc(12.5% - 1px) 12.5%), var(--oto-secondary); border-radius: 3px; }
 .reference-timeline input { margin-inline: 0; }
+
+.timbre-arrows { display: contents; }

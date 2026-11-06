@@ -7,7 +7,7 @@ Keep its established Milk UI and musical behavior unless the user requests a cha
 ## Work efficiently
 
 - Locate the relevant symbol with `rg` before reading files. Read only the affected modules and their tests; do not ingest all presets, CSS, vendor code, or historical design notes.
-- `dist/` is authored source, not generated output. There is no build step. Do not edit `dist/vendor/tone.js` or add a bundler/framework for routine changes.
+- `dist/` is authored source, not generated output. There is no build step. Do not edit vendored runtime files. Vue owns the transport, drum grid, chord monitor, and settings dialogs. Keep audio scheduling and score state outside Vue. Add new Vue components only at a clear UI boundary.
 - Use native ES modules, Web Audio, Tone.js, and strict checked JSDoc. Separate pure musical/analysis rules from DOM and server I/O.
 - Preserve public exports and version-1 arrangement files. Transport, quantization, note-off ordering, style changes during playback, and stale async results need special care.
 - Avoid unlimited caches and caches keyed by mutable object identity. Never move audio scheduling to requestAnimationFrame.

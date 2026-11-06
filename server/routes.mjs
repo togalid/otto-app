@@ -1,8 +1,10 @@
 // Explicit public files: server code, configuration, and user files are never exposed.
 export const routes = new Map([
-  ...['melody-view.js', 'reference-player.js', 'reference-analysis.js', 'reference-analysis-worker.js', 'reference-analysis-client.js', 'ornaments.js', 'ornament-audio.js', 'ornament-ui.js', 'style-ornaments.js', 'otto-style.js'].map(file => [`/${file}`, [file, 'text/javascript']]),
+  ...['mobile-chord-editor.js', 'main-controls.js', 'part-steppers.js', 'chord-grid.js', 'choice-menu.js', 'transport-view.js', 'drum-grid.js', 'chord-monitor.js', 'appearance-dialog.js', 'song-dialog.js', 'melody-view.js', 'reference-player.js', 'reference-analysis.js', 'reference-analysis-worker.js', 'reference-analysis-client.js', 'ornaments.js', 'ornament-audio.js', 'ornament-ui.js', 'style-ornaments.js', 'otto-style.js'].map(file => [`/${file}`, [file, 'text/javascript']]),
   ['/keyboard.js', ['keyboard.js', 'text/javascript']],
   ['/buddy.js', ['buddy.js', 'text/javascript']],
+  ['/vendor/vue.runtime.esm-browser.prod.js', ['vendor/vue.runtime.esm-browser.prod.js', 'text/javascript']],
+  ['/vendor/VUE-LICENSE.txt', ['vendor/VUE-LICENSE.txt', 'text/plain']],
   ['/vendor/tone.js', ['vendor/tone.js', 'text/javascript']],
   ['/vendor/TONE-LICENSE.txt', ['vendor/TONE-LICENSE.txt', 'text/plain']],
   ['/tone-engine.js', ['tone-engine.js', 'text/javascript']],

@@ -6,17 +6,26 @@ const root = document.documentElement
 function applySkin(value) {
   const skin = value && skins.includes(value) ? value : 'milk'
   root.dataset.skin = skin
-  document.querySelectorAll('input[name="skin"]').forEach((element) => {
-    const input = /** @type {HTMLInputElement} */ (element)
-    input.checked = input.value === skin
-  })
   const color = getComputedStyle(root).getPropertyValue('--oto-page').trim()
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color)
 }
 try { applySkin(localStorage.getItem(storageKey)) } catch { applySkin('milk') }
 const dialog = /** @type {HTMLDialogElement} */ (document.querySelector('#appearance-dialog'))
 const opener = /** @type {HTMLButtonElement} */ (document.querySelector('#appearance-open'))
-opener.addEventListener('click', () => dialog.showModal())
+/** @type {Promise<ReturnType<import('./appearance-dialog.js').mountAppearanceDialog>> | undefined} */
+let appearancePromise
+opener.addEventListener('click', async () => {
+  opener.disabled = true
+  try {
+    appearancePromise ??= import('./appearance-dialog.js').then(({ mountAppearanceDialog }) =>
+      mountAppearanceDialog({ current: () => root.dataset.skin || 'milk', select: selectSkin, close: () => { void closeAppearance() } }))
+    const appearance = await appearancePromise
+    appearance.open()
+  } catch {
+    appearancePromise = undefined
+    opener.title = '外観設定を開けませんでした。もう一度お試しください。'
+  } finally { opener.disabled = false }
+})
 let closing = false
 async function closeAppearance() {
   if (closing || !dialog.open) return
@@ -29,17 +38,13 @@ async function closeAppearance() {
   closing = false
 }
 dialog.addEventListener('cancel', event => { event.preventDefault(); void closeAppearance() })
-document.querySelector('#appearance-close')?.addEventListener('click', () => { void closeAppearance() })
 dialog.addEventListener('click', (event) => { if (event.target === dialog) {
   const bounds = dialog.getBoundingClientRect()
   if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) void closeAppearance()
 } })
 dialog.addEventListener('close', () => opener.focus())
-document.querySelectorAll('input[name="skin"]').forEach((element) => {
-  element.addEventListener('change', () => {
-    const input = /** @type {HTMLInputElement} */ (element)
-    if (!input.checked) return
-    applySkin(input.value)
-    try { localStorage.setItem(storageKey, input.value) } catch { /* Optional preference storage. */ }
-  })
-})
+/** @param {string} skin */
+function selectSkin(skin) {
+  applySkin(skin)
+  try { localStorage.setItem(storageKey, skin) } catch { /* Optional preference storage. */ }
+}

@@ -1,3 +1,4 @@
+import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { styleOrnaments } from './style-ornaments.js'
 import { ornamentParts, ornamentPatterns } from './ornaments.js'
 
@@ -9,13 +10,7 @@ export function mountOrnaments(tracks) {
   caption.className = 'part-bank'
   caption.setAttribute('role', 'group')
   caption.setAttribute('aria-label', '表示するパート')
-  const buttons = ['基本', '彩り'].map((label, index) => {
-    const button = document.createElement('button')
-    button.type = 'button'; button.textContent = label
-    button.setAttribute('aria-pressed', String(index === 0))
-    caption.append(button)
-    return button
-  })
+  const bank = ref(0)
   const genre = /** @type {HTMLElement} */ (document.querySelector('#genre-group'))
   const heading = document.createElement('div')
   heading.className = 'genre-caption'
@@ -37,7 +32,32 @@ export function mountOrnaments(tracks) {
     const row = document.createElement('div')
     row.className = 'ornament-controls'; row.hidden = true
     row.setAttribute('role', 'group'); row.setAttribute('aria-label', `${part.label}パート`)
-    row.innerHTML = `<button type="button" class="part-heading track-select ornament-select" aria-pressed="${index === 0}" aria-label="${part.label}のミックスを表示"><span class="ornament-icon" aria-hidden="true">${icons[index]}</span><span class="track-name">${part.label}</span></button><label class="select-control"><span class="sr-only">${part.label}の音色</span><select id="${part.id}-timbre">${part.timbres.map(t => `<option value="${t.id}">${t.label}</option>`).join('')}</select></label><label class="select-control"><span class="sr-only">${part.label}のパターン</span><select id="${part.id}-pattern">${ornamentPatterns.filter(p => p.part === part.id).map(p => `<option value="${p.id}">${p.label}</option>`).join('')}</select></label><div class="part-mix" role="group" aria-label="${part.label}のミックス"><button type="button" class="mix-button" id="${part.id}-mute" aria-label="${part.label}をミュート" aria-pressed="false">M</button><button type="button" class="mix-button" id="${part.id}-solo" aria-label="${part.label}をソロ" aria-pressed="false">S</button><label class="volume-knob" title="${part.label}の音量"><input id="${part.id}-volume" type="range" min="0" max="100" value="24" aria-label="${part.label}の音量"><span aria-hidden="true"></span></label></div>`
+    const mixLabel = part.label + 'のミックス'
+    /** @param {string} kind @param {string} label @param {readonly {id:string,label:string}[]} options */
+    const selector = (kind, label, options) => h('label', { class: 'select-control' }, [
+      h('span', { class: 'sr-only' }, part.label + 'の' + label),
+      h('select', { id: part.id + '-' + kind }, options.map(option => h('option', { value: option.id }, option.label))),
+    ])
+    createApp({
+      render: () => [
+        h('button', { type: 'button', class: 'part-heading track-select ornament-select',
+          'aria-pressed': String(index === 0), 'aria-label': mixLabel + 'を表示' }, [
+          h('span', { class: 'ornament-icon', 'aria-hidden': 'true' }, icons[index]),
+          h('span', { class: 'track-name' }, part.label),
+        ]),
+        selector('timbre', '音色', part.timbres),
+        selector('pattern', 'パターン', ornamentPatterns.filter(pattern => pattern.part === part.id)),
+        h('div', { class: 'part-mix', role: 'group', 'aria-label': mixLabel }, [
+          ...[['mute', 'ミュート', 'M'], ['solo', 'ソロ', 'S']].map(([id, label, glyph]) =>
+            h('button', { type: 'button', class: 'mix-button', id: part.id + '-' + id,
+              'aria-label': part.label + 'を' + label, 'aria-pressed': 'false' }, glyph)),
+          h('label', { class: 'volume-knob', title: part.label + 'の音量' }, [
+            h('input', { id: part.id + '-volume', type: 'range', min: 0, max: 100, value: 24, 'aria-label': part.label + 'の音量' }),
+            h('span', { 'aria-hidden': 'true' }),
+          ]),
+        ]),
+      ],
+    }).mount(row)
     grid.append(row)
     const track = tracks[index]
     const timbre = /** @type {HTMLSelectElement} */ (row.querySelector(`#${part.id}-timbre`))
@@ -50,11 +70,17 @@ export function mountOrnaments(tracks) {
     })
     return row
   })
-  buttons.forEach((button, index) => button.addEventListener('click', () => {
-    basic.forEach(row => { /** @type {HTMLElement} */ (row).hidden = index !== 0 })
-    rows.forEach(row => { row.hidden = index === 0 })
-    buttons.forEach((item, i) => item.setAttribute('aria-pressed', String(index === i)))
-  }))
+  createApp({
+    render: () => ['基本', '彩り'].map((label, index) => h('button', {
+      type: 'button',
+      'aria-pressed': String(bank.value === index),
+      onClick: () => {
+        bank.value = index
+        basic.forEach(row => { /** @type {HTMLElement} */ (row).hidden = index !== 0 })
+        rows.forEach(row => { row.hidden = index === 0 })
+      },
+    }, label)),
+  }).mount(caption)
   /** @param {string} styleId */
   return function setStyle(styleId) {
     const settings = styleOrnaments[styleId]

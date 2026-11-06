@@ -1,3 +1,5 @@
+import { createApp, h } from './vendor/vue.runtime.esm-browser.prod.js'
+
 /** Three octaves, with the closing C. */
 export const pianoNotes = Object.freeze(Array.from({length:37},(_,i)=>48+i))
 /** @param {number} midi */
@@ -13,18 +15,25 @@ export function mountKeyboard(source) {
   const pads=/** @type {HTMLElement} */ (document.querySelector('#pads'))
   /** @type {Map<number,HTMLButtonElement>} */
   const buttons=new Map()
-  let white=0
-  pianoNotes.forEach(midi=>{
-    const key=pianoKey(midi),button=document.createElement('button')
-    button.type='button'; button.className='piano-key '+(key.black?'piano-black':'piano-white')
-    button.dataset.midi=String(midi); button.setAttribute('aria-label',key.label+'を鳴らす')
-    button.tabIndex=midi===60?0:-1
-    if(key.black) button.style.left=`calc(${white} * var(--piano-width) - var(--piano-black-width) / 2)`
-    else {button.style.left=`calc(${white} * var(--piano-width))`;white++}
-    const label=document.createElement('span');label.textContent=key.label;button.append(label)
-    board.append(button);buttons.set(midi,button)
+  let white = 0
+  const keys = pianoNotes.map(midi => {
+    const key = pianoKey(midi)
+    const left = key.black
+      ? `calc(${white} * var(--piano-width) - var(--piano-black-width) / 2)`
+      : `calc(${white++} * var(--piano-width))`
+    return { ...key, left }
   })
-  board.style.width=`calc(${white} * var(--piano-width))`
+  createApp({
+    render: () => keys.map(key => h('button', {
+      type: 'button', class: key.black ? 'piano-key piano-black' : 'piano-key piano-white',
+      'data-midi': key.midi, 'aria-label': key.label + 'を鳴らす',
+      tabindex: key.midi === 60 ? 0 : -1, style: { left: key.left },
+    }, [h('span', key.label)])),
+  }).mount(board)
+  for (const button of Array.from(board.querySelectorAll('button'))) {
+    buttons.set(Number(button.dataset.midi), button)
+  }
+  board.style.width = `calc(${white} * var(--piano-width))`
   /** @type {{pointer:number,midi:number,ready:boolean,token:number}|undefined} */
   let gesture
   let token=0

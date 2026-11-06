@@ -207,8 +207,10 @@ export function mountReferencePlayer() {
   const position = () => source && context ? loopPosition(offset, Math.max(0, context.currentTime - began), from, to) : offset
   const time = (/** @type {number} */ value) => `${Math.floor(value / 60)}:${(value % 60).toFixed(1).padStart(4, '0')}`
   function draw() {
-    seek.value = String(position())
-    clock.textContent = `${time(position())} / ${time(buffer?.duration ?? 0)}`
+    const current = position()
+    seek.value = String(current)
+    const label = `${time(current)} / ${time(buffer?.duration ?? 0)}`
+    if (clock.textContent !== label) clock.textContent = label
     if (source) frame = requestAnimationFrame(draw)
   }
   function pause() {

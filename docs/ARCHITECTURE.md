@@ -2,7 +2,7 @@
 
 ## Runtime
 
-The browser loads authored native ES modules from `dist/`. No framework hydration, bundle build, database, external fonts, remote LLM, or remote sample fetch is needed. Tone.js is a local, lazy-loaded synthesis dependency (about 340 KiB); keep its existing promise deduplication. Replacing it would change the instruments and has no measured justification.
+The browser loads authored native ES modules from `dist/`. The transport, score, basic and ornament parts, pads, keyboard, reference controls, and dialogs use the local Vue runtime. Audio timing and score state live in the existing engine. No bundle build, database, external fonts, remote LLM, or remote sample fetch is needed. Tone.js is a local, lazy-loaded synthesis dependency (about 340 KiB); keep its existing promise deduplication. Replacing it would change the instruments and has no measured justification.
 
 `app.js` composes controls, instruments, progression, and Otto. Musical events use the AudioContext clock and look-ahead scheduling. Visual work must never become the audio clock. Reference playback has its own transport. Large reference analysis belongs off the UI thread; worker output is accepted only for the current file/selection.
 
@@ -10,17 +10,22 @@ The browser loads authored native ES modules from `dist/`. No framework hydratio
 
 | Change | Read first | Focused tests |
 | --- | --- | --- |
+| Instrument and chord choice menus | `choice-menu.js`, select adapters in `app.js` | browser |
+| Score grid and part pattern controls | `chord-grid.js`, `part-steppers.js`, adapters in `app.js` | browser |
 | Harmony, chord labels | `music.js`, `presets.js` | `music`, `presets` |
-| Transport, live updates | `progression.js` | `progression` |
+| Transport display and playback | `transport-view.js`, `progression.js` | `progression` |
+| Drum grid and chord monitor | `drum-grid.js`, `chord-monitor.js` | browser |
 | Otto phrase/interaction | `buddy.js`, `otto-style.js` | `buddy`, `otto-style` |
 | Melody pad feedback | `melody-view.js`, relevant `app.js` handler | `melody-view` |
 | Synth/mono/timbre | `audio.js`, `tone-engine.js`, `timbres.js` | `mono-line`, `tone-engine`, timbre tests |
 | Basic accompaniment | `backing.js`, `groove.js`, `rhythm.js` | matching tests |
 | Ornament arrangement | `ornaments.js`, `ornament-audio.js`, `style-ornaments.js` | matching tests |
+| Basic parts and reference controls | `main-controls.js` | browser |
+| Mobile score editor | `mobile-chord-editor.js`, `chord-grid.js` | browser |
 | Reference audio | `reference-player.js`, `reference-analysis.js` and worker modules | `reference-player`, analysis tests |
 | File serving/stems | `server.mjs`, `server/` | server tests |
-| Appearance | `index.html`, `style.css`, `skins.css` | browser |
-| Portable settings | end of `app.js` | temporary JSON round trip |
+| Appearance | `appearance-dialog.js`, `skins.js`, `style.css`, `skins.css` | browser |
+| Portable settings | `song-dialog.js`, end of `app.js` | temporary JSON round trip |
 
 Test names are `tests/<name>.test.mjs`. Sources referenced above live under `dist/` unless noted. Keep public analysis exports compatible with existing consumers.
 

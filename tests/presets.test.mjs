@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { presets, presetGroups, presetSlots, presetBeatSlots } from '../dist/presets.js'
-import { chordNotes, rootPitch, defaultProgression } from '../dist/music.js'
+import { chordNotes, rootPitch, defaultProgression, presetLevel } from '../dist/music.js'
 import { Progression } from '../dist/progression.js'
 
 test('catalog groups follow the requested starting-degree order and every preset matches its group', () => {
@@ -168,4 +168,13 @@ test('newmusic and magical pop retain pivot dominants and independent tonal excu
     assert.equal(presetSlots(id).length, 8)
     assert.ok(presetBeatSlots(id).flat().some(Boolean))
   }
+})
+
+test('preset levels distinguish diatonic pitches, chromatic chords, and modulation', () => {
+  const pattern = ['FM7', 'G7', 'Em7', 'Am7', 'x:0:maj:maj9:0']
+  assert.equal(presetLevel({pattern, changes: [{chord: 'Dm7'}, {chord: 'C'}]}), 1)
+  for (const chord of ['x:3:dim:7:1', 'x:5:maj:maj7:11', 'x:2:maj:7:0']) {
+    assert.equal(presetLevel({pattern, changes: [{chord}]}), 2)
+  }
+  assert.equal(presetLevel({pattern, changes: [], modulation: [0, 0, 2, 0]}), 3)
 })

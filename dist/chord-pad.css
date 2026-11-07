@@ -1,0 +1,80 @@
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif}.pad-shell{max-width:1300px;margin:auto;padding:32px}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}header a{font-size:42px;font-weight:800;letter-spacing:-3px;color:var(--oto-ink);text-decoration:none}header span,.hint,p{color:var(--oto-muted);font-size:13px}.pad-case{padding:28px;border-radius:18px;background:linear-gradient(150deg,var(--oto-case),var(--oto-case-low));box-shadow:var(--oto-raised)}.pad-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:32px}h1{font-size:24px;margin:0}h2{font-size:14px;margin-right:auto}.pads{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}.chord-pad{position:relative;aspect-ratio:1;touch-action:none;user-select:none;border:0;border-radius:7px;background:var(--oto-key);color:var(--oto-ink);box-shadow:var(--oto-raised);cursor:pointer;font:inherit}.chord-pad strong{font-size:clamp(18px,2.2vw,30px)}.chord-pad small{display:block;font-size:11px;margin-top:8px;color:var(--oto-muted)}.corner{position:absolute;padding:6px;font-size:12px;border-radius:7px}.tl{top:4px;left:4px}.tr{top:4px;right:4px}.bl{bottom:4px;left:4px}.br{bottom:4px;right:4px}.chord-pad.active{box-shadow:var(--oto-recess)}.chosen{background:var(--oto-selection);color:var(--oto-selection-ink)}.pad-status{margin:24px 0;padding:16px;background:var(--oto-display);color:var(--oto-display-ink);border-radius:7px;box-shadow:var(--oto-recess);min-height:56px}.record-heading{display:flex;align-items:center;gap:12px}.record-heading button,.pad-heading select{font:inherit;padding:10px;border:0;border-radius:7px;background:var(--oto-key);color:var(--oto-ink);box-shadow:var(--oto-raised)}:focus-visible{outline:2px solid var(--oto-secondary);outline-offset:4px}ol{display:flex;flex-wrap:wrap;gap:10px;list-style:none;padding:0;min-height:70px}li{background:var(--oto-key);box-shadow:var(--oto-raised);padding:14px;border-radius:7px}li small{display:block;font-size:10px;color:var(--oto-muted);margin-bottom:6px}.hint{margin-top:28px}@media(max-width:850px){.pads{grid-template-columns:repeat(4,1fr)}.pad-shell{padding:16px}.pad-case{padding:20px}}@media(max-width:480px){.pads{grid-template-columns:repeat(2,1fr)}.pad-heading{align-items:start;gap:12px}h1{font-size:20px}}
+
+.chord-pad{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1.4fr 1fr;padding:6px;gap:0}.chord-pad .corner,.chord-pad .pad-center{position:static;box-shadow:none;padding:4px;background:transparent;border:0;cursor:pointer;color:var(--oto-ink)}.chord-pad .pad-center{grid-column:1 / 3;grid-row:2;font-size:clamp(18px,2.2vw,30px);font-weight:700}.chord-pad .tl{grid-column:1;grid-row:1}.chord-pad .tr{grid-column:2;grid-row:1}.chord-pad .bl{grid-column:1;grid-row:3}.chord-pad .br{grid-column:2;grid-row:3}.chord-pad button:active{background:var(--oto-selection)}
+
+
+.pad-menu-source{position:fixed;opacity:0;pointer-events:none;width:1px;height:1px}
+
+/* Five distinct touch regions, contained inside each physical pad. */
+.chord-pad{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(44px,1fr) minmax(44px,1.15fr) minmax(44px,1fr);gap:4px;min-width:0;aspect-ratio:auto;min-height:180px;padding:7px;cursor:default}
+.chord-pad .corner{min-width:0;max-width:100%;min-height:44px;padding:6px 3px;border:1px solid color-mix(in srgb,var(--oto-secondary) 15%,transparent);background:color-mix(in srgb,var(--oto-secondary) 5%,var(--oto-key));border-radius:5px;font-size:clamp(10px,1.05vw,13px);line-height:1.25;white-space:normal;overflow-wrap:anywhere;box-shadow:inset 0 1px 0 #ffffff80}
+.chord-pad .pad-center{min-width:0;max-width:100%;overflow-wrap:anywhere;font-size:clamp(17px,2vw,27px);line-height:1.15}
+.chord-pad .corner:hover{background:color-mix(in srgb,var(--oto-secondary) 9%,var(--oto-key))}
+.chord-pad .corner:active{background:var(--oto-selection);box-shadow:var(--oto-recess)}
+.chord-pad .corner:focus-visible{outline-offset:0}
+@media(max-width:850px){.chord-pad .corner{font-size:12px}}
+
+.chord-result{display:grid;grid-template-columns:minmax(120px,1fr) 2fr;gap:24px;align-items:center}.chord-result div{display:grid;gap:6px;min-width:0}.chord-result span{font-size:11px;color:var(--oto-muted)}.chord-result strong{font-size:20px;overflow-wrap:anywhere}@media(max-width:480px){.chord-result{grid-template-columns:1fr;gap:14px}}
+
+/* Joined surfaces inside one rounded pad, arranged like the reference. */
+.pads{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:20px;background:transparent;padding:0;box-shadow:none;border:0}
+.chord-pad{grid-column:span 2;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(44px,1fr) minmax(90px,2.5fr) minmax(44px,1fr);gap:0;padding:0;min-height:0;aspect-ratio:1;border-radius:18px;overflow:hidden;isolation:isolate;background:var(--oto-key);box-shadow:0 2px 0 color-mix(in srgb,var(--oto-seam) 45%,transparent)}
+.chord-pad:nth-child(4){grid-column:2 / span 2;grid-row:1}.chord-pad:nth-child(5){grid-column:4 / span 2;grid-row:1}.chord-pad:nth-child(6){grid-column:6 / span 2;grid-row:1}
+.chord-pad:nth-child(1){grid-column:1 / span 2;grid-row:2}.chord-pad:nth-child(2){grid-column:3 / span 2;grid-row:2}.chord-pad:nth-child(3){grid-column:5 / span 2;grid-row:2}.chord-pad:nth-child(7){grid-column:7 / span 2;grid-row:2}
+.chord-pad .corner{width:100%;height:100%;border:0;border-radius:0;box-shadow:none;background:color-mix(in srgb,var(--oto-secondary) 4%,var(--oto-key));font-size:clamp(12px,1.3vw,18px);padding:8px 5px;overflow-wrap:anywhere}
+.chord-pad .tl,.chord-pad .tr{border-bottom:1px solid color-mix(in srgb,var(--oto-seam) 35%,transparent)}
+.chord-pad .tl,.chord-pad .bl{border-right:1px solid color-mix(in srgb,var(--oto-seam) 35%,transparent)}
+.chord-pad .pad-center{width:100%;height:100%;padding:12px 6px;border-radius:0;background:var(--oto-key);font-size:clamp(24px,3vw,42px)}
+.chord-pad button:focus-visible{outline-offset:-4px}
+@media(max-width:600px){.pads{gap:10px}.chord-pad{border-radius:12px;aspect-ratio:auto;grid-template-rows:44px 76px 44px}.chord-pad .corner{font-size:11px;padding:5px 2px}.chord-pad .pad-center{font-size:20px}}
+@media(max-width:420px){.pads{grid-template-columns:repeat(4,minmax(0,1fr))}.chord-pad:nth-child(n){grid-column:span 2;grid-row:auto}.chord-pad{aspect-ratio:1}}
+
+/* Compact pad bank: half the desktop width and height. */
+.pads{width:50%;margin-inline:auto;gap:10px}
+.chord-pad{border-radius:10px;grid-template-rows:minmax(24px,1fr) minmax(44px,2.5fr) minmax(24px,1fr)}
+.chord-pad .corner{min-height:0;padding:4px 2px;font-size:clamp(8px,.7vw,11px);line-height:1.15}
+.chord-pad .pad-center{padding:6px 3px;font-size:clamp(14px,1.5vw,22px)}
+@media(max-width:600px){.pads{width:75%;gap:6px}.chord-pad{grid-template-rows:26px 44px 26px}.chord-pad .corner{font-size:9px}.chord-pad .pad-center{font-size:14px}}
+@media(max-width:420px){.pads{width:100%}}
+
+/* Fit the enclosure to the compact bank without shrinking the pads again. */
+.pad-shell{max-width:660px;padding:20px 16px;margin-inline:auto}
+.pad-shell header{min-height:0;margin-bottom:16px;padding:0;gap:16px}
+.pad-shell header a{font-size:34px}
+.pad-case{padding:18px}
+.pad-heading{margin-bottom:18px;gap:16px}
+.pad-heading h1{font-size:19px}
+.pad-heading p{font-size:11px;margin:8px 0 0}
+.pad-heading label{font-size:12px;white-space:nowrap}
+.pad-heading select{padding:8px}
+.pads{width:100%;margin:0;gap:10px}
+.chord-result{margin:16px 0 0;padding:12px;gap:16px;min-height:0}
+.chord-result strong{font-size:17px}
+.hint{margin:14px 0 0;font-size:10px;line-height:1.6}
+@media(max-width:600px){.pad-shell{padding:12px}.pad-case{padding:14px}.pad-heading{margin-bottom:14px}.pads{width:100%;gap:8px}}
+
+/* Twelve-pad audition bank, in visual and keyboard focus order. */
+.pads{grid-template-columns:repeat(4,minmax(0,1fr))}
+.pads .chord-pad:nth-child(n){grid-column:auto;grid-row:auto}
+.chromatic-pad{--oto-key:color-mix(in srgb,var(--oto-secondary) 12%,var(--oto-key-low))}
+@media(max-width:420px){.pads{gap:6px}.chord-pad{aspect-ratio:auto;grid-template-rows:28px 54px 28px}.chord-pad .corner{font-size:8px}.chord-pad .pad-center{font-size:13px}}
+
+.embedded-pad .pad-shell{max-width:460px;padding:6px}
+.embedded-pad header,.embedded-pad .pad-heading,.embedded-pad .hint,.embedded-pad .chord-result{display:none}
+.embedded-pad .pad-case{padding:4px;background:transparent;box-shadow:none}
+.embedded-pad .pads{gap:6px}
+.embedded-pad .chord-pad{grid-template-rows:24px 44px 24px;aspect-ratio:auto}
+.embedded-pad .corner{font-size:9px}.embedded-pad .pad-center{font-size:17px}
+
+body.embedded-pad{background:transparent}
+
+.chord-pad .pad-center .pad-quality{font-size:.65em;font-weight:500;vertical-align:baseline;margin-left:.08em}
+
+html.embedded-pad-root,html.embedded-pad-root body{background:transparent}
+
+/* Keep the pad face distinct from the enclosure, including on the light skin. */
+.embedded-pad .chord-pad{box-shadow:0 0 0 1px color-mix(in srgb,var(--oto-seam) 75%,transparent),var(--oto-raised)}
+.embedded-pad .chord-pad .pad-center{background:var(--oto-key)}
+
+/* Allow the outside edge and raised shadow of every pad to remain visible. */
+.embedded-pad .pads{overflow:visible}

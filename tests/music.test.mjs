@@ -26,3 +26,23 @@ test('volume stays within safe bounds', () => {
   instrument.setVolume(-1)
   assert.equal(instrument.volume, 0)
 })
+
+test('sixth-degree slash chords retain the requested voicing in a progression', async () => {
+  const { bassHarmonyNotes, chordNotes, customChord, defaultChord, displayChordParts, qualityGroups, voicePhrase } =
+    await import('../dist/music.js')
+  const sixth = defaultChord(9)
+  const options = qualityGroups(sixth).flatMap(group => group.options.map(option => option.value))
+
+  for (const [extension, notes, symbol] of [
+    ['vii7_over_vi', [57, 63, 66, 71], 'B7/A'],
+    ['flat_vii_over_vi', [57, 62, 65, 70], 'B♭/A'],
+  ]) {
+    assert.ok(options.includes('slash:' + extension))
+    const id = customChord({ root: 5, alter: 0, quality: 'slash', extension })
+    const parts = displayChordParts(id, 0, 'chord')
+    assert.equal(parts.main + parts.suffix, symbol)
+    assert.deepEqual(chordNotes(id, 0), notes)
+    assert.deepEqual(voicePhrase([{ id: 'C', key: 0 }, { id, key: 2 }])[1], notes.map(note => note + 2))
+    assert.equal(bassHarmonyNotes(id, 2)[0] % 12, 11)
+  }
+})

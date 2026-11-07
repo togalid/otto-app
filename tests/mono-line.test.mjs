@@ -39,7 +39,7 @@ test('mono melody builds one voice, delays vibrato, and clears pending notes on 
   }
   const instrument=new Instrument()
   instrument.setTimbre('lead-round')
-  instrument.context={currentTime:0,destination:{},createGain:()=>({gain:{value:0},connect(){},disconnect(){}})}
+  instrument.context={currentTime:0,destination:{},createAnalyser:()=>({connect(){}}),createGain:()=>({gain:{value:0},connect(){},disconnect(){}})}
   instrument.engine={Tone:{MonoSynth:Voice,Filter:class {connect(){return this} dispose(){}},LFO}}
   try {
     instrument.playAt([60],1,2)

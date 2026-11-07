@@ -26,7 +26,14 @@ export function createMelodyView(buttons, root = document) {
       const next = `${key}:${chord}:${chordKey}`
       if (next !== signature) {
         signature = next
-        palette = melodyPalette(key, chord, chordKey, 'key')
+        const scale = melodyPalette(key, chord, chordKey, 'key')
+        // Start on the key's fifth: it is a chord tone over I, IV and V.
+        // Keep the same pitches under the same keys when chords change.
+        palette = Array.from({length: 8}, (_, index) => {
+          const position = index + 4
+          const note = scale[position % 7]
+          return { ...note, midi: note.midi + (position >= 7 ? 12 : 0) }
+        })
         pads.forEach(({button, label, degree, role}, index) => {
           const note = palette[index]
           setText(label, note.label)

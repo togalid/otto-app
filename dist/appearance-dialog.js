@@ -2,9 +2,8 @@ import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 
 const choices = [
   { id: 'milk', name: 'ミルク', description: '乳白色のキーと朱色の再生ボタン' },
-  { id: 'natural', name: 'ナチュラル', description: '明るい白木色の筐体、白いキー、蜂蜜色のアクセント' },
-  { id: 'bauhaus', name: 'バウハウス', description: '深い赤・青・黄。積み木のような落ち着いた原色' },
   { id: 'toy', name: 'トイ', description: '赤・青・黄色の、にぎやかな音のおもちゃ' },
+  { id: 'soda', name: 'ソーダ', description: '白いキー、水色の筐体、濃い青の再生キー' },
 ]
 
 /** @param {{ current: () => string, select: (skin: string) => void, close: () => void }} actions */

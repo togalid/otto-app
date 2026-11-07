@@ -30,7 +30,7 @@ function nativeFixture() {
     return value
   }
   const reference = new Instrument()
-  reference.context = { currentTime: 1, sampleRate: 100, destination: {},
+  reference.context = { currentTime: 1, sampleRate: 100, destination: {}, createAnalyser: () => ({ connect() {} }),
     createGain: node, createBiquadFilter: node, createBufferSource: source, createOscillator: source,
     createBuffer: (_, length) => ({ getChannelData: () => new Float32Array(length) }),
   }

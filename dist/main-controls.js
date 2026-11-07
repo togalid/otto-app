@@ -1,85 +1,119 @@
+import { meterParts, partMeter } from './tone-engine.js'
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 
 export function mountReferenceControls() {
   const state = ref({
-    duration: 0, position: 0, head: '0', ruler: '0', region: false, regionLabel: '',
-    bandStyle: {left: '0%', width: '0%'}, clock: '0:00.0 / 0:00.0',
-    message: '', result: '', splitStatus: '', stems: false,
-    dragging: false, matching: false, playing: false, starting: false,
-    enabledStems: [true, true, true, true],
+    duration: 0, playing: false, filename: '', message: '', stemsReady: false, importing: false,
+    stemEnabled: [true, true, true, true],
+    dragging: false, meterLevel: 0,
   }).value
-  const playbackPosition = {render: () => [
-    h("input", {"id": "ref-seek", "type": "range", "min": "0", "max": state.duration || 1, "step": "0.01", "value": state.position, "aria-label": "お手本の再生位置"}),
-    h("output", {"id": "ref-clock"}, state.clock),
-  ]}
+  const style = ref('')
+  const genre = ref('')
+  const segmentCount = 26
   createApp({
     render: () => [
-      h("summary", null, "お手本 · MP3を読み込む"),
-      h("label", {"class": ["reference-drop", {dragging: state.dragging}], "id": "ref-drop"}, [
-        h("input", {"id": "ref-file", "type": "file", "accept": "audio/*,.mp3"}),
-        h("span", null, [
-          "音声ファイルをここにドロップ",
-          h("br", null),
-          "またはクリックして選択",
+      h('input', {id: 'ref-file', type: 'file', accept: 'audio/*,.mp3', hidden: true}),
+      h('div', { class: 'lcd-screen' }, [
+        h('button', {id: 'style-open', type: 'button', class: 'lcd-title', title: state.filename || style.value, 'aria-label': 'ジャンルとスタイルを選ぶ'}, [
+          h('span', {class: 'lcd-caption'}, state.filename ? 'ユーザーのお気に入り曲' : genre.value),
+          h('span', {class: 'lcd-style-line'}, [
+            h('span', {class: 'lcd-note', 'aria-hidden': 'true'}, '♪'),
+            h('span', {class: 'lcd-style-name'}, state.filename || style.value || 'oto'),
+          ]),
+          state.filename ? h('span', {class: 'lcd-applied-style'}, style.value) : null,
         ]),
-      ]),
-      h("p", {"id": "ref-status", "role": "status"}, state.message),
-      h("fieldset", {"disabled": !state.duration}, [
-        h("legend", {"class": "sr-only"}, "お手本の再生"),
-        h("div", {"class": "reference-row"}, [
-          h("button", {"id": "ref-region", "type": "button"}, "再生位置を8小節の頭に"),
-          h("label", null, [
-            "頭（秒）",
-            h("input", {"id": "ref-head", "type": "number", "min": "0", "step": "0.001", "max": state.duration || 1, "value": state.head}),
-          ]),
-          h("button", {"id": "ref-apply", "type": "button", "disabled": !state.region || state.matching}, "合わせる"),
-        ]),
-        h("div", {"class": "reference-row"}, [
-          h("output", {"id": "ref-bpm-result", "role": "status"}, state.result),
-          h("output", {"id": "ref-split-status", "role": "status"}, state.splitStatus),
-        ]),
-        h("div", {"id": "ref-stems", "class": "reference-row", "style": {display: state.stems ? "" : "none"}}, [
-          h("label", null, [
-            h("input", {"type": "checkbox", "checked": state.enabledStems[0]}),
-            "歌",
-          ]),
-          h("label", null, [
-            h("input", {"type": "checkbox", "checked": state.enabledStems[1]}),
-            "ドラム",
-          ]),
-          h("label", null, [
-            h("input", {"type": "checkbox", "checked": state.enabledStems[2]}),
-            "ベース",
-          ]),
-          h("label", null, [
-            h("input", {"type": "checkbox", "checked": state.enabledStems[3]}),
-            "その他",
-          ]),
-        ]),
-        h("div", {"class": "reference-ruler"}, [
-          h("output", {"id": "ref-region-label"}, state.regionLabel),
-          h("div", {"class": "reference-timeline"}, [
-            h("div", {"id": "ref-band", "hidden": !state.region, "style": state.bandStyle, "aria-hidden": "true"}),
-            h("input", {"id": "ref-ruler", "type": "range", "min": "0", "max": state.duration || 1, "step": "0.001", "value": state.ruler, "aria-label": "8小節の開始位置"}),
-          ]),
-        ]),
-        h("div", {"class": "reference-row"}, [
-          h("button", {"id": "ref-play", "type": "button", "disabled": state.starting}, state.playing ? "Ⅱ 一時停止" : "▶ お手本を再生"),
-          h(playbackPosition),
-          h("label", null, [
-            "原曲の音量",
-            h("input", {"id": "ref-volume", "type": "range", "min": "0", "max": "1", "step": "0.01", "value": "0.5"}),
-          ]),
-        ]),
+        h('div', {class: 'lcd-meters', 'aria-hidden': 'true'},
+          meterParts.map(part => h('span', {class: 'channel-meter', 'data-channel-meter': part, title: part},
+            Array.from({length: 8}, () => h('i'))))),
       ]),
     ],
-  }).mount('#reference-player')
-  return state
+  }).mount('#player-display')
+  const samples = new Float32Array(1024)
+  let frame = 0
+  const displayedLevels = meterParts.map(() => 0)
+  return {
+    state,
+    /** @param {string} name @param {string} group */
+    setStyle(name, group) { style.value = name; genre.value = group },
+    /** @param {AudioContext | undefined} context */
+    meter(context) {
+      if (frame || !context) return
+      const analysers = meterParts.map(part => partMeter(context, part))
+      const segments = meterParts.map(part => document.querySelectorAll(`[data-channel-meter="${part}"]`))
+      const bars = segments.map(meters => Array.from(meters, meter => meter.querySelectorAll('i')))
+      function update() {
+        analysers.forEach((analyser, index) => {
+          analyser.getFloatTimeDomainData(samples)
+          let peak = 0
+          for (const sample of samples) peak = Math.max(peak, Math.abs(sample))
+          const decibels = 20 * Math.log10(peak)
+          const target = Math.max(0, segmentCount * (1 + decibels / 48))
+          displayedLevels[index] = Math.max(target, displayedLevels[index] - 1)
+          const lit = Math.ceil(Math.min(segmentCount, displayedLevels[index]) / segmentCount * 8)
+          for (const bar of bars[index]) bar.forEach((segment, step) => segment.classList.toggle('lit', step < lit))
+        })
+        frame = requestAnimationFrame(update)
+      }
+      frame = requestAnimationFrame(update)
+    },
+    stopMeter() {
+      cancelAnimationFrame(frame)
+      frame = 0
+      displayedLevels.fill(0)
+      document.querySelectorAll('[data-channel-meter] i').forEach(node => node.classList.remove('lit'))
+    },
+  }
 }
 
-export function mountBasicParts() {
+/** @param {ReturnType<typeof mountReferenceControls>['state']} reference
+ * @param {{editReference:()=>void, toggleStem:(index:number)=>void, cancelImport:()=>void, remove:()=>void}} player */
+export function mountBasicParts(reference, player) {
+  const referenceMeter = {
+    render: () => h('span', {class: 'channel-meter', 'aria-hidden': 'true'},
+      Array.from({length: 8}, (_, i) => h('i', {class: {lit: i < Math.ceil(reference.meterLevel * .8)}}))),
+  }
   createApp({
     render: () => [
+      h('div', {class: ['reference-channel', {'awaiting-file': !reference.duration || !!reference.message}], role: 'group', 'aria-label': 'MP3パート'}, [
+        reference.message ? h('div', {class: 'reference-upload reference-import-status', 'aria-busy': reference.importing}, [
+          reference.importing ? h('span', {class: 'ref-import-spinner', 'aria-hidden': 'true'}) : null,
+          h('p', {role: 'status', 'aria-live': 'polite'}, reference.message),
+          h('button', {type: 'button', onClick: player.cancelImport}, reference.importing ? '中断' : '閉じる'),
+        ]) : !reference.duration ? h('button', {type: 'button', class: ['reference-upload', {dragging: reference.dragging}],
+          'data-reference-drop': '', 'aria-label': 'MP3ファイルを読み込む',
+          onClick: () => document.getElementById('ref-file')?.click()}, [
+            h('svg', {class: 'part-icon', viewBox: '0 0 24 24', 'aria-hidden': 'true'}, [
+              h('path', {d: 'M2 10v4m4-7v10m4-14v18m4-15v12m4-10v8m4-6v4',
+                fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round'}),
+            ]),
+            h('span', 'MP3 読み込み'),
+          ]) : h('div', {class: 'reference-stem-switches', role: 'group', 'aria-label': '分離したパート'}, [
+          ...[[1, 'Drum'], [2, 'Bass'], [0, 'Vocal'], [3, 'Other']].map(([index, label]) =>
+            h('button', {type: 'button', key: index, disabled: !reference.stemsReady,
+              'aria-pressed': reference.stemsReady && reference.stemEnabled[Number(index)],
+              onClick: () => player.toggleStem(Number(index))}, String(label))),
+        ]),
+        reference.duration && !reference.message ? h('button', {type:'button', disabled:reference.importing, onClick:player.remove}, '曲を外す') : null,
+        h('div', {class: 'part-mix', role: 'group', 'aria-label': 'MP3のミックス'}, [
+          h('button', {id: 'reference-mute', type: 'button', class: 'mix-button', 'aria-label': 'MP3をミュート', 'aria-pressed': 'false'}, 'M'),
+          h('button', {id: 'reference-solo', type: 'button', class: 'mix-button', 'aria-label': 'MP3をソロ', 'aria-pressed': 'false'}, 'S'),
+          h('label', {class: 'volume-knob', title: 'MP3の音量'}, [
+            h('input', {id: 'reference-volume', type: 'range', min: 0, max: 100, value: 25, 'aria-label': 'MP3の音量'}),
+            h('span', {'aria-hidden': 'true'}),
+          ]),
+          h(referenceMeter),
+        ]),
+        h('button', {class: 'part-heading track-select reference-play-key', type: 'button',
+          'aria-label': reference.duration ? 'MP3の開始位置を調整' : 'MP3ファイルを選ぶ',
+          title: reference.filename || undefined,
+          onClick: () => reference.duration ? player.editReference() : document.getElementById('ref-file')?.click()}, [
+          h('svg', {class: 'part-icon', viewBox: '0 0 24 24', 'aria-hidden': 'true'}, [
+            h('path', {d: 'M2 10v4m4-7v10m4-14v18m4-15v12m4-10v8m4-6v4',
+              fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round'}),
+          ]),
+          h('span', {class: 'track-name'}, 'MP3'),
+        ]),
+      ]),
       h("div", {"class": "drum-controls", "role": "group", "aria-label": "ドラムパート"}, [
         h("button", {"class": "part-heading track-select", "type": "button", "data-track": "drums", "aria-controls": "detail-drums", "aria-label": "ドラムの詳細を表示", "title": "ドラムの設定を表示", "aria-pressed": "false"}, [
           h("svg", {"class": "part-icon", "aria-hidden": "true", "focusable": "false", "viewBox": "0 0 24 24"}, [
@@ -142,6 +176,11 @@ export function mountBasicParts() {
               h("option", {"value": "line_relay"}, "階段フレーズ"),
               h("option", {"value": "line_octave"}, "オクターブ・ライン"),
             ]),
+            h("optgroup", {"label": "グルーヴ"}, [
+              h("option", {"value": "offbeat"}, "裏拍"),
+              h("option", {"value": "pop"}, "ポップ"),
+              h("option", {"value": "chill"}, "チル"),
+            ]),
             h("optgroup", {"label": "コードプログレッション"}, [
               h("option", {"value": "support_hold"}, "ロングトーン"),
               h("option", {"value": "support_half"}, "2拍ずつ"),
@@ -200,8 +239,8 @@ export function mountBasicParts() {
         h("label", {"class": "select-control", "for": "melody-mode"}, [
           h("span", {"class": "sr-only"}, "メロディの演奏方法"),
           h("select", {"id": "melody-mode"}, [
-            h("option", {"value": "all-you"}, "自分が弾く"),
-            h("option", {"value": "all-pc"}, "Ottoが弾く"),
+            h("option", {"value": "all-you"}, "自分で"),
+            h("option", {"value": "all-pc"}, "自動演奏"),
           ]),
         ]),
         h("div", {"class": "part-mix", "role": "group", "aria-label": "メロディのミックス"}, [

@@ -15,8 +15,10 @@ export function createChoiceMenu(kind) {
   /** @param {string} value */
   function choose(value) {
     if (!source) return
+    const changed = source.value !== value
     source.value = value
     source.dispatchEvent(new Event('change', { bubbles: true }))
+    if (changed) source.dispatchEvent(new Event('part-user-change', { bubbles: true }))
     dialog.close()
   }
   createApp({

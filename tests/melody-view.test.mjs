@@ -25,12 +25,17 @@ test('repeated melody notes reuse harmony and do not rewrite pad DOM', () => {
   } }
   const view = createMelodyView(buttons, root)
   const first = view.update(0, 'FM7', 0, 60, '')
+  assert.equal(first.notes[0].label, 'G')
+  assert.equal(first.notes[0].clash, false)
+  assert.ok(first.notes.every((note, index) => index === 0 || note.midi > first.notes[index - 1].midi))
   view.update(0, 'FM7', 0, 60, first.degree)
   const before = writes
   for (let i = 0; i < 100; i++) {
     assert.equal(view.update(0, 'FM7', 0, 60, first.degree).notes, first.notes)
   }
   assert.equal(writes, before)
+  const nextChord = view.update(0, 'CM7', 0, 60, '')
+  assert.deepEqual(nextChord.notes.map(note => note.midi), first.notes.map(note => note.midi))
   const changed = view.update(2, 'FM7', 2, 60, first.degree)
   assert.notEqual(changed.notes, first.notes)
   assert.ok(writes > before)

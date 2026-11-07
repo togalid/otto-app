@@ -5,7 +5,7 @@ import { ornamentParts, ornamentPatterns } from './ornaments.js'
 /** Mount a second bank in the same four-row space. @param {{id:string,pattern:string,voice:{setTimbre:(id:string)=>void,silence:()=>void}}[]} tracks */
 export function mountOrnaments(tracks) {
   const grid = /** @type {HTMLElement} */ (document.querySelector('#track-grid'))
-  const basic = Array.from(grid.children)
+  const basic = Array.from(grid.children).filter(row => !row.classList.contains('reference-channel'))
   const caption = document.createElement('div')
   caption.className = 'part-bank'
   caption.setAttribute('role', 'group')
@@ -20,13 +20,14 @@ export function mountOrnaments(tracks) {
   if (field) {
     field.firstChild?.remove()
     field.prepend(heading)
-    heading.append(label, caption)
+    heading.append(label)
     // Avoid interactive buttons nested in a label.
     const replacement = document.createElement('div')
     replacement.className = field.className
     replacement.append(...Array.from(field.childNodes))
     field.replaceWith(replacement)
   }
+  document.querySelector('.groove-settings')?.prepend(caption)
   const icons = ['✦', '♪', '≋', '◌']
   const rows = ornamentParts.map((part, index) => {
     const row = document.createElement('div')

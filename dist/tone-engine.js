@@ -1,3 +1,28 @@
+import { frequency } from './music.js'
+
+export const meterParts = /** @type {const} */ (['drum', 'bass', 'chord', 'melody', 'bell', 'pluck', 'phrase', 'fx'])
+/** @typedef {typeof meterParts[number]} MeterPart */
+
+/** @type {WeakMap<AudioContext, Map<MeterPart, AnalyserNode>>} */
+const meters = new WeakMap()
+
+/** @param {AudioContext} context @param {MeterPart} part */
+export function partMeter(context, part) {
+  let parts = meters.get(context)
+  if (!parts) {
+    parts = new Map()
+    meters.set(context, parts)
+  }
+  let meter = parts.get(part)
+  if (!meter) {
+    meter = context.createAnalyser()
+    meter.fftSize = 1024
+    meter.connect(context.destination)
+    parts.set(part, meter)
+  }
+  return meter
+}
+
 /** @type {Promise<any> | undefined} */
 let libraryPromise
 /** @type {AudioContext | undefined} */
@@ -66,7 +91,7 @@ export class ToneBass {
       this.activeTimbre = this.timbre
       this.gain = this.context.createGain()
       this.gain.gain.value = this.volume * 0.25
-      this.gain.connect(this.context.destination)
+      this.gain.connect(partMeter(this.context, 'bass'))
       this.synth = new this.tone.MonoSynth({
         oscillator: {
           type:
@@ -136,8 +161,8 @@ export class ToneDrums {
         0.02,
       )
   }
-  /** @param {string} sound @param {number} time @param {number} [velocity] @param {number} [duration] */
-  hitAt(sound, time, velocity, duration) {
+  /** @param {string} sound @param {number} time @param {number} [velocity] @param {number} [duration] @param {number} [pitch] @param {boolean} [accent] */
+  hitAt(sound, time, velocity, duration, pitch = 0, accent = false) {
     const defaults = { kick: 0.85, snare: 0.55, hat: 0.35 }
     const level = Math.max(0, Math.min(1, Number.isFinite(velocity) ? /** @type {number} */ (velocity) : (defaults[/** @type {keyof typeof defaults} */ (sound)] ?? 0)))
     if (this.gain && this.activeTimbre !== this.timbre) this.silence()
@@ -145,12 +170,12 @@ export class ToneDrums {
       this.activeTimbre = this.timbre
       this.gain = this.context.createGain()
       this.gain.gain.value = this.volume * 0.35
-      this.gain.connect(this.context.destination)
+      this.gain.connect(partMeter(this.context, 'drum'))
       this.kick = new this.tone.MembraneSynth({
-        pitchDecay: this.timbre === 'electronic' ? 0.065 : 0.04,
-        octaves: this.timbre === 'electronic' ? 7 : 5,
-        oscillator: { type: this.timbre === 'chip' ? 'square' : 'sine' },
-        envelope: { attack: 0.001, decay: 0.32, sustain: 0, release: 0.05 },
+        pitchDecay: this.timbre === 'electronic' ? 0.065 : this.timbre === 'chip' ? 0.025 : 0.04,
+        octaves: this.timbre === 'electronic' ? 7 : this.timbre === 'chip' ? 3 : 5,
+        oscillator: { type: this.timbre === 'chip' ? 'triangle' : 'sine' },
+        envelope: { attack: this.timbre === 'chip' ? 0.003 : 0.001, decay: this.timbre === 'chip' ? 0.2 : 0.32, sustain: 0, release: 0.05 },
       }).connect(this.gain)
       this.kick.volume.value = 1
       this.snare = new this.tone.NoiseSynth({
@@ -175,11 +200,14 @@ export class ToneDrums {
       }).connect(this.gain)
       this.hat.volume.value = -12
     }
-    if (sound === 'kick') this.kick.triggerAttackRelease('G1', 0.32, time, level)
+    const ratio = 2 ** (pitch / 12)
+    const strength = accent ? Math.min(1, level * 1.5) : level
+    if (sound === 'kick') this.kick.triggerAttackRelease(pitch ? frequency(31 + pitch) : 'G1', 0.32, time, strength)
     else if (sound === 'snare') {
-      this.snare.triggerAttackRelease(0.12, time, level)
-      this.snareBody.triggerAttackRelease(this.timbre === 'electronic' ? 'G3' : 'C4', 0.1, time, level)
-    } else if (sound === 'hat') this.hat.triggerAttackRelease(220, duration ?? 0.06, time, level)
+      this.snare.triggerAttackRelease(0.12, time, strength)
+      this.snareBody.triggerAttackRelease(pitch ? frequency((this.timbre === 'electronic' ? 55 : 60) + pitch)
+        : this.timbre === 'electronic' ? 'G3' : 'C4', 0.1, time, strength)
+    } else if (sound === 'hat') this.hat.triggerAttackRelease(220 * ratio, duration ?? 0.06, time, strength)
   }
   silence() {
     this.kick?.dispose()

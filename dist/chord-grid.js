@@ -35,15 +35,16 @@ export function mountChordGrid(bars, actions) {
       actions.openQuality(/** @type {HTMLSelectElement} */ (event.currentTarget), bar, beat)
     }
     return h('div', { class: 'base-chord beat-chord' }, [
+      h('button', {type:'button', class:'score-chord-edit', 'aria-label':label+'をPadで編集'}),
       h('span', { class: 'root-wrapper' }, [
         h('span', { class: 'root-display', 'aria-hidden': 'true' }),
         h('select', {
-          class: 'root-select', 'aria-label': label + 'のルート',
+          tabindex:-1, 'aria-hidden':'true', class: 'root-select', 'aria-label': label + 'のルート', title: 'タップまたはEnterでPad入力',
           onChange: (/** @type {Event} */ event) => actions.root(bar, beat, /** @type {HTMLSelectElement} */ (event.currentTarget).value),
         }),
       ]),
       h('select', {
-        class: 'quality-select',
+        tabindex:-1, 'aria-hidden':'true', class: 'quality-select',
         onChange: (/** @type {Event} */ event) => actions.quality(bar, beat, /** @type {HTMLSelectElement} */ (event.currentTarget)),
         onBlur: actions.refresh,
         onPointerdown: open,
@@ -65,7 +66,7 @@ export function mountChordGrid(bars, actions) {
       ...(bar % 2 === 0 ? [modulation(bar)] : []),
       h('div', { class: ['chord-slot', { 'first-in-pair': bar % 2 === 0 }] }, [
         h('span', { class: 'bar-label' }, String(bar + 1)),
-        ...Array.from({ length: 4 }, (_, beat) => cell(bar, beat)),
+        ...Array.from({ length: 5 }, (_, beat) => cell(bar, beat)),
       ]),
     ]).flat(),
   }).mount('#chord-slots')

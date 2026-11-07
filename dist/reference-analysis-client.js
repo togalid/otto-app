@@ -1,5 +1,5 @@
-/** @typedef {{kind:'tempo'|'harmony', samples:Float32Array, rate:number, bpm:number, key:number}} AnalysisRequest */
-/** @typedef {{bpm?:number|null, key?:string|null, drum?:string|null, matches?:{id:string,name:string,score:number}[]}} AnalysisResult */
+/** @typedef {{kind:'key'|'tempo'|'harmony'|'song'|'performance'|'sections'|'presets', samples:Float32Array, rate:number, bpm:number, key:number, stems?:{bass:Float32Array,drums:Float32Array}}} AnalysisRequest */
+/** @typedef {{keyScores?:number[]|null, starts?:number[], preset?:string, style?:string, bpm?:number|null, key?:string|null, drum?:string|null, matches?:{id:string,name:string,score:number}[], performance?:import('./reference-performance.js').ReferencePerformance, sections?:import('./reference-song-analysis.js').ReferenceSection[]}} AnalysisResult */
 
 /** One lazily created worker. Cancellation releases CPU and rejects pending requests.
  * @param {() => Worker} makeWorker */
@@ -31,7 +31,7 @@ export function createReferenceAnalyzer(makeWorker = () => new Worker(new URL('.
       }
       const id = ++sequence
       pending.set(id, {resolve, reject})
-      try { worker.postMessage({...request, id}, [request.samples.buffer]) }
+      try { worker.postMessage({...request, id}, [request.samples.buffer, ...(request.stems ? [request.stems.bass.buffer, request.stems.drums.buffer] : [])]) }
       catch (error) { pending.delete(id); reject(error) }
     })
   }

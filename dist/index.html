@@ -16,9 +16,11 @@
   </head>
   <body>
     <div class="shell">
-      <header>
+      <header class="player-header">
+        <div class="player-left"><div class="player-brand">
         <a class="logo" href="./" aria-label="oto ホーム">oto<span>●</span></a
-        ><div class="buddy-guide"><button id="oto-buddy" type="button" aria-label="Otto（オットー）にあいさつ" title="やあ。" data-mood="idle">
+        >
+        <div class="buddy-guide"><button id="oto-buddy" type="button" aria-label="Otto（オットー）にあいさつ" title="やあ。" data-mood="idle">
           <svg viewBox="0 0 28 28" aria-hidden="true" focusable="false">
             <circle class="buddy-case" cx="14" cy="14" r="11"/>
             <path class="record-grooves" d="M5.5 10A9 9 0 0 1 12 5.5M22.5 18A9 9 0 0 1 16 22.5"/>
@@ -35,24 +37,47 @@
             <g class="record-headphones"><path d="M3 14V11a11 11 0 0 1 22 0v3"/><rect x="1" y="11" width="4" height="8" rx="2"/><rect x="23" y="11" width="4" height="8" rx="2"/></g>
           </svg>
         </button><p id="buddy-message" class="buddy-message" role="status" aria-live="polite">スタイルを選んで再生してみよう。鳴らしながら各パートの奏法を変えると、曲の表情が変わるよ。</p></div>
-        <button id="song-open" class="appearance-open" type="button" aria-haspopup="dialog" aria-controls="song-dialog">設定保存／ロード</button>
-        <button id="appearance-open" class="appearance-open" type="button" aria-haspopup="dialog" aria-controls="appearance-dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5zM5 10h14M10 10v9"/></svg>外観</button>
+        </div>
+        <div class="player-transport"><div class="style-stepper" role="group" aria-label="スタイルを切り替え"><button id="style-prev" type="button" aria-label="前のスタイル">←</button><button id="style-next" type="button" aria-label="次のスタイル">→</button></div><div id="transport" class="transport"></div></div></div>
+        <div id="player-display"></div>
+        <div class="player-actions">
+          <details id="settings-menu">
+            <summary id="settings-open" class="appearance-open" aria-label="設定" title="設定">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 3-.6 2.3-2 .9-2-.9-2 3.4 1.7 1.5v2.4l-1.7 1.5 2 3.4 2-.8 2 .9.6 2.4h4l.6-2.4 2-.9 2 .8 2-3.4-1.7-1.5v-2.4l1.7-1.5-2-3.4-2 .9-2-.9L14 3z"/><circle cx="12" cy="11.5" r="3"/></svg>
+            </summary>
+            <div class="settings-options">
+              <div id="count-in-control"></div>
+              <button id="song-open" type="button" aria-haspopup="dialog" aria-controls="song-dialog">設定保存／ロード</button>
+              <button id="appearance-open" type="button" aria-haspopup="dialog" aria-controls="appearance-dialog">外観</button>
+            </div>
+          </details>
+        </div>
       </header>
       <main>
-        <details id="reference-player" class="instrument reference-player"></details>
         <section
           class="instrument groove progression"
           aria-label="リズム設定"
         >
-          <div id="transport" class="transport"></div>
+
+
+          <div class="mixer-watermark" aria-hidden="true"><span>Arrange Mixer</span></div>
           <div class="genre-row" role="group" aria-label="ジャンルを選択">
             <label class="groove-field">ジャンル<select id="genre-group" aria-label="ジャンルの大分類"></select></label>
-            <div class="groove-field style-field"><label for="genre">スタイル</label><div class="style-picker"><select id="genre" aria-label="ジャンルのスタイル"></select><div class="style-stepper" role="group" aria-label="スタイルを切り替え"><button id="style-prev" type="button" aria-label="前のスタイル">←</button><button id="style-next" type="button" aria-label="次のスタイル">→</button></div></div></div>
+            <select id="genre" aria-label="ジャンルのスタイル" hidden></select>
           </div>
+          <div class="mixer-sections"><span class="mixer-sections-label">セクション</span><div id="song-sections" class="song-sections" role="group" aria-label="曲のセクション"></div></div>
           <div class="groove-settings">
+            <div class="mixer-key"><label for="mixer-key">キー</label>
+              <span class="volume-knob key-knob"><input id="mixer-key" type="range" min="-12" max="12" step="1" value="0" aria-label="キーを半音ずつ変更" /><span aria-hidden="true"></span></span>
+              <output id="mixer-key-value" for="mixer-key">C</output>
+            </div>
+            <div class="mixer-meter"><label for="meter">拍子</label>
+              <span class="volume-knob meter-knob"><input id="meter" type="range" min="3" max="5" step="1" value="4" aria-label="拍子" /><span aria-hidden="true"></span></span>
+              <output id="meter-value" for="meter">4/4</output>
+            </div>
             <div class="groove-timing">
               <label class="timing-control" for="tempo"
-                >テンポ
+                ><span>テンポ</span>
                 <input
                   id="tempo"
                   type="range"
@@ -63,7 +88,7 @@
                 /><input id="tempo-value" type="number" inputmode="decimal" min="40" max="200" step="0.1" value="100" aria-label="テンポを数値で入力" /></label
               >
               <label class="timing-control swing-control" for="swing"
-                ><span class="swing-caption">ノリ <svg id="swing-print" viewBox="0 0 37 8" aria-hidden="true" focusable="false"><path d="M1 1v6m18-6v6m17-6v6"/><path class="offbeats" d="M10 3v4m18-4v4"/></svg></span>
+                ><span class="swing-caption">ノリ</span>
                 <input
                   id="swing"
                   type="range"
@@ -75,7 +100,8 @@
               >
             </div>
           </div>
-          <div id="track-grid" class="track-grid" aria-label="パートの設定"></div>
+          <div class="mixer-banks">
+          <div id="track-grid" class="track-grid" aria-label="パートの設定"></div></div>
           <p id="progression-status" role="status"></p>
         </section>
         <section class="instrument track-details" aria-label="トラックの詳細">
@@ -99,10 +125,11 @@
               role="region"
               aria-label="コード進行"
             >
-              <div class="chord-heading"><h2 class="track-detail-title">コードをつなげてみよう。</h2><div class="backing-display"><div id="backing-monitor" role="img" aria-label="バッキングの鍵盤表示"></div></div></div>
+              <div class="chord-heading"><h2 class="track-detail-title">コードをつなげてみよう。</h2><div id="section-bar-count"></div><div class="backing-display"><div id="backing-monitor" role="img" aria-label="バッキングの鍵盤表示"></div></div></div>
               <div class="chord-settings">
                 <div class="chord-field chord-start" hidden><label for="preset-group">開始度数</label><select id="preset-group" aria-label="プリセットの開始度数" aria-controls="preset"></select></div>
                 <div class="chord-field chord-preset"><label for="preset">コード進行</label><div class="preset-picker"><select id="preset" aria-label="コード進行プリセット"></select><div class="style-stepper" role="group" aria-label="コード進行を切り替え"><button id="preset-prev" type="button" aria-label="前のコード進行">←</button><button id="preset-next" type="button" aria-label="次のコード進行">→</button></div></div></div>
+                <div class="chord-field" hidden><label for="chord-rate">進行の速さ</label><select id="chord-rate"><option value="0.5">½ ハーフ</option><option value="1" selected>1 通常</option><option value="2">2 ダブル</option></select></div>
                 <div class="chord-field chord-key"><label for="key">キー</label><div class="key-control" role="group" aria-label="キー">
                   <select id="key" aria-label="キー（メジャー）"></select>
                   <div class="key-stepper" role="group" aria-label="キーを半音ずつ変更">
@@ -152,10 +179,10 @@
           <div class="melody-heading"><h2 id="instrument-title" class="track-detail-title">Ottoとセッション。</h2><div class="melody-chord"><span>いまのコード</span><strong id="melody-current-chord"></strong></div></div>
           <div id="buddy-inline" class="buddy-inline"></div>
           <div class="melody-legend"><span class="legend-chord">コードトーン</span><span class="legend-tension">テンション</span><span>同じ音も、コードが変わると違う響きに。</span></div>
-          <div class="melody-view" role="group" aria-label="演奏する鍵盤"><button type="button" data-melody-view="pads" aria-pressed="true">8 Pad</button><button type="button" data-melody-view="piano" aria-pressed="false">3オクターブ鍵盤</button></div>
-          <div id="piano-scroll" class="piano-scroll" hidden><div id="piano-keys" role="group" aria-label="C3からC6の鍵盤。押したまま滑らせてグライド。矢印キーで移動、スペースかEnterで演奏。"></div></div>
+          <div class="melody-view" role="group" aria-label="演奏する鍵盤"><button type="button" data-melody-view="pads" aria-pressed="false">8 Pad</button><button type="button" data-melody-view="piano" aria-pressed="true">3オクターブ鍵盤</button></div>
+          <div id="piano-scroll" class="piano-scroll"><div id="piano-keys" role="group" aria-label="C3からC6の鍵盤。押したまま滑らせてグライド。矢印キーで移動、スペースかEnterで演奏。"></div></div>
           <div
-            id="pads"
+            id="pads" hidden
             class="pads"
             role="group"
             aria-label="8つの音のパッド"
@@ -165,6 +192,36 @@
         </section>
       </main>
     </div>
+    <dialog id="reference-crop" class="appearance-dialog" aria-labelledby="reference-crop-title">
+      <form method="dialog">
+        <div class="crop-heading"><span class="talk-avatar crop-buddy" aria-hidden="true"></span><h2 id="reference-crop-title">曲の1拍目の頭を指定してね</h2></div>
+        <p>波形を動かして位置を選ぼう · スペースで再生／停止</p>
+        <div class="reference-timeline crop-timeline">
+          <svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+            <path></path><rect height="100" width="0"></rect>
+          </svg>
+          <input id="ref-crop-position" type="range" min="0" step="0.001" value="0" aria-label="切り出しの開始位置">
+        </div>
+        <div class="crop-scale"><span>0:00.0</span><div class="crop-scale-end">
+          <button id="ref-crop-zoom-out" type="button" aria-label="波形を縮小">−</button><button id="ref-crop-zoom-in" type="button" aria-label="波形を拡大">＋</button><span id="ref-crop-end">0:15.0</span>
+          <button id="ref-crop-extend" type="button">＋15秒</button>
+        </div></div>
+        <div class="ref-import-feedback"><span class="ref-import-spinner" aria-hidden="true"></span><p id="ref-import-status" role="status"></p></div>
+        <div class="crop-adjust">
+          <output id="ref-crop-time" for="ref-crop-position">0:00.0</output>
+          <div class="crop-stepper" role="group" aria-label="開始位置の調整">
+            <button id="ref-crop-back" type="button" aria-label="開始位置を0.1秒戻す">←</button>
+            <button id="ref-crop-forward" type="button" aria-label="開始位置を0.1秒進める">→</button>
+          </div>
+          <button id="ref-crop-preview" type="button">▶ 試聴</button>
+        </div>
+        <div class="reference-row crop-actions">
+          <button value="cancel" hidden>中断</button>
+          <button value="ok">処理</button>
+          <button id="ref-remove" type="button" hidden>曲を外す</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="song-dialog" class="appearance-dialog" aria-labelledby="song-title"></dialog>
     <dialog id="appearance-dialog" class="appearance-dialog" aria-labelledby="appearance-title" aria-describedby="appearance-description"></dialog>
   </body>

@@ -10,6 +10,8 @@
   color: #303b35;
   background: #f8f7f2;
   font-synthesis: none;
+  /* Keep the page width stable when switching between panels of different heights. */
+  scrollbar-gutter: stable;
 }
 * {
   box-sizing: border-box;
@@ -1886,7 +1888,7 @@ main {
 
 /* Four beat positions per bar, with two bars per row. */
 .chord-grid-scroll .chord-slots { grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 620px; gap: 4px 0; }
-.chord-grid-scroll .chord-slot { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); position: relative; border: 1px solid #aebba7; }
+.chord-grid-scroll .chord-slot { display: grid; grid-template-columns: repeat(var(--beats-per-bar, 4), minmax(0, 1fr)); position: relative; border: 1px solid #aebba7; }
 .chord-grid-scroll .chord-slot.first-in-pair { border-right: 0; }
 .modulation-bar {
   grid-column: 1 / -1;

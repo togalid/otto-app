@@ -1,8 +1,9 @@
+import { sectionControlIds, arrangementControlIds, arrangementMixIds, decodeArrangement, encodeArrangement, restoreArrangement } from './arrangement-file.js'
 import { mountBassDetail } from './bass-detail.js'
 import { mountStyleChoices, mountPresetChoices } from './arrangement-selects.js'
 import { mountMobileChordEditor } from './mobile-chord-editor.js'
 import { mountBasicParts, mountReferenceControls } from './main-controls.js'
-import { createApp, h } from './vendor/vue.runtime.esm-browser.prod.js'
+import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { mountPartSteppers, mountTimbreSteppers } from './part-steppers.js'
 import { mountChordGrid } from './chord-grid.js'
 import { createChoiceMenu } from './choice-menu.js'
@@ -11,10 +12,17 @@ import { mountDrumGrid } from './drum-grid.js'
 import { mountChordMonitor } from './chord-monitor.js'
 import { createMelodyView } from './melody-view.js'
 import { mountReferencePlayer } from './reference-player.js'
-mountBasicParts()
-mountReferencePlayer(mountReferenceControls())
+const playerDisplay = mountReferenceControls()
+const referenceView = playerDisplay.state
+const referenceTrack = mountReferencePlayer(referenceView, applyReferenceArrangement, section => progression.barCount(section))
+mountBasicParts(referenceView, {
+  toggleStem: referenceTrack.toggleStem,
+  editReference: referenceTrack.editReference,
+  cancelImport: referenceTrack.cancelImport,
+  remove: referenceTrack.remove,
+})
 const { style: genreSelect, choose: chooseStyle } = mountStyleChoices()
-const { preset: presetSelect, set: setPreset, choose: choosePreset } = mountPresetChoices()
+const { preset: presetSelect, set: setPreset, choose: choosePreset, selected: selectedPreset } = mountPresetChoices()
 import { OrnamentPlayer } from './ornament-audio.js'
 import { mountOrnaments } from './ornament-ui.js'
 import {
@@ -42,7 +50,7 @@ import { BassSynth, genres, genreProgressions, createPartMixer, swungBassBeat } 
 
 /** @type {ReturnType<typeof mountBuddy> | undefined} */
 let buddyController
-const instrument = new Instrument()
+const instrument = new Instrument('melody')
 instrument.setTimbre('lead-round')
 const status = document.querySelector('#status')
 /** @type {HTMLButtonElement[]} */
@@ -121,7 +129,7 @@ createApp({
 buttons.push(...Array.from(document.querySelectorAll('#pads button'), button => /** @type {HTMLButtonElement} */ (button)))
 
 document.addEventListener('keydown', (event) => {
-  if (event.target instanceof Element && event.target.closest('dialog[open], #reference-player')) return
+  if (event.target instanceof Element && event.target.closest('dialog[open]')) return
   if (
     event.repeat ||
     event.ctrlKey ||
@@ -149,7 +157,7 @@ document.addEventListener('visibilitychange', () => {
   }
 })
 
-const chordInstrument = new Instrument()
+const chordInstrument = new Instrument('chord')
 const drums = new DrumSynth(chordInstrument)
 const bass = new BassSynth(chordInstrument)
 const slotContainer = document.querySelector('#chord-slots')
@@ -159,13 +167,35 @@ const startButton = /** @type {HTMLButtonElement} */ (
   document.querySelector('#progression-play')
 )
 document.addEventListener('keydown', (event) => {
-  if (event.target instanceof Element && event.target.closest('dialog[open], #reference-player')) return
+  if (event.target instanceof Element && event.target.closest('dialog[open]')) return
   if (event.target instanceof Element && event.target.closest('#piano-keys')) return
   if (event.code !== 'Space' || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return
+  const spaceTarget = event.target instanceof Element ? event.target : null
+  if (spaceTarget?.closest('.score-pad-dock button, .score-pad-dock input, .score-pad-dock select')) return
   event.preventDefault()
   event.stopPropagation()
-  if (!event.repeat) startButton.click()
+  if (!event.repeat) {
+    const target = spaceTarget
+    const selected = document.querySelector('.pad-input-target')?.closest('.chord-slot')
+    const bar = selected ? slotElements.indexOf(/** @type {HTMLElement} */(selected)) : -1
+    const interactive = target?.closest('input, select, textarea, button:not(.score-chord-edit), [contenteditable=true]')
+    if (bar >= 0 && !interactive) {
+      if (progression.running) progression.stop()
+      else playFromBar(bar)
+    } else startButton.click()
+  }
 }, true)
+// Left and right browse styles while ordinary controls keep their native keys.
+document.addEventListener('keydown', event => {
+  if (event.defaultPrevented || event.repeat || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+  if (document.querySelector('dialog[open]')) return
+  if (event.target instanceof Element && event.target.closest('input, select, textarea, [contenteditable]:not([contenteditable="false"]), [role="slider"], [role="radio"], #piano-keys')) return
+  const button = /** @type {HTMLButtonElement | null} */ (document.getElementById(event.key === 'ArrowLeft' ? 'style-prev' : 'style-next'))
+  if (!button || button.disabled) return
+  event.preventDefault()
+  button.click()
+})
 const tempo = /** @type {HTMLInputElement} */ (document.querySelector('#tempo'))
 const notation = /** @type {HTMLFieldSetElement} */ (
   document.querySelector('#notation')
@@ -200,21 +230,32 @@ function refreshMelody() {
 }
 let displayedBar = -1
 let displayedBeat = -1
+const playingSection = ref(-1)
+const editingSection = ref(0)
+const sectionAdvance = ref(false)
+const sectionBars = ref(16)
 const progression = new Progression(
   chordInstrument,
-  (index, chord, key, beat) => {
+  (index, chord, key, beat, section) => {
+    const previousSection = playingSection.value
+    playingSection.value = index < 0 ? -1 : section
+    if (index === 0 && beat === 0 && previousSection >= 0 && previousSection !== section) {
+      editSection(section)
+      referenceTrack.startWithAccompaniment(chordInstrument.context?.currentTime ?? 0, 0, section)
+    }
+    const visibleBar = section === editingSection.value ? index : -1
     transportView.beat.value = index < 0 ? '' : String(beat)
-    if (displayedBar !== index || displayedBeat !== beat) {
+    if (displayedBar !== visibleBar || displayedBeat !== beat) {
       const previous = slotElements[displayedBar]
       previous?.querySelectorAll('.beat-chord')[displayedBeat]?.classList.remove('current-beat')
-      if (displayedBar !== index) {
+      if (displayedBar !== visibleBar) {
         previous?.classList.remove('current')
         previous?.removeAttribute('aria-current')
-        slotElements[index]?.classList.add('current')
-        slotElements[index]?.setAttribute('aria-current', 'step')
+        slotElements[visibleBar]?.classList.add('current')
+        slotElements[visibleBar]?.setAttribute('aria-current', 'step')
       }
-      slotElements[index]?.querySelectorAll('.beat-chord')[beat]?.classList.add('current-beat')
-      displayedBar = index
+      slotElements[visibleBar]?.querySelectorAll('.beat-chord')[beat]?.classList.add('current-beat')
+      displayedBar = visibleBar
       displayedBeat = beat
     }
     if (activeChord !== chord || activeKey !== key) {
@@ -222,7 +263,7 @@ const progression = new Progression(
       activeKey = key
       refreshMelody()
     }
-    if (index >= 0) updateChordMonitor(index, chord, beat)
+    if (index >= 0) updateChordMonitor(index, chord, beat, section)
     updateTransport()
   },
   (message) => {
@@ -231,11 +272,25 @@ const progression = new Progression(
   drums,
   bass,
 )
+/** @type {{bar: number, section: number} | null} */
+let barPlayback = null
+/** Last explicitly selected playback head, kept separately from the running state. */
+/** @type {Map<number, number>} */
+const playbackHeads = new Map()
+progression.onScheduleBar = () => playerDisplay.meter(chordInstrument.context)
+progression.onStart = referenceTrack.startWithAccompaniment
+progression.onStop = () => {
+  barPlayback = null
+  referenceTrack.stopWithAccompaniment()
+  playerDisplay.stopMeter()
+}
 const refreshBassDetail = mountBassDetail(progression)
 const drumGrid = mountDrumGrid(hits => {
+  const captured = progression.sections[progression.selectedSection].performance
+  if (captured) delete captured.drums
   progression.drumSteps = hits
   renderDrumSteps()
-})
+}, progression)
 progression.onDrumPosition = drumGrid.showPosition
 renderDrumSteps()
 progression.melody = instrument
@@ -246,7 +301,7 @@ melodyMode.addEventListener('change', () => {
   refreshMelody()
 })
 
-const qualityOrigins = progression.slots.map((chord) => [chord, chord, chord, chord])
+const qualityOrigins = progression.slots.map((chord) => [chord, chord, chord, chord, chord])
 const qualityMenu = createChoiceMenu('quality')
 /** @param {number} bar @param {number} beat @param {string} chord */
 async function previewChord(bar, beat, chord) {
@@ -288,14 +343,21 @@ function openQualityMenu(select, bar, beat) {
   const height = Math.min(260, window.innerHeight - top - 8)
   void qualityMenu.open(select, 'コードの響きを選択', groups, { left, top, width, height })
 }
-const slotElements = mountChordGrid(progression.slots.length, {
-  play(bar) {
-    if (!tempo.reportValidity()) return
-    if (progressionStatus) progressionStatus.textContent = ''
-    progression.bpm = Number(tempo.value)
-    void progression.start(bar, 0)
-    updateTransport()
-  },
+/** @param {number} bar */
+function playFromBar(bar) {
+  if (progression.running && barPlayback?.bar === bar && barPlayback.section === progression.selectedSection) {
+    progression.stop(); updateTransport(); return
+  }
+  if (!tempo.reportValidity()) return
+  if (progressionStatus) progressionStatus.textContent = ''
+  progression.bpm = Number(tempo.value)
+  playbackHeads.set(progression.selectedSection, bar)
+  void progression.start(bar, 0)
+  barPlayback = {bar, section: progression.selectedSection}
+  updateTransport()
+}
+const slotElements = mountChordGrid(16, {
+  play: playFromBar,
   modulate(section, amount) {
     progression.modulation[section] = Math.max(-11, Math.min(11, progression.modulation[section] + amount))
     refreshLabels()
@@ -306,7 +368,8 @@ const slotElements = mountChordGrid(progression.slots.length, {
     else if (beat > 0) progression.beatSlots[bar][beat] = chord
     if (chord) qualityOrigins[bar][beat] = chord
     setPreset('custom')
-    refreshLabels()
+    chordRate.disabled = true
+    refreshChordCell(bar, beat)
   },
   quality(bar, beat, select) {
     const current = beat === 0 ? progression.slots[bar] : progression.beatSlots[bar][beat]
@@ -318,7 +381,8 @@ const slotElements = mountChordGrid(progression.slots.length, {
     if (quality === 'maj' && ['7', '9', 'b9', 'b9_13', 's9_13'].includes(extension))
       qualityOrigins[bar][beat] = chord
     setPreset('custom')
-    refreshLabels(select)
+    chordRate.disabled = true
+    refreshChordCell(bar, beat, select)
   },
   openQuality: openQualityMenu,
   refresh: () => refreshLabels(),
@@ -327,6 +391,7 @@ const slotElements = mountChordGrid(progression.slots.length, {
     if (chord) void previewChord(bar, beat, chord)
   },
 })
+let hasOpenedPlayPanel = false
 function togglePlayback() {
   if (buddyController?.active) { buddyController.stop(); return }
   if (progression.running) {
@@ -336,14 +401,30 @@ function togglePlayback() {
   if (progressionStatus) progressionStatus.textContent = ''
   if (!tempo.reportValidity()) return
   progression.bpm = Number(tempo.value)
-  if (buddyController) void buddyController.start()
-  else void progression.start()
+  const playbackHead = playbackHeads.get(progression.selectedSection)
+  if (playbackHead !== undefined) {
+    const bar = Math.min(playbackHead, progression.barCount() - 1)
+    void progression.start(bar, 0)
+    barPlayback = {bar, section: progression.selectedSection}
+  } else if (buddyController) {
+    const firstPlay = !hasOpenedPlayPanel
+    if (firstPlay) hasOpenedPlayPanel = true
+    void buddyController.start(firstPlay)
+  } else void progression.start()
   updateTransport()
 }
 const tempoNumber = /** @type {HTMLInputElement} */ (document.querySelector('#tempo-value'))
 tempo.addEventListener('input', () => {
   progression.bpm = Number(tempo.value)
   tempoNumber.value = tempo.value
+})
+
+tempo.addEventListener('keydown', event => {
+  if (event.key !== 'ArrowUp' && event.key !== 'ArrowRight' && event.key !== 'ArrowDown' && event.key !== 'ArrowLeft') return
+  event.preventDefault()
+  const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
+  tempo.value = String(Math.round(Number(tempo.value)) + direction)
+  tempo.dispatchEvent(new Event('input', { bubbles: true }))
 })
 
 tempoNumber.addEventListener('blur', () => {
@@ -363,90 +444,152 @@ tempoNumber.addEventListener('keydown', event => {
 keys.forEach((key, index) => {
   const option = document.createElement('option')
   option.value = String(index)
-  option.textContent = key.name
+  option.textContent = `${key.name}(${index > 0 ? '+' : ''}${index})`
   keySelect.append(option)
 })
-/** @param {HTMLSelectElement | null} [keepOptions] */
-function refreshLabels(keepOptions = null) {
-  const mode = notationMode()
+const mixerKey = /** @type {HTMLInputElement} */ (document.querySelector('#mixer-key'))
+const mixerKeyValue = /** @type {HTMLOutputElement} */ (document.querySelector('#mixer-key-value'))
+const meterInput = /** @type {HTMLInputElement} */ (document.querySelector('#meter'))
+const meterValue = /** @type {HTMLOutputElement} */ (document.querySelector('#meter-value'))
+function refreshMeter() {
+  meterInput.value = String(progression.beatsPerBar)
+  meterValue.value = `${progression.beatsPerBar}/4`
+  meterInput.setAttribute('aria-valuetext', `${progression.beatsPerBar}拍子`)
+  meterInput.parentElement?.style.setProperty('--angle', `${(progression.beatsPerBar - 4) * 90}deg`)
+}
+refreshMeter()
+function refreshMixerKey() {
+  const pitch = Number(keySelect.value)
+  if ((Number(mixerKey.value) % 12 + 12) % 12 !== pitch) {
+    mixerKey.value = String(pitch > 6 ? pitch - 12 : pitch)
+  }
+  const semitones = Number(mixerKey.value)
+  const offsetLabel = `${semitones > 0 ? '+' : ''}${semitones}`
+  mixerKeyValue.value = `${keys[pitch].name} (${offsetLabel})`
+  mixerKey.setAttribute('aria-valuetext', `${keys[pitch].name} ${offsetLabel}`)
+  mixerKey.parentElement?.style.setProperty('--angle', `${Number(mixerKey.value) * 11.25}deg`)
+}
+mixerKey.addEventListener('input', () => {
+  keySelect.value = String((Number(mixerKey.value) % 12 + 12) % 12)
+  keySelect.dispatchEvent(new Event('change', { bubbles: true }))
+})
+refreshMixerKey()
+function refreshLabels() {
+  // Sections can grow from eight to sixteen bars, and older scores have only
+  // four beat entries. Keep the UI's choice origins aligned with the score.
+  progression.slots.forEach((chord, bar) => {
+    qualityOrigins[bar] ??= []
+    for (let beat = 0; beat < 5; beat++) {
+      qualityOrigins[bar][beat] ??= progression.beatSlots[bar]?.[beat] ?? chord
+    }
+  })
+  sectionBars.value = progression.barCount()
+  referenceTrack.refreshLoopLength()
+  slotContainer?.querySelectorAll('.bar-play-controls button').forEach((element, bar) => { element.toggleAttribute('hidden', bar >= progression.barCount()) })
   slotContainer?.querySelectorAll('.modulation-bar').forEach((element, index) => {
     const section = index
+    element.toggleAttribute('hidden', index * 2 >= progression.barCount())
+    if (index * 2 >= progression.barCount()) return
     const offset = progression.modulation[section]
     const relative = offset - (progression.modulation[section - 1] ?? 0)
     const output = element.querySelector('output')
-    if (output) output.textContent = `${relative > 0 ? '+' : ''}${relative} (${keys[progression.keyForBar(section * 2)].name})`
+    if (output) output.textContent = `${keys[progression.keyForBar(section * 2)].name} (${relative > 0 ? '+' : ''}${relative})`
     const down = /** @type {HTMLButtonElement | null} */ (element.querySelector('.modulation-down'))
     const up = /** @type {HTMLButtonElement | null} */ (element.querySelector('.modulation-up'))
     if (down) down.disabled = offset <= -11
     if (up) up.disabled = offset >= 11
   })
   slotElements.forEach((element, bar) => {
-    element.querySelectorAll('.beat-chord').forEach((beatElement, beat) => {
-      const id = beat === 0 ? progression.slots[bar] : progression.beatSlots[bar][beat]
-      const root = /** @type {HTMLSelectElement} */ (beatElement.querySelector('.root-select'))
-      const barKey = progression.keyForBar(bar)
-      const signature = `${barKey}:${mode}:${beat}`
-      if (root.dataset.signature !== signature) {
-        root.replaceChildren()
-        if (beat > 0) {
-          const empty = document.createElement('option')
-          empty.value = ''
-          empty.textContent = '（変更なし）'
-          root.append(empty)
-        }
-        for (let pitch = 0; pitch < 12; pitch++) {
-          const option = document.createElement('option')
-          option.value = String(pitch)
-          option.textContent = displayParts(changeRoot('C', pitch), barKey).main
-          root.append(option)
-        }
-        root.dataset.signature = signature
-      }
-      root.value = id ? String(rootPitch(id)) : ''
-      const rootDisplay = beatElement.querySelector('.root-display')
-      if (rootDisplay) rootDisplay.textContent = id ? root.selectedOptions[0]?.textContent ?? '' : '＋'
-      const quality = /** @type {HTMLSelectElement} */ (beatElement.querySelector('.quality-select'))
-      const preview = /** @type {HTMLButtonElement} */ (beatElement.querySelector('.chord-preview'))
-      quality.hidden = !id
-      preview.hidden = !id
-      beatElement.classList.toggle('is-empty', !id)
-      if (!id) return
-      const config = chordConfig(id)
-      const groupSignature = `${qualityOrigins[bar][beat]}|${id}`
-      if (quality !== keepOptions && quality.dataset.origin !== groupSignature) {
-        const groupedChoices = qualityGroups(qualityOrigins[bar][beat], id)
-        quality.replaceChildren()
-        for (const group of groupedChoices) {
-          const optgroup = document.createElement('optgroup')
-          optgroup.label = group.label
-          for (const choice of group.options) {
-            const option = document.createElement('option')
-            option.value = choice.value
-            option.textContent = choice.label
-            optgroup.append(option)
-          }
-          quality.append(optgroup)
-        }
-        quality.dataset.origin = groupSignature
-        quality.title = 'ルートに応じた候補。前後のコードによって響きの印象は変わります'
-      }
-      quality.value = `${config.quality}:${config.extension}`
-      const isMajor = quality.value === 'maj:none'
-      quality.classList.toggle('is-major', isMajor)
-      quality.classList.toggle('is-long', (quality.selectedOptions[0]?.textContent?.length ?? 0) > 5)
-      quality.setAttribute('aria-label', `${bar + 1}小節 ${beat + 1}拍目の響き：${isMajor ? 'maj' : quality.selectedOptions[0]?.textContent || '選択'}`)
+    element.hidden = bar >= progression.barCount()
+    if (element.hidden) return
+    element.style.setProperty('--beats-per-bar', String(progression.beatsPerBar))
+    element.querySelectorAll('.beat-chord').forEach((cell, beat) => {
+      cell.toggleAttribute('hidden', beat >= progression.beatsPerBar)
+      if (beat < progression.beatsPerBar) updateChordCell(cell, bar, beat)
     })
   })
+  refreshHarmonyViews()
+}
+
+/** @param {number} bar @param {number} beat @param {HTMLSelectElement | null} [keepOptions] */
+function refreshChordCell(bar, beat, keepOptions = null) {
+  const cell = slotElements[bar].querySelectorAll('.beat-chord')[beat]
+  if (cell) updateChordCell(cell, bar, beat, keepOptions)
+  refreshHarmonyViews(bar === 0)
+}
+
+/** @param {Element} beatElement @param {number} bar @param {number} beat @param {HTMLSelectElement | null} [keepOptions] */
+function updateChordCell(beatElement, bar, beat, keepOptions = null) {
+  const mode = notationMode()
+  const id = beat === 0 ? progression.slots[bar] : progression.beatSlots[bar][beat]
+  const root = /** @type {HTMLSelectElement} */ (beatElement.querySelector('.root-select'))
+  const barKey = progression.keyForBar(bar)
+  const signature = `${barKey}:${mode}:${beat}`
+  if (root.dataset.signature !== signature) {
+    root.replaceChildren()
+    if (beat > 0) {
+      const empty = document.createElement('option')
+      empty.value = ''
+      empty.textContent = '（変更なし）'
+      root.append(empty)
+    }
+    for (let pitch = 0; pitch < 12; pitch++) {
+      const option = document.createElement('option')
+      option.value = String(pitch)
+      option.textContent = displayParts(changeRoot('C', pitch), barKey).main
+      root.append(option)
+    }
+    root.dataset.signature = signature
+  }
+  root.value = id ? String(rootPitch(id)) : ''
+  const rootDisplay = beatElement.querySelector('.root-display')
+  if (rootDisplay) rootDisplay.textContent = id ? root.selectedOptions[0]?.textContent ?? '' : '＋'
+  const quality = /** @type {HTMLSelectElement} */ (beatElement.querySelector('.quality-select'))
+  const preview = /** @type {HTMLButtonElement} */ (beatElement.querySelector('.chord-preview'))
+  const editButton=beatElement.querySelector('.score-chord-edit')
+  editButton?.setAttribute('aria-label',`${bar+1}小節 ${beat+1}拍目：${id ? displayParts(id,barKey).main : '変更なし'}をPadで編集`)
+  quality.hidden = !id
+  preview.hidden = !id
+  beatElement.classList.toggle('is-empty', !id)
+  if (!id) return
+  const config = chordConfig(id)
+  const groupSignature = `${qualityOrigins[bar][beat]}|${id}`
+  if (quality !== keepOptions && quality.dataset.origin !== groupSignature) {
+    const groupedChoices = qualityGroups(qualityOrigins[bar][beat], id)
+    quality.replaceChildren()
+    for (const group of groupedChoices) {
+      const optgroup = document.createElement('optgroup')
+      optgroup.label = group.label
+      for (const choice of group.options) {
+        const option = document.createElement('option')
+        option.value = choice.value
+        option.textContent = choice.label
+        optgroup.append(option)
+      }
+      quality.append(optgroup)
+    }
+    quality.dataset.origin = groupSignature
+    quality.title = 'ルートに応じた候補。前後のコードによって響きの印象は変わります'
+  }
+  quality.value = `${config.quality}:${config.extension}`
+  const isMajor = quality.value === 'maj:none'
+  quality.classList.toggle('is-major', isMajor)
+  quality.classList.toggle('is-long', (quality.selectedOptions[0]?.textContent?.length ?? 0) > 5)
+  quality.setAttribute('aria-label', `${bar + 1}小節 ${beat + 1}拍目の響き：${isMajor ? 'maj' : quality.selectedOptions[0]?.textContent || '選択'}`)
+}
+
+function refreshHarmonyViews(refreshBass = true) {
   if (!progression.running) {
     activeChord = progression.slots[0]
     activeKey = progression.keyForBar(0)
   }
   refreshMelody()
-  refreshBassDetail()
+  if (refreshBass) refreshBassDetail()
   if (progressionStatus) progressionStatus.textContent = ''
 }
 notation.addEventListener('change', () => refreshLabels())
 keySelect.addEventListener('change', () => {
+  refreshMixerKey()
   progression.key = Number(keySelect.value)
   refreshLabels()
   buddyController?.harmonyChanged()
@@ -459,14 +602,59 @@ for (const [selector, step] of [['#key-down', -1], ['#key-up', 1]]) {
 }
 updateTransport()
 
+const chordRate = /** @type {HTMLSelectElement} */ (document.querySelector('#chord-rate'))
+const chordRates = [1, 0.5, 2]
+
+/** @param {typeof presets[number]} preset @param {number} rate */
+function arrangePreset(preset, rate) {
+  const slots = presetSlots(preset.id)
+  const beatSlots = presetBeatSlots(preset.id)
+  const modulation = [...preset.modulation]
+  if (rate === 1) return { slots, beatSlots, modulation }
+
+  const bars = Array.from({length: 8}, () => /** @type {(string | null)[]} */ ([null, null, null, null]))
+  for (let bar = 0; bar < 8; bar++) {
+    for (let beat = 0; beat < 4; beat++) {
+      const chord = beatSlots[bar][beat] ?? (beat === 0 ? slots[bar] : null)
+      if (!chord) continue
+      const tick = Math.floor((bar * 4 + beat) / rate)
+      if (rate === 0.5 && tick >= 32) break
+      for (let offset = tick; offset < 32; offset += 32 / rate) {
+        const row = bars[Math.floor(offset / 4)]
+        row[offset % 4] ??= chord
+      }
+    }
+  }
+  let heldChord = slots[0]
+  return {
+    slots: bars.map(row => {
+      const firstChord = row[0] ?? heldChord
+      heldChord = row.slice().reverse().find(chord => chord !== null) ?? heldChord
+      return firstChord
+    }),
+    beatSlots: bars.map(row => [null, ...row.slice(1)]),
+    modulation: modulation.map((_, pair) => modulation[Math.floor(pair * rate)] ?? 0),
+  }
+}
+
 /** @param {string} id */
 function applyPreset(id) {
   const selected = presets.find((item) => item.id === id)
   if (!selected) return
-  progression.modulation = [...selected.modulation]
-  progression.slots = presetSlots(selected.id)
+  chordRate.disabled = false
+  const double = /** @type {HTMLOptionElement} */ (chordRate.options[2])
+  double.disabled = selected.modulation.some(Boolean)
+  if (double.disabled && chordRate.value === '2') chordRate.value = '1'
+  const {slots, beatSlots, modulation} = arrangePreset(selected, Number(chordRate.value))
+  progression.modulation = modulation
+  if (progression.slots.length === 16 && slots.length === 8) {
+    slots.push(...slots)
+    beatSlots.push(...beatSlots.map(row => [...row]))
+    modulation.push(...modulation)
+  }
+  progression.slots = slots
   progression.clearBeatSlots()
-  progression.beatSlots = presetBeatSlots(selected.id)
+  progression.beatSlots = beatSlots
   qualityOrigins.splice(0, qualityOrigins.length, ...progression.slots.map((chord, bar) =>
     progression.beatSlots[bar].map((change) => change ?? chord),
   ))
@@ -475,6 +663,10 @@ function applyPreset(id) {
 presetSelect.addEventListener('change', () => {
   if (!presets.some(item => item.id === presetSelect.value)) return
   applyPreset(presetSelect.value)
+  buddyController?.harmonyChanged()
+})
+chordRate.addEventListener('change', () => {
+  applyPreset(selectedPreset.value)
   buddyController?.harmonyChanged()
 })
 /** @param {string} chord @param {number} [key] */
@@ -512,6 +704,10 @@ for (const pattern of rhythmPatterns) {
 }
 rhythmSelect.value = progression.rhythm
 rhythmSelect.addEventListener('change', () => {
+  if (rhythmSelect.value === 'reference') return
+  const captured = progression.sections[progression.selectedSection].performance
+  if (captured) delete captured.drums
+  syncCapturedChoices()
   progression.drumSteps = null
   progression.rhythm = rhythmSelect.value
   renderDrumSteps()
@@ -563,10 +759,12 @@ genreSelect.addEventListener('change', () => {
   if (!genre) return
   const presetId = genreProgressions[/** @type {keyof typeof genreProgressions} */ (genre.id)]
   const recommended = presets.find(item => item.id === presetId)
-  if (recommended) {
+  if (recommended && !referenceView.filename) {
     setPreset(recommended.id)
     applyPreset(recommended.id)
   }
+  delete progression.sections[progression.selectedSection].performance
+  syncCapturedChoices()
   progression.genre = genre.id
   progression.bassPattern = genre.bassPattern
   bassPattern.value = progression.bassPattern
@@ -574,7 +772,7 @@ genreSelect.addEventListener('change', () => {
   progression.rhythm = genre.rhythm
   renderDrumSteps()
   setOrnamentStyle(genre.id)
-  progression.bpm = genre.bpm
+  if (!referenceView.filename) progression.bpm = genre.bpm
   progression.swing = genre.swing
   bass.timbre = genre.bass
   drums.timbre = genre.drum
@@ -589,11 +787,12 @@ genreSelect.addEventListener('change', () => {
   rhythmSelect.value = genre.rhythm
   bassTimbre.value = genre.bass
   updatePartIcons()
-  tempo.value = String(genre.bpm)
+  if (!referenceView.filename) tempo.value = String(genre.bpm)
   swing.value = String(genre.swing)
   tempoNumber.value = tempo.value
   renderSwing()
   buddyController?.styleChanged()
+  rememberSectionParts()
 })
 bassTimbre.addEventListener('change', () => {
   bass.timbre = bassTimbre.value
@@ -605,7 +804,6 @@ swing.addEventListener('input', () => {
 })
 function renderSwing() {
   refreshBassDetail()
-  document.querySelector('#swing-print .offbeats')?.setAttribute('transform', `translate(${18 * (swungBassBeat(1, Number(swing.value)) - 0.5)} 0)`)
   const output = document.querySelector('#swing-value')
   if (output) output.textContent = `${swing.value}%`
 }
@@ -617,50 +815,79 @@ const ornamentTracks = ['bell', 'pluck', 'phrase', 'fx'].map((id, index) => ({
 progression.ornaments = ornamentTracks
 const setOrnamentStyle = mountOrnaments(ornamentTracks)
 
-const mixer = createPartMixer([
+const mixParts = [
   { part: drums, volume: 0.35 }, { part: bass, volume: 0.5 },
   { part: chordInstrument, volume: 0.4 }, { part: instrument, volume: 0.4 },
   ...ornamentTracks.map(track => ({part: track.voice, volume: .24})),
-])
-for (const [index, id] of ['drum', 'bass', 'chord', 'melody', 'bell', 'pluck', 'phrase', 'fx'].entries()) {
+  {part: referenceTrack, volume: .25},
+]
+const mixer = createPartMixer(mixParts)
+/** @param {HTMLInputElement} input @param {number} sensitivity */
+function bindKnobDrag(input, sensitivity) {
+  const knob = input.parentElement
+  if (!knob) return
+  // Drag relative to the starting value so touching the knob never jumps it.
+  input.addEventListener('pointerdown', event => {
+    if (!event.isPrimary || event.button !== 0) return
+    event.preventDefault()
+    input.focus({ preventScroll: true })
+    const startX = event.clientX
+    const startY = event.clientY
+    const startValue = Number(input.value)
+    knob.setPointerCapture(event.pointerId)
+    /** @param {PointerEvent} move */
+    const onMove = move => {
+      if (move.pointerId !== event.pointerId) return
+      const change = (move.clientX - startX) - (move.clientY - startY)
+      const previous = input.value
+      input.value = String(input === tempo ? Math.round(startValue + change * sensitivity) : startValue + change * sensitivity)
+      if (input.value !== previous) {
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+    }
+    /** @param {PointerEvent} end */
+    const onEnd = end => {
+      if (end.pointerId !== event.pointerId) return
+      knob.removeEventListener('pointermove', onMove)
+      knob.removeEventListener('pointerup', onEnd)
+      knob.removeEventListener('pointercancel', onEnd)
+      knob.removeEventListener('lostpointercapture', onEnd)
+    }
+    knob.addEventListener('pointermove', onMove)
+    knob.addEventListener('pointerup', onEnd)
+    knob.addEventListener('pointercancel', onEnd)
+    knob.addEventListener('lostpointercapture', onEnd)
+  })
+}
+
+bindKnobDrag(mixerKey, .12)
+bindKnobDrag(meterInput, .025)
+
+for (const input of [tempo, swing]) {
+  const knob = document.createElement('span')
+  knob.className = 'volume-knob timing-knob'
+  const cap = document.createElement('span')
+  cap.setAttribute('aria-hidden', 'true')
+  input.before(knob)
+  knob.append(input, cap)
+  const refresh = () => {
+    const ratio = (input.valueAsNumber - Number(input.min)) / (Number(input.max) - Number(input.min))
+    knob.style.setProperty('--angle', `${-135 + ratio * 270}deg`)
+  }
+  input.addEventListener('input', refresh)
+  document.getElementById('genre')?.addEventListener('change', refresh)
+  bindKnobDrag(input, .5)
+  refresh()
+}
+
+for (const [index, id] of ['drum', 'bass', 'chord', 'melody', 'bell', 'pluck', 'phrase', 'fx', 'reference'].entries()) {
   const volume = /** @type {HTMLInputElement} */ (document.querySelector(`#${id}-volume`))
   const renderVolume = () => {
     mixer.setVolume(index, Number(volume.value) / 100)
     volume.parentElement?.style.setProperty('--angle', `${-135 + Number(volume.value) * 2.7}deg`)
   }
   volume.addEventListener('input', renderVolume)
-  // Drag relative to the starting value so touching the knob never jumps it.
-  volume.addEventListener('pointerdown', event => {
-    if (event.button !== 0) return
-    event.preventDefault()
-    volume.focus({ preventScroll: true })
-    const startX = event.clientX
-    const startY = event.clientY
-    const startValue = Number(volume.value)
-    volume.setPointerCapture(event.pointerId)
-    /** @param {PointerEvent} move */
-    const onMove = move => {
-      if (move.pointerId !== event.pointerId) return
-      const change = (move.clientX - startX) - (move.clientY - startY)
-      const value = Math.max(0, Math.min(100, Math.round(startValue + change / 2)))
-      if (Number(volume.value) !== value) {
-        volume.value = String(value)
-        volume.dispatchEvent(new Event('input', { bubbles: true }))
-      }
-    }
-    /** @param {PointerEvent} end */
-    const onEnd = end => {
-      if (end.pointerId !== event.pointerId) return
-      volume.removeEventListener('pointermove', onMove)
-      volume.removeEventListener('pointerup', onEnd)
-      volume.removeEventListener('pointercancel', onEnd)
-      volume.removeEventListener('lostpointercapture', onEnd)
-    }
-    volume.addEventListener('pointermove', onMove)
-    volume.addEventListener('pointerup', onEnd)
-    volume.addEventListener('pointercancel', onEnd)
-    volume.addEventListener('lostpointercapture', onEnd)
-  })
+  bindKnobDrag(volume, .5)
   renderVolume()
   for (const mode of ['mute', 'solo']) {
     const toggle = mode === 'mute' ? mixer.toggleMute : mixer.toggleSolo
@@ -673,6 +900,10 @@ const bassPattern = /** @type {HTMLSelectElement} */ (
   document.querySelector('#bass-pattern')
 )
 bassPattern.addEventListener('change', () => {
+  if (bassPattern.value === 'reference') return
+  const captured = progression.sections[progression.selectedSection].performance
+  if (captured) delete captured.bass
+  syncCapturedChoices()
   progression.bassPattern = bassPattern.value
   if (bassPattern.value === 'off') bass.silence()
   refreshBassDetail()
@@ -685,7 +916,7 @@ drumTimbre.addEventListener('change', () => {
   updatePartIcons()
 })
 
-const trackButtons = Array.from(document.querySelectorAll('.track-select:not(.ornament-select)'))
+const trackButtons = Array.from(document.querySelectorAll('.track-select[data-track]:not(.ornament-select)'))
 for (const button of trackButtons) {
   button.addEventListener('click', () => {
     const selected = /** @type {HTMLElement} */ (button).dataset.track
@@ -702,8 +933,45 @@ for (const button of trackButtons) {
   })
 }
 
+// Select a part only for a direct user edit, not for style or file loading.
+const trackGrid = /** @type {HTMLElement} */ (document.querySelector('#track-grid'))
+/** @param {Event} event */
+function selectEditedTrack(event) {
+  if (!(event.target instanceof HTMLSelectElement)) return
+  const row = event.target.closest('[role="group"]')
+  const button = /** @type {HTMLButtonElement | null} */ (row?.querySelector('.track-select'))
+  if (button) button.click()
+}
+trackGrid.addEventListener('change', event => {
+  if (event.isTrusted) selectEditedTrack(event)
+})
+trackGrid.addEventListener('part-user-change', selectEditedTrack)
+
 // Keep the native selects as the source of truth while presenting their choices
 // in the same tactile menu as the rest of the instrument.
+const styleDialog = document.createElement('dialog')
+styleDialog.className = 'style-browser'
+styleDialog.setAttribute('aria-label', 'ジャンルとスタイルを選ぶ')
+document.body.append(styleDialog)
+const styleGroup = ref('')
+createApp({render: () => [
+  h('div', {class: 'style-browser-header'}, [
+    ...(styleGroup.value ? [h('button', {type: 'button', onClick: () => { styleGroup.value = '' }}, '← ジャンル')] : [h('strong', 'ジャンル')]),
+    h('button', {type: 'button', 'aria-label': '閉じる', onClick: () => styleDialog.close()}, '×'),
+  ]),
+  ...(styleGroup.value
+    ? genres.filter(item => item.group === styleGroup.value).map(item => h('button', {
+      type: 'button', class: 'style-browser-choice', 'aria-current': item.id === genreSelect.value ? 'true' : undefined,
+      onClick: () => { void chooseStyle(item.id); styleDialog.close() },
+    }, item.label))
+    : [...new Set(genres.map(item => item.group))].map(group => h('button', {
+      type: 'button', class: 'style-browser-choice', onClick: () => { styleGroup.value = group },
+    }, group + ' ›'))),
+]}).mount(styleDialog)
+document.getElementById('style-open')?.addEventListener('click', () => { styleGroup.value = ''; styleDialog.showModal() })
+styleDialog.addEventListener('click', event => { if (event.target === styleDialog) styleDialog.close() })
+styleDialog.addEventListener('close', () => document.getElementById('style-open')?.focus({preventScroll: true}))
+
 const selectMenu = createChoiceMenu('select')
 /** @param {HTMLSelectElement} select */
 function openSelectMenu(select) {
@@ -746,12 +1014,12 @@ document.addEventListener('keydown', event => {
 const partIcons = {
   drums: {
     acoustic: '<path class="stamp" d="M3 9q9 5 18 0l-2 9q-7 5-14 0z"/><ellipse class="print" cx="12" cy="7" rx="9" ry="3"/><path class="cut" d="m6 12 2 5 3-4m3 0 2 4 2-5"/>',
-    electronic: '<rect class="stamp" x="2" y="3" width="20" height="18" rx="3"/><circle class="print" cx="7" cy="8" r="2"/><circle class="print" cx="17" cy="8" r="2"/><circle class="print" cx="7" cy="16" r="2"/><circle class="print" cx="17" cy="16" r="2"/>',
+    electronic: '<rect class="stamp" x="2" y="3" width="20" height="18" rx="3"/><circle class="icon-cutout" cx="7" cy="8" r="2"/><circle class="icon-cutout" cx="17" cy="8" r="2"/><circle class="icon-cutout" cx="7" cy="16" r="2"/><circle class="icon-cutout" cx="17" cy="16" r="2"/>',
   },
   bass: {
     electric: '<path class="stamp" d="m13 9 6-7 3 2-7 8q2 4-2 8-4 4-8 1t-2-8q2-4 6-3z"/><path class="print" d="m5 15 4 4 2-2-4-4z"/><path class="cut" d="m10 14 8-9"/>',
     acoustic: '<path class="stamp" d="M13 2h3v8c3 1 4 3 4 6 0 4-3 6-8 6s-8-2-8-6c0-3 2-5 5-6l1-3h3z"/><circle class="print" cx="12" cy="15" r="2.5"/><path class="cut" d="M13 4v12m2-12v12"/>',
-    synth: '<rect class="stamp" x="2" y="4" width="20" height="16" rx="2"/><path class="print" d="M5 7h3v5H5zm6 0h3v5h-3zm6 0h3v5h-3z"/><path class="cut" d="M7 14v4m5-4v4m5-4v4"/>',
+    synth: '<path class="stamp" d="M3 3h18v18H3z"/><path class="cut" fill="none" d="M5 15h3v-5h3v5h3v-5h3v5h2"/><circle class="print" cx="7" cy="6.5" r="1"/><circle class="print" cx="12" cy="6.5" r="1"/><circle class="print" cx="17" cy="6.5" r="1"/>',
   },
 }
 function updatePartIcons() {
@@ -765,20 +1033,53 @@ function updatePartIcons() {
 updatePartIcons()
 
 function renderDrumSteps() {
-  drumGrid.hits.value = progression.drumSteps ?? rhythmPatterns.find(pattern => pattern.id === progression.rhythm)?.hits ?? []
+  drumGrid.hits.value = progression.drumSteps ?? progression.drumHits()
 }
 
 const setChordMonitor = mountChordMonitor()
-/** @param {number} bar @param {string} chord @param {number} beat */
-function updateChordMonitor(bar, chord, beat) {
+/** @param {number} bar @param {string} chord @param {number} beat @param {number} [section] */
+function updateChordMonitor(bar, chord, beat, section = progression.selectedSection) {
   let chordBeat = Math.floor(beat)
-  while (chordBeat > 0 && !progression.beatSlots[bar][chordBeat]) chordBeat--
-  const root = (rootPitch(chord) + progression.keyForBar(bar) + 12) % 12
-  setChordMonitor(progression.notesForBar(chord, bar, chordBeat), root)
+  while (chordBeat > 0 && !progression.sections[section].beatSlots[bar][chordBeat]) chordBeat--
+  const root = (rootPitch(chord) + progression.keyForBar(bar, section) + 12) % 12
+  setChordMonitor(progression.notesForBar(chord, bar, chordBeat, section), root)
 }
 updateChordMonitor(0, progression.slots[0], 0)
 
+for (const [selector, name] of [
+  ['.drum-controls', 'drum'], ['.bass-controls', 'bass'], ['.chord-sound-controls', 'chord'], ['.melody-controls', 'melody'],
+  ...['bell', 'pluck', 'phrase', 'fx'].map(id => [`#${id}-volume`, id]),
+]) {
+  const item = document.querySelector(selector)
+  const mix = item?.closest('.part-mix') || item?.querySelector('.part-mix')
+  if (!mix) continue
+  const meter = document.createElement('span')
+  meter.className = 'channel-meter'
+  meter.setAttribute('data-channel-meter', name)
+  meter.setAttribute('aria-hidden', 'true')
+  for (let step = 0; step < 8; step++) {
+    const segment = document.createElement('i')
+    segment.style.setProperty('--step', String(step))
+    meter.append(segment)
+  }
+  mix.append(meter)
+}
+for (const select of [rhythmSelect, bassPattern]) {
+  const option = document.createElement('option')
+  option.value = 'reference'
+  option.textContent = '原曲から抽出'
+  select.append(option)
+}
 mountPartSteppers()
+function syncCapturedChoices() {
+  const captured = progression.sections[progression.selectedSection].performance
+  for (const [select, available] of /** @type {[HTMLSelectElement,boolean][]} */ ([[rhythmSelect, !!captured?.drums], [bassPattern, !!captured?.bass]])) {
+    const option = select.querySelector('option[value="reference"]')
+    if (option instanceof HTMLOptionElement) option.disabled = !available
+    select.dispatchEvent(new Event('part-sync'))
+  }
+}
+syncCapturedChoices()
 
 // Short responses belong to the object that the user just touched.
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -792,6 +1093,10 @@ function respondToTouch(element, frames, duration = 220) {
   smallResponses.set(element, animation)
 }
 const buddy = /** @type {HTMLButtonElement} */ (document.querySelector('#oto-buddy'))
+const cropBuddy = /** @type {HTMLElement} */ (document.querySelector('.crop-buddy'))
+const buddyIcon = buddy.querySelector('svg')
+if (buddyIcon) cropBuddy.append(buddyIcon.cloneNode(true))
+new MutationObserver(() => { cropBuddy.dataset.look = buddy.dataset.look }).observe(buddy, {attributes: true, attributeFilter: ['data-look']})
 const buddyMessage = /** @type {HTMLElement} */ (document.querySelector('#buddy-message'))
 // Musical listening cues describe the gesture rather than repeat control labels.
 const arrangementCues = new Map([
@@ -825,13 +1130,12 @@ function refreshBuddyLook() {
   buddy.dataset.look = buddyLooks.get(group) ?? 'fringe'
 }
 genreSelect.addEventListener('change', refreshBuddyLook)
+genreSelect.addEventListener('change', () => {
+  const style = genres.find(item => item.id === genreSelect.value)
+  playerDisplay.setStyle(style?.label ?? '', style?.group ?? '')
+})
 refreshBuddyLook()
-let hasShownPlaybackTip = false
 function refreshBuddy() {
-  if (progression.running && !hasShownPlaybackTip) {
-    buddyMessage.textContent = '鳴らしたまま、各パートの←→で奏法を変えてみよう。好きな組み合わせを探してね。'
-    hasShownPlaybackTip = true
-  }
   const failed = Boolean(status?.textContent?.trim() || progressionStatus?.textContent?.trim())
   const mood = failed ? 'error' : progression.running ? 'listening' : 'idle'
   if (buddy.dataset.mood === mood) return
@@ -888,7 +1192,7 @@ document.addEventListener('change', event => {
   }
 })
 
-mountMobileChordEditor(slotElements, refreshLabels)
+// The unified Pad trigger handles desktop and mobile chord editing.
 const chordDetail = document.querySelector('#detail-chord')
 for (const [className, label] of [['mobile-options', 'キー・表示'], ['mobile-monitor', '鍵盤・指板']]) {
   const button = document.createElement('button')
@@ -930,12 +1234,17 @@ buddyController = mountBuddy({
   getNotes: () => playableNotes,
   refreshTransport: updateTransport,
   onModeChange: mode => { melodyMode.value = mode },
-  notesAt: (bar, beat) => {
-    let chord = progression.slots[bar]
-    for (let i = 1; i <= Math.floor(beat); i++) chord = progression.beatSlots[bar]?.[i] ?? chord
+  notesAt: (bar, beat, absoluteBar) => {
+    const {section, bar:localBar} = progression.positionAt(absoluteBar)
+    bar = localBar
+    const {slots, beatSlots} = progression.sections[section]
+    let chord = slots[bar]
+    for (let i = 1; i <= Math.floor(beat); i++) chord = beatSlots[bar]?.[i] ?? chord
     // Otto follows the sounding harmony, independently of the human keyboard view.
-    const key = progression.keyForBar(bar)
+    const key = progression.keyForBar(bar, section)
+    const scalePitches = new Set(melodyPalette(key, chord, key, 'key').map(note => note.midi % 12))
     const palette = melodyPalette(key, chord, key, 'chord')
+      .filter(note => !note.clash && (note.category === 'chord' || scalePitches.has(note.midi % 12)))
     return palette.flatMap(note => [note.midi-12,note.midi,note.midi+12]
       .filter(midi => midi >= 60 && midi <= 84)
       .map(midi => ({...note,midi,...melodyRole(midi,chord,key)})))
@@ -953,67 +1262,222 @@ buddyController = mountBuddy({
   },
 })
 
+const sectionNames = ['A', 'B', 'C', 'D']
+let restoringSectionParts = false
+
+function readSectionParts() {
+  return Object.fromEntries(sectionControlIds.map(id => {
+    const control = /** @type {HTMLSelectElement} */ (document.getElementById(id))
+    return [id, id === 'rhythm-pattern' ? progression.rhythm :
+      id === 'bass-pattern' ? progression.bassPattern : control.value]
+  }))
+}
+
+function rememberSectionParts() {
+  if (!restoringSectionParts) progression.sections[progression.selectedSection].partSettings = readSectionParts()
+}
+
+function restoreSectionParts() {
+  const settings = progression.sections[progression.selectedSection].partSettings
+  if (!settings) return
+  const currentPerformance = progression.sections[progression.selectedSection].performance
+  const performance = currentPerformance ? {...currentPerformance} : undefined
+  restoringSectionParts = true
+  try {
+    for (const id of sectionControlIds) {
+      const control = /** @type {HTMLSelectElement} */ (document.getElementById(id))
+      const value = settings[id]
+      if (value !== undefined && control.value !== value) {
+        control.value = value
+        control.dispatchEvent(new Event('change', {bubbles: true}))
+      }
+    }
+  } finally {
+    progression.sections[progression.selectedSection].performance = performance
+    restoringSectionParts = false
+  }
+}
+for (const id of sectionControlIds) document.getElementById(id)?.addEventListener('change', rememberSectionParts)
+progression.onScheduleSection = (/** @type {number} */ section) => {
+  if (section !== progression.selectedSection) editSection(section)
+}
+
+
+/** @param {number} section */
+function editSection(section) {
+  queueMicrotask(() => document.dispatchEvent(new Event('reference-timing-refresh')))
+  const timing = /** @type {HTMLInputElement | null} */ (document.querySelector('.reference-timing-control input'))
+  if (timing) {
+    timing.value = String(referenceTrack.getTiming(section))
+    const output = document.querySelector('.reference-timing-control output')
+    if (output) output.textContent = Number(timing.value).toFixed(2) + ' 秒'
+  }
+  progression.selectedSection = editingSection.value = section
+  restoreSectionParts()
+  sectionAdvance.value = progression.sections[section].advance
+  const captured = progression.sections[section].performance
+  rhythmSelect.value = captured?.drums ? 'reference' : progression.rhythm
+  bassPattern.value = captured?.bass ? 'reference' : progression.bassPattern
+  syncCapturedChoices()
+  qualityOrigins.splice(0, qualityOrigins.length, ...progression.slots.map((chord, bar) =>
+    progression.beatSlots[bar].map(change => change ?? chord)))
+  const slots = JSON.stringify(progression.slots)
+  const beats = JSON.stringify(progression.beatSlots)
+  const modulation = JSON.stringify(progression.modulation)
+  const rate = chordRates.find(rate => presets.some(item => matches(item, rate))) ?? 1
+  const preset = presets.find(item => matches(item, rate))
+  /** @param {typeof presets[number]} item @param {number} rate */
+  function matches(item, rate) {
+    if (rate === 2 && item.modulation.some(Boolean)) return false
+    const layout = arrangePreset(item, rate)
+    return JSON.stringify(layout.modulation) === modulation &&
+      JSON.stringify(layout.slots) === slots && JSON.stringify(layout.beatSlots) === beats
+  }
+  chordRate.value = String(rate)
+  chordRate.disabled = !preset
+  chordRate.options[2].disabled = !!preset?.modulation.some(Boolean)
+  setPreset(preset?.id ?? 'custom')
+  refreshLabels()
+  if (!progression.running) updateChordMonitor(0, progression.slots[0], 0)
+}
+
+createApp({
+  render: () => [
+    ...sectionNames.map((name, index) => h('button', {
+      type: 'button', 'aria-label': `セクション${name}を編集`,
+      'aria-pressed': String(index === editingSection.value),
+      'data-playing': index === playingSection.value ? 'true' : undefined,
+      onClick: () => editSection(index),
+    }, name)),
+    h('div', {class: 'section-advance', role: 'radiogroup', 'aria-label': 'セクション終了後'}, [
+      ...[[false, 'ループ'], [true, '次へ']].map(([advance, label]) =>
+        h('label', [
+          h('input', {
+            type: 'radio', name: 'section-advance', checked: sectionAdvance.value === advance,
+            onChange: () => {
+              progression.sections[editingSection.value].advance = sectionAdvance.value = Boolean(advance)
+            },
+          }),
+          h('span', String(label)),
+        ])),
+    ]),
+  ],
+}).mount('#song-sections')
+
+createApp({setup: () => () => h('div', {class:'section-bar-count'}, [
+  h('span', {}, '小節数'),
+  h('div', {class:'style-stepper'}, [
+    h('button', {type:'button', disabled:sectionBars.value <= 1, 'aria-label':'小節数を減らす', onClick:() => changeBarCount(-1)}, '−'),
+    h('output', {'aria-live':'polite'}, String(sectionBars.value)),
+    h('button', {type:'button', disabled:sectionBars.value >= 16, 'aria-label':'小節数を増やす', onClick:() => changeBarCount(1)}, '＋'),
+  ]),
+])}).mount('#section-bar-count')
+/** @param {number} delta */
+function changeBarCount(delta) {
+  const section = progression.sections[progression.selectedSection]
+  const count = Math.max(1, Math.min(16, progression.barCount() + delta))
+  // Older saved arrangements have eight stored bars; extend without losing edits.
+  if (count > section.slots.length) {
+    section.slots = [...section.slots, ...section.slots]
+    section.beatSlots = [...section.beatSlots, ...section.beatSlots.map(row => [...row])]
+    section.modulation = [...section.modulation, ...section.modulation]
+  }
+  section.barCount = count
+  refreshLabels()
+}
+
 // Start with the same complete arrangement as the displayed style.
 genreSelect.dispatchEvent(new Event('change', {bubbles:true}))
+if (progression.slots.length === 8) {
+  progression.slots = [...progression.slots, ...progression.slots]
+  progression.beatSlots = [...progression.beatSlots, ...progression.beatSlots.map(row => [...row])]
+  progression.modulation = [...progression.modulation, ...progression.modulation]
+}
+progression.sections[0].barCount = 16
+for (let index = 1; index < progression.sections.length; index++) {
+  const {slots, beatSlots, modulation} = progression.sections[0]
+  progression.sections[index] = {slots: [...slots], beatSlots: beatSlots.map(row => [...row]), modulation: [...modulation], advance: false, barCount:16}
+}
 
-// Portable arrangement files. Audio references and generated performances are not embedded.
-const savedControls = Array.from(document.querySelectorAll('.groove input[id], .groove select[id], #track-grid input[id], #track-grid select[id], #detail-bass input[id], #key, #count-in'))
-  .filter(element => element instanceof HTMLInputElement || element instanceof HTMLSelectElement)
-const savedMix = Array.from(document.querySelectorAll('#track-grid button[id][aria-pressed]'))
+for (const section of progression.sections) section.partSettings = {...readSectionParts()}
+refreshLabels()
+
+// Adapt version 1 control IDs to the current UI.
+const savedControls = new Map(arrangementControlIds.map(id =>
+  [id, /** @type {HTMLInputElement | HTMLSelectElement} */ (document.getElementById(id))]))
+const savedMix = new Map(arrangementMixIds.map(id =>
+  [id, /** @type {HTMLButtonElement} */ (document.getElementById(id))]))
+
 function saveArrangement() {
   tempoNumber.blur()
-  const data = {format:'oto-arrangement', version:1,
-    controls:savedControls.map(element => { const el = /** @type {HTMLInputElement} */ (element); return {id:el.id,value:el.value,checked:el.checked ?? false} }),
-    mix:savedMix.map(el => ({id:el.id,pressed:el.getAttribute('aria-pressed') === 'true'})),
-    slots:progression.slots, beatSlots:progression.beatSlots, modulation:progression.modulation,
-    bassFeel:progression.bassFeel, bassTones:progression.bassTones, drumSteps:progression.drumSteps}
-  const url = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)], {type:'application/json'}))
-  const link = document.createElement('a'); link.href=url; link.download='oto-style.json'; link.click()
+  const controls = [...savedControls.values()].map(el => ({
+    id: el.id, value: el.id === 'rhythm-pattern' ? progression.rhythm : el.id === 'bass-pattern' ? progression.bassPattern : el.value, checked: el instanceof HTMLInputElement && el.checked,
+  }))
+  const mix = [...savedMix.values()].map(el => ({id: el.id, pressed: el.getAttribute('aria-pressed') === 'true'}))
+  const {slots, beatSlots, modulation} = progression.sections[0]
+  const {bassFeel, bassTones, drumSteps, drumAccents, drumPitch, sections, beatsPerBar} = progression
+  const json = encodeArrangement(controls, mix, {slots, beatSlots, modulation, bassFeel, bassTones, drumSteps, drumAccents, drumPitch, beatsPerBar}, sections)
+  const url = URL.createObjectURL(new Blob([json], {type: 'application/json'}))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'oto-style.json'
+  link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
   return '設定ファイルを書き出しました。'
 }
+
 /** @param {File} file */
 async function loadArrangement(file) {
   try {
     if (file.size > 1024 * 1024) throw new Error('size')
-    const data = JSON.parse(await file.text())
-    const chord = (/** @type {unknown} */ value) => typeof value === 'string' && value.length < 100 && chordConfig(value) !== undefined
-    if (data.format !== 'oto-arrangement' || data.version !== 1 || !Array.isArray(data.controls) || data.controls.length !== savedControls.length ||
-        !Array.isArray(data.slots) || data.slots.length !== 8 || !data.slots.every(chord) ||
-        !Array.isArray(data.beatSlots) || data.beatSlots.length !== 8 || !data.beatSlots.every((/** @type {unknown} */ row) => Array.isArray(row) && row.length === 4 && row.every(v => v === null || chord(v))) ||
-        !Array.isArray(data.modulation) || data.modulation.length !== 4 || !data.modulation.every((/** @type {number} */ n) => Number.isInteger(n) && Math.abs(n) <= 120)) throw new Error('format')
-    for (const element of savedControls) {
-      const el = /** @type {HTMLInputElement} */ (element)
-      const item = data.controls.find((/** @type {{id:string}} */ item) => item.id === el.id)
-      if (!item || typeof item.value !== 'string' || typeof item.checked !== 'boolean') throw new Error('control')
-      if (el.id === 'genre' && !genres.some(itemGenre => itemGenre.id === item.value && itemGenre.group === data.controls.find((/** @type {{id:string}} */ entry) => entry.id === 'genre-group')?.value)) throw new Error('style')
-      if (el instanceof HTMLSelectElement && el.id !== 'genre' && !(el.id === 'bass-pattern' && item.value === '') && !Array.from(el.options).some(o => o.value === item.value)) throw new Error('option')
-      if (el.type === 'range' || el.type === 'number') {
-        const n = Number(item.value)
-        if (!Number.isFinite(n) || n < Number(el.min) || n > Number(el.max)) throw new Error('range')
+    const rules = [...savedControls.values()].map(el => {
+      if (el instanceof HTMLSelectElement && el.id !== 'genre') {
+        const options = Array.from(el.options, option => option.value)
+        if (el.id === 'bass-pattern') options.push('')
+        return {id: el.id, options}
       }
-    }
-    if (!Array.isArray(data.mix) || !savedMix.every(el => data.mix.some((/** @type {{id:string,pressed:boolean}} */ m) => m.id === el.id && typeof m.pressed === 'boolean')) ||
-      typeof data.bassFeel !== 'string' || !Array.isArray(data.bassTones) || !data.bassTones.every((/** @type {unknown} */ n) => typeof n === 'string' && ['root','third','fifth','seventh','octave','ninth'].includes(n)) ||
-      !(data.drumSteps === null || Array.isArray(data.drumSteps) && data.drumSteps.every((/** @type {{sound:string,pulse:number,velocity:number}} */ h) => h && ['kick','snare','hat','openhat'].includes(h.sound) && Number.isFinite(h.pulse) && h.pulse >= 0 && h.pulse < 8 && (h.velocity === undefined || Number.isFinite(h.velocity))))) throw new Error('parts')
-    buddyController?.stop(); progression.stop()
-    for (const element of savedControls) {
-      const el = /** @type {HTMLInputElement} */ (element)
-      const item = data.controls.find((/** @type {{id:string}} */ item) => item.id === el.id)
-      if (el.id === 'genre-group') continue
-      if (el.id === 'genre') { await chooseStyle(item.value); continue }
-      el.value = item.value; el.checked = item.checked
-      el.dispatchEvent(new Event(el.type === 'range' || el.type === 'number' ? 'input' : 'change', {bubbles:true}))
-    }
-    for (const el of savedMix) {
-      const item = data.mix.find((/** @type {{id:string}} */ m) => m.id === el.id)
-      if ((el.getAttribute('aria-pressed') === 'true') !== item.pressed) /** @type {HTMLButtonElement} */ (el).click()
-    }
-    progression.slots = data.slots; progression.beatSlots = data.beatSlots; progression.modulation = data.modulation
-    progression.bassFeel = data.bassFeel; progression.bassTones = data.bassTones; progression.drumSteps = data.drumSteps
-    refreshLabels(); renderDrumSteps(); refreshMelody(); buddyController?.styleChanged()
+      if (el instanceof HTMLInputElement && (el.type === 'range' || el.type === 'number')) {
+        return {id: el.id, range: /** @type {[number,number]} */ ([Number(el.min), Number(el.max)])}
+      }
+      return {id: el.id}
+    })
+    const arrangement = decodeArrangement(await file.text(), rules)
+    await restoreArrangement(arrangement, {
+      stop() { buddyController?.stop(); progression.stop() },
+      chooseStyle,
+      applyControl({id, value, checked}) {
+        const el = savedControls.get(id)
+        if (!el) return
+        el.value = value
+        if (el instanceof HTMLInputElement) el.checked = checked
+        const eventType = el.type === 'range' || el.type === 'number' ? 'input' : 'change'
+        el.dispatchEvent(new Event(eventType, {bubbles: true}))
+      },
+      applyMix({id, pressed}) {
+        const el = savedMix.get(id)
+        if (el && (el.getAttribute('aria-pressed') === 'true') !== pressed) el.click()
+      },
+      applyScore(score, sections) {
+        progression.beatsPerBar = score.beatsPerBar ?? 4
+        refreshMeter()
+        const fallbackParts = readSectionParts()
+        for (const section of sections) section.partSettings ??= {...fallbackParts}
+        progression.sections = sections
+        progression.bassFeel = score.bassFeel
+        progression.bassTones = score.bassTones
+        progression.drumSteps = score.drumSteps
+        progression.drumAccents = score.drumAccents ?? []
+        progression.drumPitch = score.drumPitch ?? {}
+        drumGrid.refreshSettings()
+        editSection(0)
+        renderDrumSteps()
+        buddyController?.styleChanged()
+      },
+    })
     return '保存した設定を読み込みました。'
-  } catch { return '読み込めませんでした。otoで保存した設定ファイルを選んでください。' }
+  } catch {
+    return '読み込めませんでした。otoで保存した設定ファイルを選んでください。'
+  }
 }
 
 const songOpen = /** @type {HTMLButtonElement} */ (document.querySelector('#song-open'))
@@ -1023,7 +1487,7 @@ songOpen.addEventListener('click', async () => {
   songOpen.disabled = true
   try {
     songDialogPromise ??= import('./song-dialog.js').then(({ mountSongDialog }) =>
-      mountSongDialog({ save: saveArrangement, load: loadArrangement, onClose: () => songOpen.focus() }))
+      mountSongDialog({ save: saveArrangement, load: loadArrangement, onClose: () => document.getElementById('settings-open')?.focus() }))
     const dialog = await songDialogPromise
     dialog.open()
   } catch {
@@ -1034,11 +1498,158 @@ songOpen.addEventListener('click', async () => {
   }
 })
 
-document.addEventListener('reference-preset', event => {
-  const id = /** @type {CustomEvent<string>} */ (event).detail
-  const selected = presets.find(p => p.id === id)
-  if (!selected) return
-  choosePreset(id)
+mountTimbreSteppers()
+
+/** @param {{bpm:number,key:number,presets:string[],style?:string}} result */
+async function applyReferenceArrangement(result) {
+  await chooseStyle(result.style ?? genreSelect.value)
+  if (bassPattern.value === 'straight16') {
+    bassPattern.value = 'straight8'
+    bassPattern.dispatchEvent(new Event('change', {bubbles:true}))
+  }
+  bassPattern.value = 'straight4'
+  bassPattern.dispatchEvent(new Event('change', {bubbles:true}))
+  swing.value = '0'
+  swing.dispatchEvent(new Event('input', {bubbles:true}))
+  backingSelect.value = 'whole'
+  backingSelect.dispatchEvent(new Event('change', {bubbles:true}))
+  tempo.value = String(result.bpm)
+  tempo.dispatchEvent(new Event('input', {bubbles:true}))
+  keySelect.value = String(result.key)
+  keySelect.dispatchEvent(new Event('change', {bubbles:true}))
+  progression.drumSteps = null
+  renderDrumSteps()
+  for (let index = 0; index < sectionNames.length; index++) {
+    const preset = presets.find(item => item.id === result.presets[index]) ?? presets.find(item => item.id === 'royal')
+    if (!preset) continue
+    progression.sections[index] = {
+      barCount:16,
+      slots: Array(16).fill('FM7'),
+      beatSlots: Array.from({length:16}, () => [null, null, null, null]),
+      modulation: Array(8).fill(0),
+      advance: true,
+      partSettings: {...readSectionParts()},
+    }
+  }
+  editSection(0)
+  buddyController?.styleChanged()
+}
+
+const timingControl = document.createElement('label')
+timingControl.className = 'reference-timing-control'
+timingControl.textContent = '原曲の開始位置 '
+const timingInput = document.createElement('input')
+timingInput.type = 'range'
+timingInput.min = '-0.9'
+timingInput.max = '0.9'
+timingInput.step = '0.01'
+timingInput.value = '0'
+timingInput.title = 'セクションの開始位置を調整'
+timingInput.setAttribute('aria-label', '原曲のタイミング（秒）')
+const timingOutput = document.createElement('output')
+timingOutput.value = '0.00 秒'
+timingInput.addEventListener('input', () => {
+  referenceTrack.setTiming(editingSection.value, timingInput.valueAsNumber)
+  timingOutput.value = referenceTrack.getTiming(editingSection.value).toFixed(2) + ' 秒'
+  updateTimingPreview()
+})
+timingControl.append(timingInput, timingOutput)
+document.querySelector('.chord-settings')?.append(timingControl)
+
+const timingPreview = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+timingPreview.classList.add('timing-waveform')
+timingPreview.setAttribute('viewBox', '0 0 1000 100')
+timingPreview.setAttribute('preserveAspectRatio', 'none')
+timingPreview.setAttribute('role', 'img')
+timingPreview.setAttribute('aria-label', '原曲の波形と2小節の8分音符グリッド')
+const timingWave = document.createElementNS(timingPreview.namespaceURI, 'path')
+timingPreview.append(timingWave)
+let timingMeter = 0
+function refreshTimingGrid() {
+  if (timingMeter === progression.beatsPerBar) return
+  timingMeter = progression.beatsPerBar
+  timingPreview.querySelectorAll('line').forEach(line => line.remove())
+  const eighths = timingMeter * 4
+  for (let beat = 0; beat <= eighths; beat++) {
+    const line = document.createElementNS(timingPreview.namespaceURI, 'line')
+    line.setAttribute('x1', String(beat * 1000 / eighths))
+    line.setAttribute('x2', String(beat * 1000 / eighths))
+    line.setAttribute('y1', '0'); line.setAttribute('y2', '100')
+    line.setAttribute('class', beat % (timingMeter * 2) === 0 ? 'bar-grid' : beat % 2 === 0 ? 'beat-grid' : 'eighth-grid')
+    timingPreview.append(line)
+  }
+}
+const timingRow = document.createElement('div')
+timingRow.className = 'reference-timing-row'
+timingRow.hidden = !referenceView.filename
+document.addEventListener('reference-timing-refresh', () => {
+  queueMicrotask(() => {
+    timingRow.hidden = !referenceView.filename
+    const bounds = referenceTrack.timingBounds(editingSection.value)
+    timingInput.min = String(bounds.min); timingInput.max = String(bounds.max)
+    timingInput.value = String(referenceTrack.getTiming(editingSection.value))
+    updateTimingPreview()
+  })
+})
+timingControl.replaceWith(timingRow)
+timingRow.append(timingControl, timingPreview)
+/** @param {boolean} [redraw] */
+function updateTimingPreview(redraw = true) {
+  refreshTimingGrid()
+  const seconds = (120 * progression.beatsPerBar) / Math.max(40, Number(tempo.value))
+  if (redraw || !timingWave.getAttribute('d')) timingWave.setAttribute('d', referenceTrack.timingWaveform(editingSection.value, seconds))
+  timingWave.removeAttribute('transform')
+}
+document.addEventListener('reference-timing-refresh', () => updateTimingPreview())
+tempo.addEventListener('input', () => updateTimingPreview())
+updateTimingPreview()
+
+
+
+// Move the source underneath the fixed musical grid.
+timingPreview.style.touchAction = 'none'
+timingPreview.addEventListener('pointerdown', event => {
+  const startX = event.clientX
+  const initial = referenceTrack.getTiming(editingSection.value)
+  const width = timingPreview.getBoundingClientRect().width
+  const seconds = (120 * progression.beatsPerBar) / Math.max(40, Number(tempo.value))
+  timingPreview.setPointerCapture(event.pointerId)
+  const move = (/** @type {PointerEvent} */ next) => {
+    timingInput.value = String(initial - (next.clientX - startX) / width * seconds)
+    timingInput.dispatchEvent(new Event('input'))
+  }
+  const end = () => {
+    timingPreview.removeEventListener('pointermove', move)
+    timingPreview.removeEventListener('pointerup', end)
+    timingPreview.removeEventListener('pointercancel', end)
+  }
+  timingPreview.addEventListener('pointermove', move)
+  timingPreview.addEventListener('pointerup', end)
+  timingPreview.addEventListener('pointercancel', end)
 })
 
-mountTimbreSteppers()
+// Meter changes preserve quarter-note tempo and the current accompaniment transport.
+meterInput.addEventListener('input', () => {
+  progression.beatsPerBar = /** @type {3|4|5} */ (Number(meterInput.value))
+  refreshMeter()
+  refreshLabels()
+  drumGrid.refreshSettings()
+  renderDrumSteps()
+  buddyController?.styleChanged()
+  updateTimingPreview()
+})
+
+import { mountScorePad } from './score-pad.js'
+mountScorePad({
+ key:bar=>progression.keyForBar(bar), notation:notationMode, section:()=>progression.selectedSection,
+ bars:()=>progression.barCount(), beats:()=>progression.beatsPerBar,
+ play:bar=>{if(progression.running)progression.stop();else playFromBar(bar)},
+ read:(bar,beat)=>beat===0?progression.slots[bar]:progression.beatSlots[bar][beat],
+ write:(bar,beat,id)=>{
+  if(id!==null)chordConfig(id)
+  if(beat===0){if(!id)return;progression.slots[bar]=id}
+  else progression.beatSlots[bar][beat]=id
+  if(id)qualityOrigins[bar][beat]=id
+  setPreset('custom');chordRate.disabled=true;refreshChordCell(bar,beat)
+ },
+})

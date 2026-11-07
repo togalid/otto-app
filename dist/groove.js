@@ -238,7 +238,7 @@ export const genreProgressions = Object.freeze({
 /** Delay the second eighth note from halfway to two thirds of a beat. @param {number} pulse @param {number} swing */
 export function swungBeat(pulse, swing) {
   const amount = Math.max(0, Math.min(100, swing)) / 100
-  return pulse / 2 + (pulse % 2 ? amount / 6 : 0)
+  return pulse / 2 + (pulse % 2 ? amount * amount / 6 : 0)
 }
 
 /** Swing eighth notes while keeping sixteenths in order within each beat.
@@ -247,7 +247,9 @@ export function swungBassBeat(pulse, swing) {
   const beat = pulse / 2
   const whole = Math.floor(beat)
   const fraction = beat - whole
-  const midpoint = 0.5 + Math.max(0, Math.min(100, swing)) / 600
+  // Give subtle settings a lighter touch while retaining the full triplet at 100%.
+  const amount = Math.max(0, Math.min(100, swing)) / 100
+  const midpoint = 0.5 + amount * amount / 6
   return whole + (fraction <= 0.5 ? fraction * midpoint * 2 : midpoint + (fraction - 0.5) * (1 - midpoint) * 2)
 }
 

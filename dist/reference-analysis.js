@@ -45,18 +45,22 @@ export function estimateBpm(samples, sampleRate) {
 }
 
 /** Estimate a major-key pitch collection from sampled spectral energy. Minor templates map to their relative major.
- * @param {Float32Array} samples @param {number} sampleRate @returns {string | null} */
-export function estimateMajorKey(samples, sampleRate) {
+ * @param {Float32Array} samples @param {number} sampleRate @returns {number[] | null} */
+export function majorKeyScores(samples, sampleRate) {
   if (samples.length < sampleRate * 3) return null
-  const chroma = new Float64Array(12), size = 2048
-  const coefficients = spectralCoefficients(sampleRate)
-  const stride = Math.max(size, Math.floor(samples.length / 240))
+  const chroma = new Float64Array(12)
+  const size = Math.round(sampleRate * .18)
+  const keyWindow = Float64Array.from({length: size}, (_, i) => .5 - .5 * Math.cos(2 * Math.PI * i / (size - 1)))
+  const keyCoefficients = Float64Array.from({length:48}, (_, i) => 2 * Math.cos(2 * Math.PI * 440 * 2 ** ((i + 36 - 69) / 12) / sampleRate))
+  const frame = new Float64Array(size)
+  const stride = Math.max(size, Math.floor(samples.length / 160))
   for (let offset = 0; offset + size <= samples.length; offset += stride) {
-    for (let midi = 48; midi <= 83; midi++) {
-      const coefficient = coefficients[midi - 48]
+    for (let i = 0; i < size; i++) frame[i] = samples[offset + i] * keyWindow[i]
+    for (let midi = 36; midi <= 83; midi++) {
+      const coefficient = keyCoefficients[midi - 36]
       let a = 0, b = 0
       for (let i = 0; i < size; i++) {
-        const x = samples[offset + i] * window[i] + coefficient * a - b
+        const x = frame[i] + coefficient * a - b
         b = a; a = x
       }
       chroma[midi % 12] += Math.sqrt(Math.max(0, a * a + b * b - coefficient * a * b))
@@ -67,16 +71,23 @@ export function estimateMajorKey(samples, sampleRate) {
   const major = [6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88]
   const minor = [6.33,2.68,3.52,5.38,2.6,3.53,2.54,4.75,3.98,2.69,3.34,3.17]
   const normalized = Array.from(chroma, x => x / total)
-  let best = -Infinity, key = 0
+  const scores = Array(12).fill(-Infinity)
   for (let root = 0; root < 12; root++) {
     for (const [profile, shift] of [[major, 0], [minor, 3]]) {
       const weights = /** @type {number[]} */ (profile)
       let score = 0
       for (let i = 0; i < 12; i++) score += normalized[(root + i) % 12] * weights[i]
-      if (score > best) { best = score; key = (root + /** @type {number} */ (shift)) % 12 }
+      const key = (root + /** @type {number} */ (shift)) % 12
+      scores[key] = Math.max(scores[key], score)
     }
   }
-  return ['C','D♭','D','E♭','E','F','F♯','G','A♭','A','B♭','B'][key]
+  return scores
+}
+
+/** @param {Float32Array} samples @param {number} sampleRate */
+export function estimateMajorKey(samples, sampleRate) {
+  const scores = majorKeyScores(samples, sampleRate)
+  return scores ? ['C','D♭','D','E♭','E','F','F♯','G','A♭','A','B♭','B'][scores.indexOf(Math.max(...scores))] : null
 }
 
 /** Rough low-frequency pulse regularity, used only to suggest a basic drum pattern.
@@ -107,9 +118,14 @@ export function estimateDrumPattern(samples, sampleRate, bpm) {
 /** Rank authored progressions against eight bars of spectral pitch energy.
  * @param {Float32Array} samples @param {number} rate @param {number} bpm @param {number} key */
 export function rankProgressions(samples, rate, bpm, key) {
+  return scoreProgressionPresets(samples, rate, bpm, key).matches
+}
+
+/** @param {Float32Array} samples @param {number} rate @param {number} bpm @param {number} key */
+export function scoreProgressionPresets(samples, rate, bpm, key) {
   const barSize = 240 / bpm * rate
   const coefficients = spectralCoefficients(rate)
-  if (samples.length < barSize * 8 - 1) return []
+  if (samples.length < barSize * 8 - 1) return {matches: [], fallbackScore: 0}
   const bars = Array.from({length:8}, (_, bar) => {
     const chroma = new Float64Array(12)
     for (let frame = 0; frame < 8; frame++) {
@@ -127,14 +143,15 @@ export function rankProgressions(samples, rate, bpm, key) {
     const total = chroma.reduce((sum,x) => sum+x,0)
     return Array.from(chroma,x => total ? x/total : 0)
   })
-  if (bars.every(bar => bar.every(x => x === 0))) return []
-  return presets.map(preset => {
+  if (bars.every(bar => bar.every(x => x === 0))) return {matches: [], fallbackScore: 0}
+  const ranked = presets.map(preset => {
     const slots = presetSlots(preset.id)
     const score = bars.reduce((sum,bar,index) => {
       const pitches = new Set(chordNotes(slots[index], (key + preset.modulation[Math.floor(index/2)] + 120) % 12).map(n => n % 12))
       return sum + bar.reduce((s,x,pitch) => s + x * (pitches.has(pitch) ? 1 / Math.sqrt(pitches.size) : -.15),0)
     },0)
     return {id:preset.id,name:preset.name,score}
-  }).sort((a,b) => b.score-a.score).slice(0,3)
+  }).sort((a,b) => b.score-a.score)
+  return {matches: ranked.slice(0, 3), fallbackScore: ranked.find(item => item.id === 'royal')?.score ?? 0}
 }
 

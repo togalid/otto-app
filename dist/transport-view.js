@@ -4,12 +4,28 @@ import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 export function mountTransport(togglePlayback) {
   const running = ref(false)
   const beat = ref('')
+  createApp({ render: () => [
+    h('span', {class: 'count-in-label'}, 'カウントイン'),
+    h('input', {id: 'count-in', type: 'checkbox', checked: false, value: '0', hidden: true}),
+    h('fieldset', {class: 'segmented-control count-in-switch', 'aria-label': 'カウントイン'}, [
+      h('legend', {class: 'sr-only'}, 'カウントイン'),
+      ...[['4', '4拍'], ['2', '2拍'], ['0', 'なし']].map(([value, label]) => h('label', [
+        h('input', {type: 'radio', name: 'count-in-choice', value, checked: value === '0', onChange: () => {
+          const control = /** @type {HTMLInputElement} */ (document.getElementById('count-in'))
+          control.checked = value !== '0'; control.value = value
+          control.dispatchEvent(new Event('change', {bubbles: true}))
+        }}), h('span', label),
+      ])),
+    ]),
+  ] }).mount('#count-in-control')
+  const countControl = /** @type {HTMLInputElement} */ (document.getElementById('count-in'))
+  countControl.addEventListener('change', () => {
+    const value = countControl.checked ? (countControl.value === '2' ? '2' : '4') : '0'
+    const choice = /** @type {HTMLInputElement | null} */ (document.querySelector(`input[name="count-in-choice"][value="${value}"]`))
+    if (choice) choice.checked = true
+  })
   createApp({
     render: () => [
-      h('label', { class: 'count-in-option' }, [
-        h('input', { id: 'count-in', type: 'checkbox', checked: true }),
-        ' カウントイン',
-      ]),
       h('button', {
         id: 'progression-play',
         type: 'button',

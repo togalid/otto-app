@@ -59,7 +59,9 @@ export function mountStyleChoices() {
 export function mountPresetChoices() {
   const group = select('preset-group')
   const preset = select('preset')
-  const ordered = [...presets].sort((a, b) => presetLevel(a) - presetLevel(b))
+  const ordered = [...presets].sort((a, b) =>
+    presetLevel(a) - presetLevel(b) || a.pattern.length - b.pattern.length,
+  )
   const levels = [...new Set(ordered.map(presetLevel))]
   const selected = ref('royal')
   const family = ref('4')
@@ -68,7 +70,7 @@ export function mountPresetChoices() {
     const tags = [`Lv.${presetLevel(item)}`]
     if (item.modulation.some(Boolean)) tags.push('転調あり')
     if (item.pattern.filter(chord => /9|11|13/.test(chord)).length >= 3) tags.push('テンション多め')
-    return [item.id, `${item.pattern.map(chord => labels[rootPitch(chord)]).join(' → ')} 〔${tags.join('・')}〕`]
+    return [item.id, `${item.pattern.map(chord => labels[rootPitch(chord)]).join('–')} 〔${tags.join('・')}〕`]
   }))
   createApp({render: () => presetGroups.map(item => h('option', {key: item.id, value: item.id, selected: item.id === family.value}, item.label))}).mount(group)
   createApp({render: () => [
@@ -102,5 +104,5 @@ export function mountPresetChoices() {
     const next = ordered[current < 0 ? 0 : current + direction]
     if (next) choose(next.id)
   })
-  return {preset, set, choose}
+  return {preset, set, choose, selected}
 }

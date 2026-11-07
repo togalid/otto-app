@@ -169,7 +169,7 @@ test('Tone chord voices use a compact attack spread and stop without affecting o
   const instrument = new Instrument()
   instrument.context = {
     currentTime: 0,
-    destination: {},
+    destination: {}, createAnalyser: () => ({ connect() {} }),
     createGain: () => ({ gain: { value: 0 }, connect() {}, disconnect() {} }),
   }
   instrument.engine = { Tone: tone }

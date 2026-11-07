@@ -24,7 +24,7 @@ test('Tone instruments schedule on the supplied clock and dispose on stop', () =
   }
   const context = {
     currentTime: 0,
-    destination: {},
+    destination: {}, createAnalyser: () => ({ connect() {} }),
     createGain: () => ({
       gain: { value: 0, setTargetAtTime() {} },
       connect() {},
@@ -54,7 +54,7 @@ test('both drum timbres layer the snare body in time with the noise', () => {
   }
   const tone = { MembraneSynth: FakeSynth, NoiseSynth: FakeSynth, MetalSynth: FakeSynth }
   const context = {
-    currentTime: 0, destination: {},
+    currentTime: 0, destination: {}, createAnalyser: () => ({ connect() {} }),
     createGain: () => ({ gain: { value: 0 }, connect() {}, disconnect() {} }),
   }
   for (const [timbre, note] of [['acoustic', 'C4'], ['electronic', 'G3']]) {
@@ -75,7 +75,7 @@ test('bass slide ramps from the previous pitch to the target', () => {
     triggerAttackRelease(...args) { attacks.push(args) }
     dispose() {}
   }
-  const context = { currentTime: 0, destination: {}, createGain: () => ({ gain: { value: 0 }, connect() {}, disconnect() {} }) }
+  const context = { currentTime: 0, destination: {}, createAnalyser: () => ({ connect() {} }), createGain: () => ({ gain: { value: 0 }, connect() {}, disconnect() {} }) }
   const bass = new ToneBass({ MonoSynth: FakeSynth }, context)
   bass.playAt(48, 2, 0.5, 0.7, 45)
   assert.equal(attacks[0][0], 110)

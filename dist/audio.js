@@ -1,9 +1,16 @@
 import { chordConfig, rootPitch } from './music.js'
 import { getTimbre, timbreProfile, voiceExpression, timbreOutputGain } from './timbres.js'
-import { loadToneEngine } from './tone-engine.js'
+import { loadToneEngine, partMeter } from './tone-engine.js'
 
 /** @type {AudioContext | undefined} */
 let sharedContext
+
+export function audioContext() {
+  if (!globalThis.AudioContext)
+    throw new Error('このブラウザは音声再生に対応していません。')
+  return sharedContext ??= new AudioContext({ latencyHint: 'interactive' })
+}
+
 
 const upperRoots = new Map([['v_over_7', 7], ['iv_over_v', 5], ['iii_aug_sharp4', 4]])
 
@@ -84,6 +91,11 @@ export class MonoLine {
 }
 
 export class Instrument {
+  /** @param {import('./tone-engine.js').MeterPart} [meterPart] */
+  constructor(meterPart) {
+    this.meterPart = meterPart
+  }
+
   /** @type {AudioContext | undefined} */
   context
   /** @type {Awaited<ReturnType<typeof loadToneEngine>> | undefined} */
@@ -128,11 +140,7 @@ export class Instrument {
       )
   }
   async ready() {
-    if (!globalThis.AudioContext)
-      throw new Error('このブラウザは音声再生に対応していません。')
-    if (!sharedContext)
-      sharedContext = new AudioContext({ latencyHint: 'interactive' })
-    this.context = sharedContext
+    this.context = audioContext()
     if (this.context.state !== 'running') await this.context.resume()
     if (this.context.state !== 'running')
       throw new Error('音声を開始できませんでした。もう一度お試しください。')
@@ -181,7 +189,7 @@ export class Instrument {
       const recipe = this.colour ? {...baseRecipe, attack: Math.max(baseRecipe.attack,this.colour.attack), release: Math.max(baseRecipe.release,this.colour.release), cutoff: Math.min(baseRecipe.cutoff,this.colour.cutoff)} : baseRecipe
       this.master = this.context.createGain()
       this.master.gain.value = this.volume * 0.25 * timbreOutputGain(this.timbre)
-      this.master.connect(this.context.destination)
+      this.master.connect(this.meterPart ? partMeter(this.context, this.meterPart) : this.context.destination)
       let destination = /** @type {AudioNode} */ (this.master)
       if (this.colour) {
         const colour = this.colour

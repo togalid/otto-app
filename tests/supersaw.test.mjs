@@ -21,7 +21,7 @@ test('supersaw chord and lead use a bounded three-saw unison while the lead keep
   const Tone = {MonoSynth,PolySynth,Filter,LFO}
   for (const id of ['supersaw','lead-supersaw','saw-brass']) {
     const instrument = new Instrument()
-    instrument.context = {currentTime:0,destination:{},createGain:()=>({gain:{value:0},connect(){},disconnect(){}})}
+    instrument.context = {currentTime:0,destination:{},createAnalyser:()=>({connect(){}}),createGain:()=>({gain:{value:0},connect(){},disconnect(){}})}
     instrument.engine = {Tone}
     instrument.setTimbre(id)
     instrument.ensureVoice()

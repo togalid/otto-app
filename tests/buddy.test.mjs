@@ -93,29 +93,14 @@ test('Otto plays a harmonic invitation even when the human leaves silence', asyn
   assert.ok(reply.every(n => n.midi !== undefined && n.at >= 0 && n.at + n.duration <= 8))
   assert.ok(reply.every(n => paletteAt().some(p => p.midi === n.midi)))
 })
-test('Otto quotes every user pitch, then places a safe tension and chord-tone resolution in a rest', async () => {
+test('Otto keeps safe input pitches and rests without forced tension fills', async () => {
   const {ottoReply} = await import('../dist/buddy.js')
   const {melodyPalette} = await import('../dist/music.js')
-  const paletteAt = () => melodyPalette(0, 'FM7', 0, 'key')
-  const phrase = [{step:0,midi:60,category:'chord',at:0,duration:.5},{step:2,midi:64,category:'chord',at:1,duration:.5}]
-  const result = ottoReply(phrase, paletteAt, 0)
-  assert.deepEqual(result.filter(n => n.kind === 'quote').map(n => n.midi), [60,64])
-  const fill = result.filter(n => n.kind === 'answer')
-  assert.ok(fill.length >= 2)
-  assert.ok(paletteAt().some(p => p.midi === fill[0].midi && p.category === 'tension' && !p.clash))
-  assert.ok(paletteAt().some(p => p.midi === fill.at(-1).midi && p.category === 'chord'))
-  assert.ok(fill.every(n => n.at >= 1.5 && n.at + n.duration <= 8))
-  assert.equal(phrase[1].duration, .5)
-})
-test('rhythmic exchanges add a short swung sixteenth answer without rewriting the quote', async () => {
-  const {ottoReply} = await import('../dist/buddy.js')
-  const {melodyPalette} = await import('../dist/music.js')
-  const phrase = Array.from({length:6},(_,i) => ({step:0,midi:60,at:i*.5,duration:.2}))
-  const result = ottoReply(phrase, () => melodyPalette(0,'FM7',0,'key'), 40)
-  assert.ok(result.filter(n => n.kind === 'answer').length >= 3)
-  assert.equal(result.filter(n => n.kind === 'quote').length, 6)
-  assert.ok(result.every(n => n.at + n.duration <= 8))
-  assert.ok(result.filter(n => n.kind === 'quote').every(n => n.midi === 60))
+  const phrase = [{step:0,midi:60,at:0,duration:.5},{step:2,midi:64,at:1,duration:.5}]
+  const result = ottoReply(phrase,()=>melodyPalette(0,'FM7',0,'key'),0)
+  assert.deepEqual(result.map(n=>n.midi),[60,64])
+  assert.deepEqual(result.map(n=>n.at),[0,1])
+  assert.deepEqual(result.map(n=>n.duration),[.5,.5])
 })
 
 test('Otto replies remain bounded across transposition, borrowed chords and dense input', async () => {
@@ -130,33 +115,14 @@ test('Otto replies remain bounded across transposition, borrowed chords and dens
   }
 })
 
-test('Otto shapes a connected line with sustained arrival rather than shortening every note', async () => {
-  const {ottoReply} = await import('../dist/buddy.js')
-  const {melodyPalette} = await import('../dist/music.js')
-  const input = [{step:0,midi:60,at:0,duration:.5},{step:2,midi:64,at:1,duration:.5}]
-  const line = ottoReply(input,()=>melodyPalette(0,'FM7',0,'key'),0).filter(n=>n.kind==='answer')
-  assert.ok(line.length >= 3)
-  assert.ok(line.at(-1).duration > 1)
-  assert.ok(line.at(-1).duration > line[0].duration)
-  assert.ok(line.every((n,i)=>i===0 || Math.abs(n.midi-line[i-1].midi)<=5))
-  assert.ok(new Set(line.map(n=>n.midi)).size >= 3)
-})
-
-test('singing motion recovers by step after a leap and opens up after three steps', async () => {
+test('singing motion prefers neighbors without forcing leaps after a run', async () => {
   const {melodicMotionCost,ottoReply} = await import('../dist/buddy.js')
   const {melodyPalette} = await import('../dist/music.js')
-  assert.ok(melodicMotionCost([60,67],65) < melodicMotionCost([60,67],72))
-  assert.ok(melodicMotionCost([60,62,64,65],69) < melodicMotionCost([60,62,64,65],67))
-  const palette=()=>melodyPalette(0,'FM7',0,'key')
-  const leap = ottoReply([{step:0,midi:60,at:0,duration:.3},{step:4,midi:67,at:.5,duration:.3}],palette,0).filter(n=>n.kind==='answer')
-  assert.ok(Math.abs(leap[0].midi-67)<=2)
-  const run = ottoReply([60,62,64,65].map((midi,i)=>({step:i,midi,at:i*.5,duration:.3})),palette,0).filter(n=>n.kind==='answer')
-  assert.ok(Math.abs(run[0].midi-65)>=3)
-  assert.ok(Math.abs(run[1].midi-run[0].midi)<=2)
-  const opening = ottoReply([],palette,0).filter(n=>n.kind==='quote')
-  for(let i=2;i<opening.length;i++) {
-    if(Math.abs(opening[i-1].midi-opening[i-2].midi)>=3) assert.ok(Math.abs(opening[i].midi-opening[i-1].midi)<=2)
-  }
+  assert.ok(melodicMotionCost([60,67],65)<melodicMotionCost([60,67],72))
+  assert.ok(melodicMotionCost([60,62,64,65],67)<melodicMotionCost([60,62,64,65],69))
+  const line=ottoReply([],()=>melodyPalette(0,'FM7',0,'chord'),0)
+  assert.ok(line.some(n=>n.duration>=1))
+  assert.ok(line.every((n,i)=>!i || Math.abs(n.midi-line[i-1].midi)<=5))
 })
 
 test('Otto replaces quoted avoid tones while keeping safe tones and rhythm', async () => {
@@ -173,7 +139,7 @@ test('Otto replaces quoted avoid tones while keeping safe tones and rhythm', asy
   assert.ok(reply.every(n=>!melodyRole(n.midi,'C',0).clash))
 })
 
-test('held reply notes spill into an avoid harmony for at most 60 ms and .1 beat', async () => {
+test('held reply notes stop exactly before an avoid harmony', async () => {
   const {ottoReply} = await import('../dist/buddy.js')
   const {melodyPalette,melodyRole} = await import('../dist/music.js')
   const base = melodyPalette(0,'C',0,'key')[0]
@@ -183,7 +149,7 @@ test('held reply notes spill into an avoid harmony for at most 60 ms and .1 beat
     const reply = ottoReply([{step:0,midi:65,at:0,duration:4}],palette,0,bpm)
     const quote = reply.find(n=>n.kind==='quote')
     assert.equal(quote.midi,65)
-    assert.ok(quote.duration <= 1.1 + 1e-9)
+    assert.equal(quote.duration,1)
     assert.ok((quote.duration-1)*60/bpm <= .06 + 1e-9)
   }
 })
@@ -211,4 +177,14 @@ test('generated jazz offbeats follow swing grid rather than rounding early', asy
   const style = ottoStyleFor('jazz')
   const result = ottoReply([],()=>melodyPalette(0,'C',0,'chord'),100,120,style).filter(n=>n.kind==='quote')
   for (let i=0;i<style.invitation.length;i++) assert.ok(Math.abs(result[i].at-swungBassBeat(style.invitation[i].at*2,100))<1e-9)
+})
+test('Otto alternates every two physical bars in triple and quintuple meter', () => {
+  for (const meter of [3, 5]) {
+    const span = meter * 2
+    assert.equal(conversationTurn(span - .01, 'pc', meter).pc, true)
+    assert.equal(conversationTurn(span, 'pc', meter).pc, false)
+    assert.equal(conversationTurn(span, 'pc', meter).bar, 3)
+    assert.equal(conversationTurn(span, 'pc', meter).local, 0)
+    assert.equal(conversationTurn(meter * 8, 'pc', meter).bar, 1)
+  }
 })

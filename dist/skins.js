@@ -1,5 +1,5 @@
 export {}
-const skins = ['milk', 'natural', 'bauhaus', 'toy']
+const skins = ['milk', 'toy', 'soda']
 const storageKey = 'oto-skin'
 const root = document.documentElement
 /** @param {string | null} value */
@@ -10,6 +10,22 @@ function applySkin(value) {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color)
 }
 try { applySkin(localStorage.getItem(storageKey)) } catch { applySkin('milk') }
+const settingsMenu = /** @type {HTMLDetailsElement} */ (document.getElementById('settings-menu'))
+const settingsOpen = /** @type {HTMLElement} */ (document.getElementById('settings-open'))
+settingsMenu.addEventListener('click', event => {
+  if (!(event.target instanceof HTMLButtonElement)) return
+  settingsMenu.open = false
+  settingsOpen.focus()
+})
+settingsMenu.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !settingsMenu.open) return
+  event.preventDefault()
+  settingsMenu.open = false
+  settingsOpen.focus()
+})
+document.addEventListener('pointerdown', event => {
+  if (event.target instanceof Node && !settingsMenu.contains(event.target)) settingsMenu.open = false
+})
 const dialog = /** @type {HTMLDialogElement} */ (document.querySelector('#appearance-dialog'))
 const opener = /** @type {HTMLButtonElement} */ (document.querySelector('#appearance-open'))
 /** @type {Promise<ReturnType<import('./appearance-dialog.js').mountAppearanceDialog>> | undefined} */
@@ -23,7 +39,7 @@ opener.addEventListener('click', async () => {
     appearance.open()
   } catch {
     appearancePromise = undefined
-    opener.title = '外観設定を開けませんでした。もう一度お試しください。'
+    settingsOpen.title = '外観設定を開けませんでした。もう一度お試しください。'
   } finally { opener.disabled = false }
 })
 let closing = false
@@ -42,7 +58,7 @@ dialog.addEventListener('click', (event) => { if (event.target === dialog) {
   const bounds = dialog.getBoundingClientRect()
   if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) void closeAppearance()
 } })
-dialog.addEventListener('close', () => opener.focus())
+dialog.addEventListener('close', () => settingsOpen.focus())
 /** @param {string} skin */
 function selectSkin(skin) {
   applySkin(skin)

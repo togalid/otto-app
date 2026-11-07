@@ -767,3 +767,137 @@ test('7 flat 13 keeps root, seventh, third and flat thirteenth in order in every
     assert.deepEqual(phrase[1].map(note => note - phrase[1][0]), [0, 10, 16, 20])
   }
 })
+
+test('section transitions use each score and allow changing the switch during bar eight', async t => {
+  const {player, instrument, calls} = fixture()
+  t.after(() => player.stop())
+  player.sections[1].slots.fill('C')
+  await player.start(7)
+  clearInterval(player.timer)
+  player.selectedSection = 2
+  player.sections[0].advance = true
+  instrument.context.currentTime = player.nextTime
+  player.tick()
+  assert.equal(player.nextSection, 1)
+  assert.equal(player.sectionAt(8), 1)
+  assert.deepEqual(calls[1][0], chordNotes('C', 0))
+
+  for (let bar = 0; bar < 8; bar++) {
+    instrument.context.currentTime = player.nextTime
+    player.tick()
+  }
+  assert.equal(player.nextSection, 1)
+  assert.equal(player.sectionAt(16), 1)
+
+  player.selectedSection = 3
+  player.sections[3].advance = true
+  await player.start(7)
+  clearInterval(player.timer)
+  instrument.context.currentTime = player.nextTime
+  player.tick()
+  assert.equal(player.nextSection, 0)
+})
+
+test('captured section notes retain timing, transpose, and replace preset parts independently', async () => {
+  const {player, instrument} = fixture()
+  const drums = [], bass = []
+  player.drums = {hitAt(...args) { drums.push(args) }, silence() {}}
+  player.bass = {playAt(...args) { bass.push(args) }, silence() {}}
+  player.bpm = 120
+  player.swing = 100
+  player.key = 2
+  player.sections[0].performance = {key:0,
+    drums:[{beat:.25,sound:'snare',velocity:.6}, {beat:4,sound:'kick',velocity:.8}],
+    bass:[{beat:.25,midi:40,duration:.5,velocity:.7}, {beat:4,midi:43,duration:1,velocity:.8}]}
+  await player.start()
+  clearInterval(player.timer)
+  assert.deepEqual(drums, [['snare', .175, .6]])
+  assert.deepEqual(bass, [[42, .175, .25, .7]])
+  instrument.context.currentTime = 1.95
+  player.tick()
+  assert.deepEqual(drums[1], ['kick', 2.05, .8])
+  assert.deepEqual(bass[1], [45, 2.05, .5, .8])
+  player.stop()
+  drums.length = 0; bass.length = 0
+  player.sections[0].performance = {key:0, drums:[]}
+  await player.start()
+  clearInterval(player.timer)
+  assert.equal(drums.length, 0)
+  assert.ok(bass.length > 0, 'uncaptured bass continues to use its preset')
+  player.stop()
+})
+
+for (const meter of [3, 5]) {
+  test(`${meter}/4 keeps quarter-note tempo and schedules the next bar at its boundary`, async t => {
+    const {player, instrument, calls} = fixture()
+    t.after(() => player.stop())
+    player.beatsPerBar = meter
+    player.bpm = 120
+    await player.start()
+    clearInterval(player.timer)
+    assert.ok(Math.abs(player.nextTime - (0.05 + meter * 0.5)) < 1e-9)
+    assert.ok(Math.abs(calls[0][2] - meter * 0.5 * 0.92) < 1e-9)
+    instrument.context.currentTime = player.nextTime
+    player.tick()
+    assert.ok(Math.abs(calls[1][1] - (0.05 + meter * 0.5)) < 1e-9)
+    assert.ok(player.drumHits().every(hit => hit.pulse < meter * 2))
+    if (meter === 5) assert.ok(player.drumHits().some(hit => hit.pulse >= 8))
+  })
+}
+
+test('5/4 transport start reports the actual offset of a later bar', async t => {
+  const {player} = fixture()
+  t.after(() => player.stop())
+  player.beatsPerBar = 5
+  player.bpm = 120
+  let offset
+  player.onStart = (_time, seconds) => { offset = seconds }
+  await player.start(2)
+  clearInterval(player.timer)
+  assert.equal(offset, 5)
+})
+
+test('section part settings apply before scheduling and only on section transitions', async t => {
+  const {player, instrument, calls} = fixture()
+  t.after(() => player.stop())
+  const sections = []
+  player.sections[0].advance = true
+  player.onScheduleSection = section => {
+    sections.push(section)
+    player.backing = section === 0 ? 'whole' : 'quarters'
+  }
+  await player.start(7)
+  clearInterval(player.timer)
+  const before = calls.length
+  instrument.context.currentTime = player.nextTime
+  player.tick()
+  assert.deepEqual(sections, [0, 1])
+  assert.equal(calls.length - before, 4)
+  instrument.context.currentTime = player.nextTime
+  player.tick()
+  assert.deepEqual(sections, [0, 1])
+})
+
+
+test('section lengths control loop boundaries without discarding hidden chords', async t => {
+  const {player, instrument} = fixture()
+  t.after(() => player.stop())
+  const original = [...player.sections[0].slots]
+  player.sections[0].barCount = 3
+  player.sections[0].advance = true
+  player.sections[1].barCount = 5
+  await player.start(2)
+  clearInterval(player.timer)
+  instrument.context.currentTime = player.nextTime
+  player.tick()
+  assert.deepEqual(player.positionAt(3), {section:1, bar:0})
+  for (let i = 0; i < 5; i++) {
+    instrument.context.currentTime = player.nextTime
+    player.tick()
+  }
+  assert.deepEqual(player.positionAt(8), {section:1, bar:0})
+  assert.deepEqual(player.sections[0].slots, original)
+  player.sections[0].barCount = 8
+  assert.equal(player.barCount(0), 8)
+  assert.deepEqual(player.sections[0].slots, original)
+})

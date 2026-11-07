@@ -98,6 +98,15 @@ const degreeNames = [
   '♭7',
   '7',
 ]
+// The editor selects the bass degree. These shapes keep the upper voices
+// in the same order above it, including during automatic voice leading.
+const orderedSlashShapes = new Map([
+  ['v_over_iv', { intervals: [0, 6, 9, 14], upper: 2, quality: '' }],
+  ['ii_over_vi', { intervals: [0, 5, 9, 12], upper: 5, quality: '' }],
+  ['vii7_over_vi', { intervals: [0, 6, 9, 14], upper: 2, quality: '7' }],
+  ['flat_vii_over_vi', { intervals: [0, 5, 8, 13], upper: 1, quality: '' }],
+])
+
 /** @typedef {{root: number, quality: string, extension: string, alter: number}} ChordConfig */
 /** @param {string} id @returns {ChordConfig} */
 export function chordConfig(id) {
@@ -120,7 +129,7 @@ export function chordConfig(id) {
     prefix !== 'x' ||
     !/^[0-6]$/.test(root) ||
     !['maj', 'min', 'dim', 'sus4', 'sus2', 'aug', 'slash'].includes(quality) ||
-    ![
+    (![
       'none',
       '7',
       'maj7',
@@ -143,7 +152,7 @@ export function chordConfig(id) {
       'v_over_7',
       'iv_over_v',
       'iii_aug_sharp4',
-    ].includes(extension) ||
+    ].includes(extension) && !(quality === 'slash' && orderedSlashShapes.has(extension))) ||
     !/^([0-9]|1[01])$/.test(alter) ||
     extra !== undefined
   )
@@ -182,6 +191,13 @@ export function chordParts(id, key, degrees) {
   if (!keys[key]) throw new RangeError('Unknown key')
   const pitch = (scaleIntervals[chord.root] + chord.alter) % 12
   if (chord.quality === 'slash') {
+    const shape = orderedSlashShapes.get(chord.extension)
+    if (shape) {
+      const upper = (pitch + shape.upper) % 12
+      return degrees
+        ? { main: degreeNames[pitch], suffix: romanDegrees[upper] + shape.quality + '/' + romanDegrees[pitch] }
+        : { main: chromaticNames[(upper + key) % 12], suffix: shape.quality + '/' + chromaticNames[(pitch + key) % 12] }
+    }
     const upper =
       chord.extension === 'v_over_7'
         ? 7
@@ -424,6 +440,11 @@ function chordOptions(id, key, phrase) {
     }
     return options
   }
+  if (config.quality === 'slash' && orderedSlashShapes.has(config.extension)) {
+    const bass = 48 + ((harmony[0] % 12 + 12) % 12)
+    const notes = harmony.map(note => note + bass - harmony[0])
+    return [{ notes, hand: notes.slice(1), bass, cost: 0 }]
+  }
   if (isPlainFifthSeven(config)) {
     // Ordered ♭7, R, 3, 5 (F G B D in C). An octave change is allowed,
     // but reversing the order would lose the intended close voicing.
@@ -475,6 +496,8 @@ export function bassHarmonyNotes(id, key) {
   if (chords[id]) return chords[id].map((note) => note + offset)
   const bass = 48 + ((scaleIntervals[chord.root] + chord.alter) % 12) + offset
   if (chord.quality === 'slash') {
+    const shape = orderedSlashShapes.get(chord.extension)
+    if (shape) return shape.intervals.map(interval => bass + interval)
     const intervals =
       chord.extension === 'v_over_7'
         ? [-4, 0, 3]
@@ -674,7 +697,7 @@ export function displayChordParts(id, key, notation) {
     ...parts,
     main: notation === 'roman' ? romanDegrees[rootPitch(id)] : parts.main,
     suffix:
-      notation === 'roman' && chordConfig(id).quality === 'slash'
+      notation === 'roman' && chordConfig(id).quality === 'slash' && !orderedSlashShapes.has(chordConfig(id).extension)
         ? { v_over_7: 'V/VII', iv_over_v: 'IV/V', iii_aug_sharp4: 'III+/♯IV' }[
             /** @type {'v_over_7'|'iv_over_v'|'iii_aug_sharp4'} */ (
               chordConfig(id).extension
@@ -686,7 +709,11 @@ export function displayChordParts(id, key, notation) {
 
 export const qualityCatalog = Object.freeze([
   { value: 'maj:7inv', label: '7' },
+  { value: 'slash:ii_over_vi', label: 'II/VI' },
+  { value: 'slash:vii7_over_vi', label: 'VII7/VI' },
+  { value: 'slash:flat_vii_over_vi', label: '♭VII/VI' },
   { value: 'slash:v_over_7', label: 'V/7' },
+  { value: 'slash:v_over_iv', label: 'V/VI' },
   { value: 'slash:iv_over_v', label: 'IV/V' },
   { value: 'slash:iii_aug_sharp4', label: 'III+/♯IV' },
   { value: 'dim:dim7', label: 'dim7' },
@@ -773,6 +800,9 @@ export function qualityGroups(originalId, currentId = originalId) {
       'min:9',
       'min:11',
       'min:13',
+      'slash:ii_over_vi',
+      'slash:vii7_over_vi',
+      'slash:flat_vii_over_vi',
       'min:add11',
       'sus2:none',
       'sus4:none',
@@ -808,26 +838,15 @@ export function qualityGroups(originalId, currentId = originalId) {
   ]
 }
 
-/** How much harmonic movement there is to follow in a preset.
- * @param {{pattern: readonly string[], changes: readonly {bar: number, chord: string}[], modulation?: readonly number[]}} preset */
+/** Classify by modulation, then by membership in the major scale.
+ * @param {{pattern: readonly string[], changes: readonly {chord: string}[], modulation?: readonly number[]}} preset */
 export function presetLevel(preset) {
-  if (preset.modulation?.some(offset => offset !== 0)) return 3
-  const changesPerBar = new Map()
-  for (const change of preset.changes) {
-    const count = (changesPerBar.get(change.bar) ?? 0) + 1
-    if (count >= 2) return 3
-    changesPerBar.set(change.bar, count)
-  }
-  const qualities = ['maj', 'min', 'min', 'maj', 'maj', 'min', 'dim']
+  if (preset.modulation?.some(offset => offset % 12 !== 0)) return 3
   const chords = new Set([...preset.pattern, ...preset.changes.map(change => change.chord)])
-  let colorful = 0
   for (const id of chords) {
-    const { root, alter, quality, extension } = chordConfig(id)
-    if (alter || quality !== qualities[root] || !['none', '7', 'maj7'].includes(extension)
-      || (quality === 'maj' && extension === '7' && root !== 4)) colorful++
+    if (bassHarmonyNotes(id, 0).some(note => !scaleIntervals.includes(note % 12))) return 2
   }
-  if (colorful >= 3 || (colorful >= 2 && preset.changes.length >= 2)) return 3
-  return colorful || preset.changes.length || chords.size > 5 ? 2 : 1
+  return 1
 }
 
 
@@ -851,4 +870,28 @@ export function melodyRole(midi, chord, key) {
 export function melodyPalette(key, chord, chordKey, mode) {
   return melodyNotes(mode === 'key' ? key : chordKey, chord, mode)
     .map(note => ({ ...note, ...melodyRole(note.midi, chord, chordKey) }))
+}
+
+/** Explicit voicings for the chord-pad audition, transposed from key C.
+ * @param {string} id @param {number} key @returns {number[]} */
+export function padChordNotes(id, key) {
+  const config = chordConfig(id)
+  const voicings = new Map([
+    ['3:maj:maj7', [41, 57, 60, 64]],
+    ['3:maj:maj9', [41, 55, 57, 60, 64]],
+    ['5:min:7', [45, 55, 57, 60, 64]],
+    ['5:min:9', [45, 55, 59, 62]],
+    ['0:maj:maj7', [36, 59, 60, 64, 67]],
+    ['1:min:7', [38, 65, 69, 72]],
+    ['4:maj:7', [43, 53, 55, 59, 62]],
+    ['0:min:7', [48, 58, 60, 63, 67]],
+    ['1:min:9', [50, 60, 65, 69, 72, 76]],
+    ['2:sus4:7', [52, 55, 60, 62, 67]],
+    ['2:min:7', [40, 55, 59, 62]],
+  ])
+  if (!Number.isInteger(key) || !keys[key]) throw new RangeError('Unknown key')
+  const notes = config.alter === 0 ? voicings.get(`${config.root}:${config.quality}:${config.extension}`) : undefined
+  if (!notes) return chordNotes(id, key)
+  const offset = key > 6 ? key - 12 : key
+  return notes.map(note => note + offset)
 }

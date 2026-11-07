@@ -1,4 +1,5 @@
 import { Instrument } from './audio.js'
+import { partMeter } from './tone-engine.js'
 import { ornamentParts } from './ornaments.js'
 
 /** An independent sound owner for one colour part. FX use tracked native nodes, never the drum mixer. */
@@ -8,6 +9,7 @@ export class OrnamentPlayer {
     const part = ornamentParts.find(part => part.id === id)
     if (!part) throw new RangeError('Unknown ornament part')
     this.id = id
+    this.instrument.meterPart = /** @type {import('./tone-engine.js').MeterPart} */ (id)
     this.reference = referenceInstrument
     this.timbre = part.timbres[0].id
     if (id !== 'fx') {
@@ -69,7 +71,7 @@ export class OrnamentPlayer {
     if (!this.fxMaster) {
       this.fxMaster = context.createGain()
       this.fxMaster.gain.value = this.volume * .15
-      this.fxMaster.connect(context.destination)
+      this.fxMaster.connect(partMeter(context, 'fx'))
     }
     if (!this.noiseBuffer) {
       this.noiseBuffer = context.createBuffer(1, Math.ceil(context.sampleRate * 2), context.sampleRate)

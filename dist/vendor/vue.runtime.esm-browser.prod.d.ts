@@ -1,1 +1,1 @@
-export { createApp, h, nextTick, ref, shallowRef } from 'vue'
+export { createApp, h, nextTick, ref, shallowRef, watchEffect } from 'vue'

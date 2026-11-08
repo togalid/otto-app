@@ -895,3 +895,11 @@ export function padChordNotes(id, key) {
   const offset = key > 6 ? key - 12 : key
   return notes.map(note => note + offset)
 }
+
+/** Infer a major key from a matched chord root and a zero-based scale degree.
+ * @param {number} root @param {number} degree
+ */
+export function keyFromDegree(root, degree) {
+  if (!Number.isInteger(root) || root < 0 || root > 11 || !Number.isInteger(degree) || degree < 0 || degree > 6) throw new RangeError('Invalid root or degree')
+  return (root - [0, 2, 4, 5, 7, 9, 11][degree] + 12) % 12
+}

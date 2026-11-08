@@ -18,7 +18,7 @@ export const arrangementMixIds = partControls.flatMap(([id]) => [`${id}-mute`, `
 
 /** @typedef {{id:string, value:string, checked:boolean}} Control */
 /** @typedef {{id:string, pressed:boolean}} Mix */
-/** @typedef {Pick<import('./progression.js').Progression, 'slots'|'beatSlots'|'modulation'|'bassFeel'|'bassTones'|'drumSteps'> & Partial<Pick<import('./progression.js').Progression, 'drumAccents'|'drumPitch'|'beatsPerBar'>>} Score */
+/** @typedef {Pick<import('./progression.js').Progression, 'slots'|'beatSlots'|'modulation'|'bassFeel'|'bassTones'|'drumSteps'> & Partial<Pick<import('./progression.js').Progression, 'drumAccents'|'drumPitch'|'beatsPerBar'|'drumRate'>>} Score */
 /** @typedef {{id:string, options?:string[], range?:[number,number]}} ControlRule */
 
 /** @typedef {import('./progression.js').Progression['sections'][number]} Section */
@@ -45,9 +45,16 @@ function validPerformance(value) {
 function validSection(data) {
   const chord = (/** @type {unknown} */ value) =>
     typeof value === 'string' && value.length < 100 && chordConfig(value) !== undefined
-  return (data?.barCount === undefined || (Number.isInteger(data.barCount) && data.barCount >= 1 && data.barCount <= (data.slots?.length ?? 0))) &&
+  return (data?.name === undefined || typeof data.name === 'string' && data.name.length<=40) &&
+    (data?.backingSteps === undefined || Array.isArray(data.backingSteps) && data.backingSteps.length>=12 && data.backingSteps.length<=20 && data.backingSteps.every(step=>step && typeof step.enabled==='boolean' && Number.isFinite(step.duration) && step.duration>0 && step.duration<=5 && Number.isFinite(step.level) && step.level>=0 && step.level<=1)) &&
+    (data?.startBar === undefined || Number.isInteger(data.startBar) && Number.isInteger(data.endBar) && data.startBar >= 0 && (data.endBar ?? 0) > data.startBar && (data.endBar ?? 0) <= (data.slots?.length ?? 0)) &&
+    (data?.bpm === undefined || Number.isFinite(data.bpm) && data.bpm >=40 && data.bpm<=200) &&
+    (data?.key === undefined || Number.isInteger(data.key) && data.key>=0 && data.key<=11) &&
+    (data?.style === undefined || genres.some(item=>item.id===data.style)) &&
+    (data?.meter === undefined || [3,4,5].includes(data.meter)) &&
+    (data?.barCount === undefined || (Number.isInteger(data.barCount) && data.barCount >= 1 && data.barCount <= (data.slots?.length ?? 0))) &&
       (data?.performance === undefined || validPerformance(data.performance)) &&
-      Array.isArray(data?.slots) && [8, 16].includes(data.slots.length) && data.slots.every(chord) &&
+      Array.isArray(data?.slots) && data.slots.length >= 8 && data.slots.length <= 1024 && data.slots.length % 2 === 0 && data.slots.every(chord) &&
       Array.isArray(data.beatSlots) && data.beatSlots.length === data.slots.length &&
       data.beatSlots.every((/** @type {unknown} */ row) => Array.isArray(row) && [4, 5].includes(row.length) && row.every(value => value === null || chord(value))) &&
       Array.isArray(data.modulation) && data.modulation.length === data.slots.length / 2 &&
@@ -83,7 +90,8 @@ export function decodeArrangement(text, rules) {
     if (typeof item?.pressed !== 'boolean') throw new Error('Invalid mix')
     return {id, pressed: item.pressed}
   })
-  const {slots, beatSlots, modulation, bassFeel, bassTones, drumSteps, drumAccents, drumPitch, beatsPerBar = 4} = data
+  const {slots, beatSlots, modulation, bassFeel, bassTones, drumSteps, drumAccents, drumPitch, beatsPerBar = 4, drumRate = 1} = data
+  if (![0.5, 1, 2].includes(drumRate)) throw new Error('Invalid drum rate')
   if (![3, 4, 5].includes(beatsPerBar)) throw new Error('Invalid meter')
   if (typeof bassFeel !== 'string' ||
       !Array.isArray(bassTones) || !bassTones.every(tone => ['root','third','fifth','seventh','octave','ninth'].includes(tone)) ||
@@ -109,7 +117,7 @@ export function decodeArrangement(text, rules) {
       modulation: [...modulation], advance: false,
     }))
   } else {
-    if (!Array.isArray(data.sections) || data.sections.length !== 4 ||
+    if (!Array.isArray(data.sections) || (data.sections.length < 1 || data.sections.length > 32) ||
         !data.sections.every((/** @type {Section} */ section) => validSection(section) && typeof section.advance === 'boolean'))
       throw new Error('Invalid sections')
     for (const section of data.sections) {
@@ -120,7 +128,24 @@ export function decodeArrangement(text, rules) {
           !!rules.find(rule => rule.id === id)?.options?.includes(value))
       )) throw new Error('Invalid section parts')
     }
+    const hasRanges=data.sections.some((/** @type {Section} */ section)=>section.startBar!==undefined || section.endBar!==undefined)
+    if(hasRanges){
+      const count=data.sections[0].barCount ?? data.sections[0].slots.length
+      let end=0
+      for(const section of data.sections){
+        if(section.startBar!==end || section.endBar===undefined || section.endBar>count || (section.barCount ?? section.slots.length)!==count)throw new Error('Invalid song ranges')
+        end=section.endBar
+      }
+      if(end!==count)throw new Error('Incomplete song ranges')
+    }
     sections = data.sections.map((/** @type {Section} */ section) => ({
+      ...(section.key === undefined ? {} : {key:section.key}),
+      ...(section.style === undefined ? {} : {style:section.style}),
+      ...(section.name === undefined ? {} : {name:section.name}),
+      ...(section.startBar === undefined ? {} : {startBar:section.startBar,endBar:section.endBar}),
+      ...(section.backingSteps === undefined ? {} : {backingSteps:section.backingSteps.map(step=>({...step}))}),
+      ...(section.bpm === undefined ? {} : {bpm:section.bpm}),
+      ...(section.meter === undefined ? {} : {meter:section.meter}),
       ...(section.barCount === undefined ? {} : {barCount:section.barCount}),
       slots: section.slots, beatSlots: section.beatSlots, modulation: section.modulation, advance: section.advance,
       ...(section.partSettings === undefined ? {} : {partSettings: {...section.partSettings}}),
@@ -133,7 +158,7 @@ export function decodeArrangement(text, rules) {
     controls: [...controls.values()].filter(item => item.id !== 'genre' && item.id !== 'genre-group'),
     mix,
     sections,
-    score: /** @type {Score} */ ({slots, beatSlots, modulation, bassFeel, bassTones, drumSteps, drumAccents, drumPitch, beatsPerBar}),
+    score: /** @type {Score} */ ({slots, beatSlots, modulation, bassFeel, bassTones, drumSteps, drumAccents, drumPitch, beatsPerBar, drumRate}),
   }
 }
 

@@ -93,9 +93,9 @@ input[type='range']::-moz-range-thumb { width: 19px; height: 19px; border: 0; bo
 .chord-grid-scroll .chord-slot.current { background: var(--oto-display); color: var(--oto-display-ink); }
 #chord-slots .beat-chord .quality-select, #chord-slots .root-display { color: inherit; }
 #chord-slots .beat-chord .root-select { color: transparent; }
-#chord-slots .beat-chord.is-empty .root-display { color: var(--oto-muted); opacity: .65; }
+#chord-slots .beat-chord.is-empty .root-display { color: var(--oto-muted); opacity: .35; }
 @media (hover: hover) {
-  #chord-slots .beat-chord.is-empty:hover .root-display { opacity: 1; }
+  #chord-slots .beat-chord.is-empty:hover .root-display { opacity: .7; }
 }
 #chord-slots .beat-chord.is-empty:focus-within .root-display { opacity: 1; }
 .chord-slot .chord-preview, .chord-slot .bar-number { color: var(--oto-muted); }
@@ -1031,7 +1031,7 @@ header { min-height: 60px; }
 .piano-key span { position:absolute; bottom:12px; left:0; right:0; font-size:10px; pointer-events:none; }
 .piano-white { width:calc(var(--piano-width) - 2px); height:164px; background:var(--oto-key); color:var(--oto-ink); box-shadow:var(--oto-raised); }
 .piano-black { z-index:2; width:var(--piano-black-width); height:102px; background:var(--oto-ink); color:var(--oto-key); box-shadow:var(--oto-raised); }
-.piano-key[data-held],.piano-key[data-pc-playing] { background:var(--oto-secondary); color:var(--oto-key); box-shadow:var(--oto-recess); }
+.piano-key[data-held],.piano-key[data-playing],.piano-key[data-pc-playing] { background:var(--oto-secondary); color:var(--oto-key); box-shadow:var(--oto-recess); }
 #detail-melody[data-otto-playing='true'] #piano-keys { pointer-events:none; }
 
 /* Two banks share exactly the same four physical rows. */
@@ -1898,14 +1898,21 @@ header { min-height: 60px; }
 }
 .reference-timing-control input[type="range"] { width: 180px; min-width: 80px; max-width: 100%; margin: 0; }
 .reference-timing-control output { min-width: 58px; font-variant-numeric: tabular-nums; }
+.reference-timing-control .style-stepper button { width:auto; min-width:44px; min-height:36px; padding:0 10px; font-size:12px; white-space:nowrap; }
+.reference-timing-control .timing-precision button[aria-pressed="true"] { background:var(--oto-key-low); color:var(--oto-display-ink); box-shadow:var(--oto-recess); }
+.reference-timing-control .timing-nudge button { touch-action:none; user-select:none; }
+.reference-timing-control { display:grid; grid-template-columns:minmax(80px,1fr) auto auto; width:430px; max-width:100%; }
+.reference-timing-control > span { grid-column:1; }
+.reference-timing-control .timing-precision { grid-column:2 / 4; justify-self:end; }
+.reference-timing-control input[type="range"] { width:100%; }
 
 .crop-section-waves > div { display: grid; grid-template-columns: 24px minmax(0,1fr) auto auto; align-items:center; gap:10px; margin:12px 0; }
 .crop-section-waves .crop-timeline { height:90px; }
 #reference-crop.section-heads form > :is(.crop-timeline,.crop-scale,.crop-adjust) { display:none; }
 #reference-crop { max-height:90vh; overflow:auto; }
 
-.track-details .chord-settings .reference-timing-row { grid-column:1 / -1; display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:20px; width:100%; min-width:0; }
-.timing-waveform { width:100%; min-width:0; height:48px; border-radius:5px; overflow:hidden; background:var(--oto-display); }
+.track-details .reference-timing-row { grid-column:1 / -1; display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:20px; width:100%; min-width:0; }
+.timing-waveform { pointer-events:none; user-select:none; width:100%; min-width:0; height:72px; border-radius:5px; overflow:hidden; background:var(--oto-display); }
 .timing-waveform path { stroke:var(--oto-ink); stroke-width:1; opacity:.5; }
 .timing-waveform line { stroke:#e4b916; vector-effect:non-scaling-stroke; }
 .timing-waveform .eighth-grid { opacity:.65; stroke-width:1; }
@@ -1913,7 +1920,7 @@ header { min-height: 60px; }
 .timing-waveform .bar-grid { opacity:1; stroke-width:2; }
 
 @media (max-width: 700px) {
-  .track-details .chord-settings .reference-timing-row { grid-template-columns:minmax(0,1fr); gap:10px; }
+  .track-details .reference-timing-row { grid-template-columns:minmax(0,1fr); gap:10px; }
 }
 
 .crop-section-waves .crop-timeline { position:relative; touch-action:none; cursor:ew-resize; }
@@ -1923,7 +1930,7 @@ header { min-height: 60px; }
 
 #chord-slots > [hidden] { display:none !important; }
 
-.track-details .chord-settings .reference-timing-row[hidden] { display: none; }
+.track-details .reference-timing-row[hidden] { display: none; }
 
 .track-details .chord-settings .chord-field[hidden] { display: none; }
 @media (min-width: 951px) { .track-details .chord-settings { grid-template-columns: minmax(0, 1fr) auto auto; } }
@@ -2046,3 +2053,361 @@ header { min-height: 60px; }
 .score-pad-tools .pad-interval:disabled label{cursor:default}
 
 .score-pad-dock{border:1px solid var(--oto-seam);box-shadow:var(--oto-raised),0 4px 16px var(--oto-shadow)}
+
+.reference-file-details{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:16px 0}
+.reference-filename{min-width:0;overflow-wrap:anywhere;color:var(--oto-ink)}
+.reference-remove-key{flex-shrink:0;padding:10px 16px;border:0;border-radius:7px;background:var(--oto-key);color:var(--oto-ink);font:inherit;box-shadow:var(--oto-raised);cursor:pointer}
+.reference-remove-key:active{box-shadow:var(--oto-recess)}
+.reference-remove-key:disabled{opacity:.45;cursor:default}
+@media(max-width:480px){.reference-file-details{align-items:flex-start;flex-direction:column;gap:12px}}
+
+/* Keep the pair controls and both bars on one continuous score surface. */
+@media (min-width: 701px) {
+  .chord-grid-scroll #chord-slots { row-gap: 0; }
+  #chord-slots .modulation-bar { background: var(--oto-key); }
+  #chord-slots .chord-slot { margin-bottom: 8px; }
+}
+
+/* Place modulation on the same compact line as the bar numbers. */
+@media (min-width: 701px) {
+  #chord-slots .modulation-bar { height:0; min-height:0; padding:0 6px; z-index:4; overflow:visible; align-items:flex-start; font-size:10px; line-height:20px; }
+  #chord-slots .modulation-bar .modulation-value { min-height:0; height:20px; line-height:20px; font-size:10px; }
+  #chord-slots .modulation-bar .modulation-stepper button { width:24px; height:20px; min-height:0; }
+  #chord-slots .chord-slot .beat-chord { padding-top:20px; }
+}
+
+/* Compact bank switch at the end of the mixer. */
+.groove .mixer-banks { grid-template-columns:minmax(0,1fr) 20px; gap:6px; align-items:stretch; }
+.groove .mixer-banks > .part-bank { display:flex; flex-direction:column; align-self:center; gap:2px; padding:2px; border-radius:5px; background:var(--oto-case-low); box-shadow:var(--oto-recess); }
+.groove .mixer-banks > .part-bank button { width:16px; min-height:36px; padding:0; border:0; border-radius:3px; color:var(--oto-muted); background:transparent; box-shadow:none; font-size:13px; cursor:pointer; }
+.groove .mixer-banks > .part-bank button[aria-pressed='true'] { color:var(--oto-ink); background:var(--oto-key); box-shadow:var(--oto-raised); }
+.groove .mixer-banks > .part-bank button:focus-visible { outline:2px solid var(--oto-secondary); outline-offset:-2px; }
+
+/* Quiet separator between key and meter controls. */
+@media (min-width: 701px) {
+  .groove-settings .mixer-meter { position: relative; }
+  .groove-settings .mixer-meter::before { content: ''; position: absolute; left: -7px; top: 4px; bottom: 4px; width: 1px; background: var(--oto-seam); opacity: .55; pointer-events: none; }
+}
+
+/* Match the height and vertical alignment of the two adjacent selectors. */
+@media (min-width: 701px) {
+  .groove .mixer-banks > .part-bank { height:89px; box-sizing:border-box; transform:translateY(-2px); }
+  .groove .mixer-banks > .part-bank button { flex:1; min-height:0; }
+}
+
+.timing-waveform-area { position:relative; min-width:0; }
+.waveform-zoom { position:absolute; right:4px; bottom:4px; z-index:1; }
+.waveform-zoom button { width:24px; height:24px; font-size:14px; }
+.timing-waveform .beat-grid { stroke-width:2; }
+.timing-waveform .bar-grid { stroke-width:1; }
+.timing-waveform .playhead { stroke:var(--oto-secondary); stroke-width:2; vector-effect:non-scaling-stroke; }
+
+@media (min-width: 701px) {
+  #chord-slots .modulation-bar .modulation-value { display:block; width:auto; min-width:0; white-space:nowrap; text-align:right; }
+  #chord-slots .modulation-bar .modulation-stepper { margin-left:-2px; }
+}
+
+.drum-detail-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+.drum-detail-heading .track-detail-title { margin:0; }
+.drum-rate { display:flex; gap:2px; padding:3px; margin:0; }
+.drum-rate label { position:relative; cursor:pointer; }
+.drum-rate input { position:absolute; opacity:0; }
+.drum-rate span { display:block; padding:7px 10px; font-size:12px; }
+.drum-rate input:focus-visible + span { outline:2px solid var(--oto-secondary); outline-offset:-2px; }
+.reference-key-assist { display:flex; flex-wrap:wrap; align-items:center; gap:20px; margin-top:20px; padding-top:16px; border-top:1px solid var(--oto-seam); }
+.reference-key-assist[hidden] { display:none; }
+.reference-key-assist label { display:flex; align-items:center; gap:10px; font-size:12px; }
+.reference-key-assist .key-match-control { flex-direction:column; gap:4px; }
+.reference-key-assist select { color:var(--oto-ink); background:var(--oto-key); border:0; border-radius:5px; padding:8px; box-shadow:var(--oto-raised); }
+
+.reference-timing-row { display:flex; flex-direction:column; align-items:stretch; gap:10px; }
+.reference-timing-row .reference-timing-control { display:flex; align-items:center; gap:16px; }
+.reference-timing-row .timing-waveform-area { width:100%; min-width:0; }
+.reference-timing-row .timing-waveform { height:180px; width:100%; pointer-events:auto; touch-action:none; user-select:none; cursor:grab; }
+.reference-timing-row .timing-waveform.dragging { cursor:grabbing; }
+.reference-timing-row .timing-waveform:focus-visible { outline:2px solid var(--oto-secondary); outline-offset:2px; }
+
+.track-details .reference-timing-row { display:grid; grid-template-columns:minmax(0,1fr) 150px; gap:14px; align-items:stretch; }
+.track-details .reference-timing-row .reference-timing-control { display:flex; flex-direction:column; align-items:stretch; justify-content:center; width:auto; gap:10px; font-size:12px; }
+.reference-timing-row .timing-waveform { height:220px; display:block; }
+.reference-timing-row .waveform-zoom { position:static; display:flex; align-self:flex-start; }
+.waveform-drag-hint { position:absolute; bottom:10px; left:12px; padding:5px 8px; border-radius:7px; background:var(--oto-key); color:var(--oto-ink); font-size:12px; pointer-events:none; }
+.waveform-drag-hint[hidden] { display:none; }
+.waveform-beat-target { position:absolute; top:6px; left:6px; padding:3px 6px; border-radius:5px; background:var(--oto-key); color:var(--oto-secondary); font-size:11px; font-weight:bold; pointer-events:none; }
+.timing-challenge-status { color:var(--oto-secondary); line-height:1.5; }
+.reference-timing-control button[aria-pressed="true"] { box-shadow:var(--oto-recess); color:var(--oto-secondary); }
+@media(max-width:600px) { .track-details .reference-timing-row { grid-template-columns:minmax(0,1fr); } .track-details .reference-timing-row .reference-timing-control { flex-direction:row; flex-wrap:wrap; align-items:center; } }
+
+.reference-file-details { justify-content:flex-start; gap:8px; }
+.reference-file-details .reference-filename { flex:0 1 auto; }
+.reference-trash { border:0; background:transparent; color:var(--oto-ink); opacity:.5; cursor:pointer; padding:6px; font-size:16px; }
+.reference-trash:hover { opacity:1; }
+.reference-timing-row .timing-waveform-area .waveform-zoom { position:absolute; right:8px; bottom:8px; display:flex; }
+.reference-timing-row .waveform-zoom button { min-width:25px; min-height:25px; padding:3px 7px; font-size:12px; }
+.waveform-beat-target { left:12%; transform:translateX(-50%); }
+.timing-waveform.aligned { cursor:crosshair; }
+
+.timing-waveform .bar-grid { stroke-width:2px; vector-effect:non-scaling-stroke; }
+.timing-waveform .first-beat-grid { stroke:color-mix(in srgb, #fff 30%, #efbd22); opacity:1; }
+
+.timing-waveform .wave-hover-line,.timing-waveform .wave-selected-line { stroke:var(--oto-secondary); stroke-width:1px; vector-effect:non-scaling-stroke; pointer-events:none; }
+.timing-waveform .wave-hover-line { opacity:.45; stroke-dasharray:3 3; }
+.timing-waveform .wave-selected-line { opacity:.9; stroke-width:2px; }
+
+.wave-position-speaker { position:absolute; top:0; transform:translate(-50%,-65%); width:28px; height:26px; display:grid; place-items:center; border-radius:7px; background:var(--oto-key); color:var(--oto-secondary); box-shadow:var(--oto-raised); pointer-events:none; }
+.wave-position-speaker[hidden] { display:none; }
+
+.reference-key-assist select { min-width:220px; white-space:nowrap; }
+.waveform-zoom-icon { display:grid; place-items:center; padding:0 6px; color:var(--oto-secondary); }
+
+.reference-timing-control .timing-navigation { display:flex; width:100%; }
+.reference-timing-control .timing-navigation button { flex:1; width:0; min-width:0; min-height:36px; }
+.reference-key-assist .mood-control { min-width:130px; }
+.reference-key-assist .mood-control output { white-space:nowrap; }
+
+.reference-key-assist .key-match-control { align-self:stretch; justify-content:flex-start; min-height:70px; }
+.reference-key-assist .key-match-control output { display:block; min-height:1.5em; line-height:1.5; white-space:nowrap; }
+
+.reference-timing-control .timing-tempo-knob { display:flex; flex-direction:column; align-items:center; gap:4px; font-size:12px; }
+.reference-timing-control .timing-tempo-knob[hidden] { display:none; }
+
+.reference-timing-control .timing-tempo-knob output { min-width:0; width:100%; text-align:center; }
+
+.reference-timing-row .timing-waveform { pointer-events:all; }
+
+.score-paging { display:flex; align-items:center; }
+.score-paging output { padding:8px 12px; white-space:nowrap; font-size:12px; }
+.score-paging .style-stepper button { width:auto; padding:6px 10px; }
+#chord-slots .chord-slot[hidden],#chord-slots .modulation-bar[hidden] { display:none; }
+
+.whole-song-score { display:block !important; margin-top:24px; padding:24px; border-radius:18px; background:linear-gradient(var(--oto-case),var(--oto-case-low)); box-shadow:var(--oto-raised); }
+.whole-song-score[hidden] { display:block !important; }
+
+.song-range-settings { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:12px; }
+.song-range-settings input { width:60px; padding:5px; border:0; border-radius:5px; background:var(--oto-key); color:var(--oto-ink); }
+.backing-pattern-options { display:flex; flex-wrap:wrap; gap:10px; }
+
+.song-sections { flex-wrap:wrap; }
+.song-sections .style-stepper button { width:auto; padding:6px 10px; font-size:12px; }
+.backing-step-editor { margin-top:16px; }
+.backing-step-grid { display:grid; grid-template-columns:repeat(var(--step-columns),minmax(40px,1fr)); gap:6px; overflow-x:auto; padding:10px 0; }
+.backing-step { display:flex; flex-direction:column; gap:8px; }
+.backing-step button { padding:8px 0; }
+.backing-step button[aria-pressed="true"] { color:var(--oto-secondary); box-shadow:var(--oto-recess); }
+.backing-step input { width:100%; min-width:0; accent-color:var(--oto-secondary); }
+
+.backing-step-label { font-size:10px; color:var(--oto-secondary); text-align:center; }
+
+/* Whole-song workspace: retain mounted audio controls while switching views. */
+.workspace-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; margin:0 0 16px; }
+.workspace-switch { display:flex; padding:4px; margin:0; border:0; min-width:0; }
+.workspace-switch label { position:relative; cursor:pointer; }
+.workspace-switch input { position:absolute; opacity:0; width:1px; height:1px; }
+.workspace-switch label span { display:block; min-width:140px; text-align:center; padding:12px 20px; font-size:15px; font-weight:600; border-radius:5px; }
+.workspace-switch input:focus-visible + span { outline:2px solid var(--oto-secondary); outline-offset:3px; }
+main[data-workspace-view='mixer'] > .whole-song-score,
+main[data-workspace-view='mixer'] #score-section-context,
+main[data-workspace-view='score'] > .groove.progression,
+main[data-workspace-view='score'] > .track-details,
+main[data-workspace-view='score'] > #detail-melody { display:none !important; }
+main[data-workspace-view='score'] > .whole-song-score { margin-top:0; }
+.score-context { display:flex; align-items:center; gap:20px; color:var(--oto-ink); font-size:14px; font-variant-numeric:tabular-nums; }
+.score-context-section { color:var(--oto-muted); }
+.section-style-summary { width:100%; font-size:14px; color:var(--oto-display-ink); margin-top:8px; }
+.section-style-choice { display:flex; align-items:center; gap:10px; width:100%; color:var(--oto-muted); font-size:12px; }
+.section-style-choice select { max-width:340px; min-width:0; flex:1; }
+.song-range-settings label { display:flex; align-items:center; gap:6px; }
+.song-range-settings select, .section-style-choice select { background:var(--oto-key); color:var(--oto-ink); border:0; border-radius:7px; box-shadow:var(--oto-raised); padding:8px 12px; font:inherit; }
+.song-range-settings select:focus-visible,.section-style-choice select:focus-visible { outline:2px solid var(--oto-secondary); outline-offset:2px; }
+@media(max-width:600px) { .workspace-switch { width:100%; } .workspace-switch label { flex:1; } .workspace-switch label span { min-width:0; padding:12px; } .score-context { flex-wrap:wrap; gap:12px; } }
+.whole-song-score .chord-key { display:none; }
+.whole-song-score .chord-settings { grid-template-columns:minmax(0,1fr) auto; }
+.groove.progression .mixer-watermark { display:none; }
+.song-range-settings { flex-wrap:wrap; }
+.groove .groove-timing .timing-control:has(#section-tempo) { display:grid; grid-template-columns:minmax(6ch,auto); grid-template-rows:24px 36px 18px; justify-items:center; gap:0; }
+.groove .groove-timing .timing-control:has(#section-tempo) > span:first-child { grid-area:1 / 1; line-height:24px; }
+.groove .groove-timing .timing-control:has(#section-tempo) .timing-knob { grid-area:2 / 1; }
+.groove .groove-timing #section-tempo { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:grab; }
+.groove .groove-timing #section-tempo-value { grid-area:3 / 1; width:6ch; min-width:0; height:18px; padding:0; margin:0; border:0; border-radius:4px; background:transparent; color:var(--oto-ink); font:inherit; font-size:11px; line-height:18px; text-align:center; appearance:textfield; }
+#section-tempo-value::-webkit-inner-spin-button,#section-tempo-value::-webkit-outer-spin-button { appearance:none; margin:0; }
+.groove .groove-timing #section-tempo-value:focus-visible { outline:none; background:var(--oto-key); box-shadow:inset 0 -2px var(--oto-secondary); }
+.reference-background-status { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin:0 0 12px; color:var(--oto-muted); font-size:12px; }
+.reference-background-status .ref-import-spinner { width:14px; height:14px; flex:none; }
+.reference-background-status button { padding:5px 10px; min-height:28px; font:inherit; }
+.reference-background-status button { border:0; border-radius:7px; background:var(--oto-key); color:var(--oto-ink); box-shadow:var(--oto-raised); cursor:pointer; }
+.reference-background-status button:active { box-shadow:var(--oto-recess); }
+.reference-background-status button:focus-visible { outline:2px solid var(--oto-secondary); outline-offset:3px; }
+.reference-background-status .ref-import-spinner { display:inline-block; border:2px solid var(--oto-seam); border-top-color:var(--oto-secondary); border-radius:50%; }
+
+/* A bright measuring window and a fixed reticle make alignment tangible. */
+.reference-timing-row .timing-waveform { background:var(--oto-key); border:1px solid var(--oto-seam); border-radius:7px; box-sizing:border-box; }
+.reference-timing-row .timing-waveform path { stroke:var(--oto-secondary); opacity:.48; }
+.timing-waveform .ruler-tick { stroke:var(--oto-ink); stroke-width:1px; opacity:.45; vector-effect:non-scaling-stroke; pointer-events:none; }
+.timing-waveform .beat-grid { opacity:.38; }
+.timing-waveform .bar-grid { opacity:.75; }
+.timing-waveform .first-beat-grid { opacity:1; }
+.waveform-bar-numbers { position:absolute; inset:0; pointer-events:none; overflow:hidden; border-radius:7px; }
+.waveform-bar-numbers span { position:absolute; top:12px; transform:translateX(7px); color:var(--oto-muted); background:var(--oto-key); padding:1px 3px; border-radius:3px; font-size:10px; line-height:14px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.waveform-reticle { position:absolute; left:12%; top:50%; width:28px; height:28px; transform:translate(-50%,-50%); pointer-events:none; color:var(--oto-secondary); background:linear-gradient(currentColor,currentColor) left top / 8px 2px no-repeat,linear-gradient(currentColor,currentColor) left top / 2px 8px no-repeat,linear-gradient(currentColor,currentColor) right top / 8px 2px no-repeat,linear-gradient(currentColor,currentColor) right top / 2px 8px no-repeat,linear-gradient(currentColor,currentColor) left bottom / 8px 2px no-repeat,linear-gradient(currentColor,currentColor) left bottom / 2px 8px no-repeat,linear-gradient(currentColor,currentColor) right bottom / 8px 2px no-repeat,linear-gradient(currentColor,currentColor) right bottom / 2px 8px no-repeat; }
+.waveform-reticle::before,.waveform-reticle::after { content:''; position:absolute; background:currentColor; opacity:.6; }
+.waveform-reticle::before { display:none; }
+.waveform-reticle::after { width:1px; height:52px; top:50%; left:50%; transform:translate(-50%,-50%); }
+.timing-waveform-area:has(.aligned) .waveform-reticle { visibility:hidden; }
+.timing-waveform-area .waveform-beat-target { top:auto; bottom:10px; padding:3px 6px; border:1px solid var(--oto-seam); border-radius:5px; background:var(--oto-key); color:var(--oto-secondary); font-size:11px; }
+.reference-timing-control .timing-tempo-controls { display:flex; align-items:center; justify-content:center; gap:12px; }
+.reference-timing-control .timing-tempo-controls[hidden] { display:none; }
+.timing-tempo-multipliers { display:flex; flex-direction:column; gap:7px; }
+.timing-tempo-multipliers button { min-width:34px; min-height:26px; padding:3px 6px; border:0; border-radius:5px; font:inherit; font-size:11px; color:var(--oto-ink); background:var(--oto-key); box-shadow:var(--oto-raised); cursor:pointer; }
+.timing-tempo-multipliers button:active { box-shadow:var(--oto-recess); }
+.timing-tempo-multipliers button:disabled { opacity:.35; cursor:default; }
+.timing-tempo-multipliers button:focus-visible { outline:2px solid var(--oto-secondary); outline-offset:3px; }
+.timing-waveform-area .waveform-drag-hint { left:calc(12% + 42px); bottom:10px; max-width:calc(88% - 160px); font-size:11px; }
+@media(max-width:600px) { .timing-waveform-area .waveform-drag-hint { display:none; } }
+/* Quietly veil the pre-roll while retaining the waveform and drag target. */
+.waveform-pre-roll-mask { position:absolute; inset:0 auto 0 0; width:12%; border-radius:7px 0 0 7px; background:color-mix(in srgb,var(--oto-case) 36%,transparent); pointer-events:none; }
+.reference-key-assist .key-match-result { align-self:center; color:var(--oto-secondary); font-size:14px; white-space:nowrap; min-width:6ch; }
+
+/* General colors: quiet section identifiers, independent of the surface theme. */
+:root { --generalcolor-pink:#f3dbe3; --generalcolor-mint:#d8eae1; --generalcolor-lavender:#e4dff0; --generalcolor-cream:#f3e9cc; }
+#chord-slots .chord-slot[data-section-color='0'] { --section-color:var(--generalcolor-pink); }
+#chord-slots .chord-slot[data-section-color='1'] { --section-color:var(--generalcolor-mint); }
+#chord-slots .chord-slot[data-section-color='2'] { --section-color:var(--generalcolor-lavender); }
+#chord-slots .chord-slot[data-section-color='3'] { --section-color:var(--generalcolor-cream); }
+#chord-slots .chord-slot { background-image:linear-gradient(to bottom,color-mix(in srgb,var(--section-color,var(--oto-key)) 65%,var(--oto-key)) 0 22px,transparent 22px); }
+.whole-song-score #section-bar-count[hidden] { display:none !important; }
+.workspace-switch label span { min-width:110px; padding:7px 12px; font-size:12px; }
+.workspace-switch { padding:3px; }
+.workspace-heading { margin-bottom:12px; }
+#chord-slots .chord-slot .bar-label { background:color-mix(in srgb,var(--section-color,var(--oto-key)) 65%,var(--oto-key)); position:absolute; inset:0 0 auto 0; width:100%; height:22px; box-sizing:border-box; padding:3px 5px; pointer-events:none; }
+main[data-workspace-view='melody'] > .groove.progression,
+main[data-workspace-view='melody'] > .track-details,
+main[data-workspace-view='melody'] > .whole-song-score,
+main[data-workspace-view='melody'] #score-section-context,
+main[data-workspace-view='mixer'] > #detail-melody { display:none !important; }
+main[data-workspace-view='melody'] > #detail-melody { display:block !important; width:100%; box-sizing:border-box; margin-top:0; }
+.otto-lab-host { margin:0 0 20px; }
+.otto-play-mode { display:flex; justify-self:end; width:max-content; max-width:100%; margin:0 0 18px auto; padding:3px; border:0; }
+.otto-play-mode label { position:relative; cursor:pointer; }
+.otto-play-mode input { position:absolute; opacity:0; width:1px; height:1px; }
+.otto-play-mode label>span { display:block; padding:9px 14px; font-size:12px; border-radius:5px; }
+.otto-play-mode input:focus-visible+span { outline:2px solid var(--oto-secondary); outline-offset:3px; }
+.otto-lab { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.otto-lab-toolbar { grid-column:1/-1; display:flex; flex-wrap:wrap; align-items:center; gap:12px; font-size:12px; color:var(--oto-muted); }
+.otto-lab-toolbar button { font-size:12px; }
+.otto-lab-group { min-width:0; padding:16px; border:1px solid var(--oto-seam); border-radius:12px; background:color-mix(in srgb,var(--oto-key) 25%,transparent); }
+.otto-lab-group h3 { margin:0 0 14px; font-size:15px; }
+.otto-lab-group .oto-checkbox { display:flex; margin:10px 0; font-size:12px; gap:10px; }
+.otto-lab-knobs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px 10px; margin:20px 0; }
+.otto-lab-knob { display:flex; flex-direction:column; align-items:center; gap:7px; font-size:12px; text-align:center; }
+.otto-lab-knob input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:grab; touch-action:none; }
+.otto-lab-knob output { font-size:11px; font-variant-numeric:tabular-nums; }
+.otto-lab-group select { max-width:100%; background:var(--oto-key); color:var(--oto-ink); border:0; border-radius:7px; padding:8px; font:inherit; box-shadow:var(--oto-raised); }
+.otto-lab-group>label { font-size:12px; }
+@media(max-width:800px) { .otto-lab { grid-template-columns:1fr; } }
+
+.session-turn-display { display:flex; align-items:center; gap:16px; margin:12px 0; color:var(--oto-ink); }
+.session-turn-ring { position:relative; width:112px; height:112px; flex:none; }
+.session-turn-ring svg { width:100%; height:100%; overflow:visible; }
+.turn-otto,.legend-otto { stroke:var(--oto-secondary); color:var(--oto-secondary); }
+.turn-user,.legend-user { stroke:#bd6688; color:#bd6688; }
+.turn-marker { fill:var(--oto-ink); stroke:var(--oto-key); stroke-width:2; }
+.session-turn-count { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.session-turn-count strong { font-size:24px; font-variant-numeric:tabular-nums; }
+.session-turn-count small { font-size:11px; }
+.session-turn-legend { display:flex; gap:14px; margin-top:8px; font-size:12px; }
+
+/* Cloned section controls retain the same hit target as the original knobs. */
+.groove .groove-timing #section-tempo {
+  grid-area:auto; min-height:0; margin:0; z-index:1; touch-action:none;
+}
+.melody-top-row { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin:12px 0; }
+.melody-top-row .section-style-choice { flex:1; min-width:220px; max-width:430px; }
+.melody-top-row .otto-play-mode { margin:0; }
+.melody-context-knobs { display:flex; gap:24px; justify-content:flex-end; margin:12px 0; }
+.melody-context-knob { display:flex; flex-direction:column; align-items:center; gap:8px; font-size:12px; }
+.session-first { display:flex; margin:12px 0 0; padding:4px; }
+.session-first label span { display:block; padding:7px 10px; font-size:12px; }
+.session-first { border:0; width:max-content; max-width:100%; gap:0; }
+.session-first label { position:relative; cursor:pointer; }
+.session-first input { position:absolute; width:1px; height:1px; opacity:0; }
+.session-first input:focus-visible+span { outline:2px solid var(--oto-secondary); outline-offset:3px; }
+.otto-style-choice { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin:12px 0; font-size:12px; }
+.otto-style-choice select { border:0; border-radius:7px; padding:9px 12px; background:var(--oto-key); color:var(--oto-ink); box-shadow:var(--oto-raised); font:inherit; }
+@keyframes otto-head-nod { 0%,100% { transform:translateY(0) rotate(-2deg); } 35% { transform:translateY(5px) rotate(2deg); } 65% { transform:translateY(-2px) rotate(0); } }
+.talk-face[data-speaking="true"] .talk-avatar { animation:otto-head-nod var(--otto-beat-duration,.5s) ease-in-out infinite; }
+@media(prefers-reduced-motion:reduce) { .talk-face[data-speaking="true"] .talk-avatar { animation:none; } }
+
+@keyframes otto-listening-nod { 0%,100% { transform:translateY(0); } 40% { transform:translateY(2px) rotate(1deg); } 70% { transform:translateY(-1px); } }
+.talk-face[data-listening="true"] .talk-avatar { animation:otto-listening-nod var(--otto-beat-duration,.5s) ease-in-out infinite; }
+@media(prefers-reduced-motion:reduce) { .talk-face[data-listening="true"] .talk-avatar { animation:none; } }
+
+.melody-secondary-row { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin:8px 0 12px; }
+.melody-secondary-row .otto-style-choice { margin:0; flex:1; min-width:220px; }
+.melody-secondary-row .melody-context-knobs { margin:0; }
+.melody-top-row { margin-bottom:8px; }
+
+#detail-melody .melody-view { display:flex; align-items:center; }
+#detail-melody .melody-chord { margin-left:auto; }
+#detail-melody .melody-midi-button { font-size:12px; padding:8px 12px; min-height:0; }
+
+#piano-keys .piano-key[data-harmony] { background:color-mix(in srgb,var(--oto-secondary) 16%,var(--oto-key)); }
+#piano-keys .piano-key.piano-black[data-harmony] { background:color-mix(in srgb,var(--oto-secondary) 35%,var(--oto-ink)); }
+
+#piano-keys .piano-key:is([data-held],[data-playing],[data-pc-playing]) { background:var(--oto-secondary); color:var(--oto-key); box-shadow:var(--oto-recess); }
+
+.waveform-reticle::after { width:4px; height:28px; background:#f3cb52; opacity:1; border-radius:2px; }
+.waveform-reticle { transition:color .16s,filter .16s; }
+.waveform-reticle.on-target { color:var(--oto-accent); filter:drop-shadow(0 0 3px color-mix(in srgb,var(--oto-accent) 25%,transparent)); }
+.waveform-reticle.on-target::after { width:6px; }
+.waveform-scope-cue { position:absolute; bottom:calc(100% + 12px); left:50%; transform:translateX(-50%); white-space:nowrap; padding:6px 10px; border-radius:7px; background:var(--oto-key); color:var(--oto-secondary); font-size:12px; font-weight:600; box-shadow:var(--oto-raised); }
+.waveform-scope-cue::after { content:''; position:absolute; top:100%; left:calc(50% - 5px); border:5px solid transparent; border-top-color:var(--oto-key); }
+
+.session-phase { display:flex; width:max-content; margin-top:8px; }
+.session-phase button { font-size:11px; padding:6px 10px; }
+
+#piano-scroll { scrollbar-width:none; }
+#piano-scroll::-webkit-scrollbar { display:none; }
+
+.waveform-reticle.bars-on-target .waveform-scope-cue { white-space:normal; width:210px; text-align:center; line-height:1.5; }
+
+.timing-guide-bubble { display:block; position:relative; padding:8px 12px; border-radius:7px; background:var(--oto-key); color:var(--oto-secondary); box-shadow:var(--oto-raised); font-size:12px; line-height:1.5; text-align:center; }
+.timing-guide-bubble[hidden] { display:none; }
+.timing-tempo-controls { position:relative; }
+.timing-tempo-controls .timing-guide-bubble { position:absolute; right:0; bottom:100%; width:170px; z-index:3; }
+.root-guide { flex-basis:100%; width:max-content; }
+
+.waveform-scope-cue { white-space:normal; width:190px; text-align:center; line-height:1.5; }
+
+.melody-playhead { flex:1; min-width:160px; max-width:340px; padding:10px 12px; border-radius:7px; background:var(--oto-display); color:var(--oto-display-ink); font-size:14px; font-variant-numeric:tabular-nums; box-shadow:var(--oto-recess); }
+.melody-playhead::after { content:''; display:block; height:3px; margin-top:8px; background:linear-gradient(to right,var(--oto-secondary) var(--progress,0%),transparent var(--progress,0%)); }
+.session-phase button { white-space:nowrap; min-width:72px; }
+
+.melody-playhead { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:40px; }
+.melody-playhead::after { display:none; }
+.melody-navigation { display:flex; flex:none; }
+.melody-navigation button { padding:7px 10px; min-width:32px; font-size:14px; }
+
+.melody-live-wave { flex:1; min-width:40px; height:34px; overflow:hidden; color:var(--oto-secondary); }
+.melody-live-wave path { stroke:currentColor; stroke-width:.7; opacity:.55; }
+.melody-live-wave .mini-cursor { stroke:var(--oto-accent); stroke-width:1; opacity:1; }
+:is(#oto-buddy, .talk-avatar) .buddy-happy-eyes { display:none; fill:none; stroke:var(--oto-key); stroke-width:1.35; stroke-linecap:round; stroke-linejoin:round; }
+:is(#oto-buddy, .talk-avatar)[data-energy-mood] .buddy-eyes { display:none; }
+:is(#oto-buddy, .talk-avatar)[data-energy-mood] .buddy-happy-eyes { display:block; visibility:visible; stroke:var(--oto-key); }
+.melody-bar-input { display:flex; align-items:baseline; flex:none; white-space:nowrap; }
+.melody-bar-input input { width:3.5em; min-width:0; padding:2px 3px; border:0; border-bottom:1px solid currentColor; background:transparent; color:inherit; font:inherit; font-variant-numeric:tabular-nums; text-align:right; }
+.melody-bar-input input:focus-visible { outline:2px solid var(--oto-secondary); outline-offset:2px; }
+/* Preset choices precede score navigation; the preset stepper is vertical. */
+.whole-song-score .chord-heading { margin-top:16px; }
+.track-details .chord-settings .preset-picker .style-stepper { display:flex; flex-direction:column; }
+.track-details .chord-settings .preset-picker .style-stepper button { min-height:20px; height:20px; font-size:9px; line-height:1; padding:0 10px; }
+.track-details .chord-settings .preset-picker .style-stepper button + button { border-left:0; border-top:1px solid var(--oto-seam); }
+@media (max-width:700px) { .track-details .chord-settings .preset-picker .style-stepper button { min-height:22px; height:22px; } }
+/* Keep section state available internally while presenting one song arrangement. */
+.mixer-sections-label, #song-sections > button, #song-sections > .section-style-summary, #song-sections > .song-range-settings, .score-context-section { display:none !important; }
+.session-ring-column { display:flex; flex-direction:column; align-items:center; gap:8px; flex:none; }
+.session-length { display:flex; align-items:center; gap:4px; font-size:12px; white-space:nowrap; }
+.session-length select { max-width:90px; padding:5px 8px; border:0; border-radius:5px; background:var(--oto-key); color:var(--oto-ink); box-shadow:var(--oto-raised); font:inherit; }
+.session-length select:focus-visible { outline:2px solid var(--oto-secondary); outline-offset:2px; }
+/* Otto listens and nods during manual play as well as the user's session turn. */
+#detail-melody[data-transport-running='true']:has(.otto-play-mode input[value='manual']:checked) .talk-face .talk-avatar { animation:otto-listening-nod var(--otto-beat-duration,.5s) ease-in-out infinite; }
+@media (prefers-reduced-motion:reduce) { #detail-melody[data-transport-running='true']:has(.otto-play-mode input[value='manual']:checked) .talk-face .talk-avatar { animation:none; } }

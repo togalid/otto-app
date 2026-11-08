@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { Readable } from 'node:stream'
 import { createStaticHandler } from '../server/static.mjs'
-import { createStemHandler } from '../server/stems.mjs'
+import { createStemHandler, stemProcessEnvironment } from '../server/stems.mjs'
 
 function response() {
   return Object.assign(new EventEmitter(), {
@@ -89,4 +89,15 @@ test('abandoning a stem response cancels its model process and releases the busy
   const next = Readable.from([Buffer.alloc(44)]); next.headers = headers
   const nextResponse = response(); await separate(next, nextResponse)
   assert.equal(nextResponse.status, 400)
+})
+
+
+test('stem CPU thread defaults are bounded and preserve explicit operator settings', () => {
+  assert.deepEqual(stemProcessEnvironment({TORCH_HOME:'/tmp/test-models'}, 10), {
+    TORCH_HOME:'/tmp/test-models', OMP_NUM_THREADS:'4', MKL_NUM_THREADS:'4',
+  })
+  assert.equal(stemProcessEnvironment({}, 2).OMP_NUM_THREADS,'2')
+  assert.deepEqual(stemProcessEnvironment({OMP_NUM_THREADS:'6', MKL_NUM_THREADS:'2'}, 10), {
+    OMP_NUM_THREADS:'6', MKL_NUM_THREADS:'2',
+  })
 })

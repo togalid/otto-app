@@ -901,3 +901,24 @@ test('section lengths control loop boundaries without discarding hidden chords',
   assert.equal(player.barCount(0), 8)
   assert.deepEqual(player.sections[0].slots, original)
 })
+
+test('modulation edits carry forward while preserving later changes and saved bounds', async () => {
+  const {shiftModulationFrom} = await import('../dist/progression.js')
+  const offsets = [0, 0, 2, 2]
+  assert.equal(shiftModulationFrom(offsets, 0, 1), true)
+  assert.deepEqual(offsets, [1, 1, 3, 3])
+  assert.equal(shiftModulationFrom(offsets, 1, -1), true)
+  assert.deepEqual(offsets, [1, 0, 2, 2])
+  const bounded = [0, 120, 0]
+  assert.equal(shiftModulationFrom(bounded, 0, 1), false)
+  assert.deepEqual(bounded, [0, 120, 0])
+})
+
+test('drum rate repeats or stretches a pattern across bars without changing other parts', async () => {
+  const {drumEventsAtRate} = await import('../dist/progression.js')
+  const hits = [{beat:0}, {beat:1}, {beat:2}, {beat:3}]
+  assert.deepEqual(drumEventsAtRate(hits, 4, 0, 4, 2).map(x=>x.beat), [0,.5,1,1.5,2,2.5,3,3.5])
+  assert.deepEqual(drumEventsAtRate(hits, 4, 0, 4, .5).map(x=>x.beat), [0,2])
+  assert.deepEqual(drumEventsAtRate(hits, 4, 1, 4, .5).map(x=>x.beat), [0,2])
+  assert.deepEqual(drumEventsAtRate(hits, 4, 0, 4, 1).map(x=>x.beat), [0,1,2,3])
+})

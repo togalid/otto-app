@@ -188,3 +188,13 @@ test('Otto alternates every two physical bars in triple and quintuple meter', ()
     assert.equal(conversationTurn(meter * 8, 'pc', meter).bar, 1)
   }
 })
+
+test('modulation follows recorded changes during an echoed held note', async () => {
+  const {modulationAt, echoPhrase} = await import('../dist/buddy.js')
+  const points = [{at:0,value:.1},{at:.5,value:.8},{at:1.5,value:.3}]
+  const [note] = echoPhrase([{step:0,midi:60,at:0,duration:2,modulation:points}],0)
+  assert.deepEqual(note.modulation,points)
+  assert.equal(modulationAt(note.modulation,.25),.1)
+  assert.equal(modulationAt(note.modulation,1),.8)
+  assert.equal(modulationAt(note.modulation,1.75),.3)
+})

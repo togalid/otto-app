@@ -57,9 +57,9 @@ test('Otto sustained notes do not rewrite pad/key highlights on every audio tick
   const player = new Instrument()
   const transport = {
     instrument: new Instrument(), ornaments: [], bpm: 100, swing: 0, genre: 'pop',
-    slots: Array(8).fill('FM7'), running: false, nextTime: 2.4,
+    slots: Array(8).fill('FM7'), running: false, nextTime: 2.4, playbackStartTime:0,
     stop() { this.running = false },
-    async start() { this.running = true },
+    async start(_bar, _beat, startTime) { this.playbackStartTime = startTime; this.nextTime = startTime + 2.4; this.running = true },
   }
   const palette = melodyPalette(0, 'FM7', 0, 'key')
   let actions

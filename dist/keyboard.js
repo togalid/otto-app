@@ -8,9 +8,12 @@ export function pianoKey(midi) {
   const pitch=midi%12
   return {midi,black:[1,3,6,8,10].includes(pitch),label:['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'][pitch]+(Math.floor(midi/12)-1)}
 }
-/** @param {{ready:()=>Promise<void>,attack:(midi:number,glide:boolean)=>void,release:(midi:number)=>void,stop:()=>void,onError:(error:unknown)=>void}} source */
+/** @param {{ready:()=>Promise<void>,attack:(midi:number,glide:boolean)=>void,release:(midi:number)=>void,stop:()=>void,key?:()=>number,onError:(error:unknown)=>void}} source */
 export function mountKeyboard(source) {
+  const original=source
+  const sounding=new Map()
   const board=/** @type {HTMLElement} */ (document.querySelector('#piano-keys'))
+  source={...original,attack:(midi,glide)=>{const pitch=midi+(board.dataset.magic==='true'?(original.key?.()??0):0);sounding.set(midi,pitch);original.attack(pitch,glide)},release:midi=>{original.release(sounding.get(midi)??midi);sounding.delete(midi)}}
   const scroll=/** @type {HTMLElement} */ (document.querySelector('#piano-scroll'))
   const pads=/** @type {HTMLElement} */ (document.querySelector('#pads'))
   /** @type {Map<number,HTMLButtonElement>} */
@@ -106,11 +109,64 @@ export function mountKeyboard(source) {
   board.addEventListener('focusout',event=>{if(!board.contains(/** @type {Node|null} */(event.relatedTarget)))release()})
   for(const button of Array.from(document.querySelectorAll('[data-melody-view]')))button.addEventListener('click',()=>{
     release()
-    const piano=/** @type {HTMLElement} */(button).dataset.melodyView==='piano'
+    const selected=/** @type {HTMLElement} */(button).dataset.melodyView
+    const piano=selected!=='pads'
+    board.dataset.magic=String(selected==='magic')
+    document.dispatchEvent(new Event('melody-keyboard-change'))
     pads.hidden=piano;scroll.hidden=!piano
     document.querySelectorAll('[data-melody-view]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)))
   })
   window.addEventListener('blur',release)
   document.addEventListener('visibilitychange',()=>{if(document.hidden)release()})
   return {release}
+}
+
+/** MIDI input is explicitly enabled by a user gesture; SysEx is never requested.
+ * @param {{ready:()=>Promise<void>,attack:(note:number)=>void,release:(note:number)=>void,bend?:(value:number)=>void,modulation?:(value:number)=>void,transpose?:()=>number}} source */
+export function mountMidiInput(source) {
+ const button=document.createElement('button')
+ button.type='button';button.className='reference-remove-key melody-midi-button';button.textContent='MIDIを接続'
+ document.querySelector('.melody-heading')?.append(button)
+ /** @type {MIDIAccess|undefined} */ let access
+ /** @type {Map<string,Map<number,number>>} */ const held=new Map()
+ /** @param {string} id */
+ const releasePort=id=>{for(const note of held.get(id)?.values()??[])source.release(note);held.delete(id)}
+ const silence=()=>{for(const id of held.keys())releasePort(id)}
+ const refresh=()=>{
+  if(!access)return
+  let count=0
+  access.inputs.forEach(input=>{
+   if(input.state==='disconnected'){releasePort(input.id);return}
+   count++
+   input.onmidimessage=(/** @type {MIDIMessageEvent} */ event)=>{
+    const [status,note,velocity]=event.data??[]
+    const kind=status&0xf0
+    let notes=held.get(input.id)
+    if(!notes){notes=new Map();held.set(input.id,notes)}
+    if(kind===0x90&&velocity>0){const previous=notes.get(note);if(previous!==undefined)source.release(previous);const pitch=Math.max(0,Math.min(127,note+(source.transpose?.()??0)));notes.set(note,pitch);source.attack(pitch)}
+    else if(kind===0x80||(kind===0x90&&velocity===0)){const pitch=notes.get(note);notes.delete(note);if(pitch!==undefined)source.release(pitch)}
+    else if(kind===0xe0)source.bend?.((((velocity<<7)|note)-8192)/8192)
+    else if(kind===0xb0&&note===1)source.modulation?.(velocity/127)
+    else if(kind===0xb0&&(note===120||note===123))releasePort(input.id)
+   }
+  })
+  button.textContent=count?`MIDI 接続中（${count}）`:'MIDI 接続待ち'
+ }
+ button.disabled=!navigator.requestMIDIAccess
+ if(button.disabled)button.title='このブラウザはMIDI入力に対応していません'
+ const connect=async(userGesture=true)=>{
+  try{
+   if(userGesture)await source.ready()
+   access??=await navigator.requestMIDIAccess({sysex:false})
+   access.onstatechange=refresh;refresh()
+   localStorage.setItem('oto-midi-enabled','1')
+  }catch(error){button.textContent='MIDIを再接続';button.title=error instanceof Error?error.message:'MIDIに接続できませんでした'}
+ }
+ button.addEventListener('click',()=>void connect())
+ if(!button.disabled&&localStorage.getItem('oto-midi-enabled')==='1'){
+  void navigator.permissions.query({name:/** @type {PermissionName} */('midi')}).then(permission=>{if(permission.state==='granted')void connect(false)}).catch(()=>{})
+ }
+ window.addEventListener('blur',silence)
+ window.addEventListener('pagehide',silence)
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)silence()})
 }

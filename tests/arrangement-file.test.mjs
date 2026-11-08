@@ -71,3 +71,40 @@ test('section lengths round trip independently while retaining hidden chords', (
   assert.equal(decoded.sections[1].barCount, 7)
   assert.deepEqual(decoded.sections[0].slots, f.sections[0].slots)
 })
+
+test('variable song sections preserve identities, custom backing and reject invalid steps',async()=>{
+  const {migrateSongSections,splitSongSection}=await import('../dist/song-score.js')
+  const f=fixture(),sections=migrateSongSections(f.sections)
+  splitSongSection(sections,0)
+  sections[1].name='サビ'
+  sections[1].backingSteps=Array.from({length:16},()=>({enabled:true,duration:.5,level:.7}))
+  sections[1].bpm=132;sections[1].meter=4
+  const score={...f.score,slots:sections[0].slots,beatSlots:sections[0].beatSlots,modulation:sections[0].modulation}
+  const decoded=decodeArrangement(encodeArrangement(f.controls,f.mix,score,sections),f.rules)
+  assert.equal(decoded.sections.length,5)
+  assert.equal(decoded.sections[1].name,'サビ')
+  assert.deepEqual(decoded.sections[1].backingSteps,sections[1].backingSteps)
+  sections[1].backingSteps[0].level=2
+  assert.throws(()=>decodeArrangement(encodeArrangement(f.controls,f.mix,score,sections),f.rules))
+})
+
+test('whole song ranges reject gaps and overlaps before restoring any settings',async()=>{
+ const {migrateSongSections}=await import('../dist/song-score.js')
+ const f=fixture(), sections=migrateSongSections(f.sections)
+ const score={...f.score,slots:sections[0].slots,beatSlots:sections[0].beatSlots,modulation:sections[0].modulation}
+ sections[1].startBar++
+ assert.throws(()=>decodeArrangement(encodeArrangement(f.controls,f.mix,score,sections),f.rules),/ranges/)
+ sections[1].startBar-=2
+ assert.throws(()=>decodeArrangement(encodeArrangement(f.controls,f.mix,score,sections),f.rules),/ranges/)
+})
+
+test('section key and style round trip with validation and legacy fallback',()=>{
+ const f=fixture()
+ f.sections[1].key=9;f.sections[1].style=genres[1].id
+ const decode=()=>decodeArrangement(encodeArrangement(f.controls,f.mix,f.score,f.sections),f.rules)
+ assert.equal(decode().sections[1].key,9)
+ assert.equal(decode().sections[1].style,genres[1].id)
+ assert.equal(decode().sections[0].key,undefined)
+ for(const key of [-1,12,1.5]){f.sections[1].key=key;assert.throws(decode)}
+ f.sections[1].key=9;f.sections[1].style='missing-style';assert.throws(decode)
+})

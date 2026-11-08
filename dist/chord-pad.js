@@ -1,9 +1,9 @@
-import {padChordNotes, customChord, qualityGroups} from './music.js'
+import {padChordNotes, customChord, qualityGroups, displayChordParts} from './music.js'
 import {createChoiceMenu} from './choice-menu.js'
-const degrees=['I','II','III','IV','V','VI','VII','♭II','♭III','♭V','♭VI','♭VII']
-const numericDegrees=['1','2','3','4','5','6','7','♭2','♭3','♭5','♭6','♭7']
+const degrees=['I','II','III','IV','V','VI','VII','♯I','♭III','♯IV','♭VI','♭VII']
+const numericDegrees=['1','2','3','4','5','6','7','♯1','♭3','♯4','♭6','♭7']
 let notation='roman'
-const degreeRoots=[0,1,2,3,4,5,6,1,2,4,5,6]
+const degreeRoots=[0,1,2,3,4,5,6,0,2,3,5,6]
 const layout=[7,8,9,10,3,4,5,11,0,1,2,6]
 const names=['C','D♭','D','E♭','E','F','F♯','G','A♭','A','B♭','B']
 const key=/** @type {HTMLSelectElement} */(document.querySelector('#pad-key'))
@@ -21,7 +21,11 @@ const assignments=new Map(Object.entries({
  '4:bl':{quality:'sus4',extension:'7',label:'7sus4'}, '4:tr':{quality:'maj',extension:'b13',label:'7(♭13)'},
  '5:bl':{quality:'sus4',extension:'7',label:'7sus4'}, '5:br':{quality:'min',extension:'9',label:'m9'},
  '6:bl':{quality:'slash',extension:'v_over_7',label:'V/7'},
- ...Object.fromEntries([7,8,9,10,11].map(index=>[index+':center',{quality:'maj',extension:'maj7',label:'△7'}])),
+ '7:center':{quality:'maj',extension:'maj7',label:'△7'},
+ '8:center':{quality:'dim',extension:'dim7',label:'dim7'},
+ '9:center':{quality:'dim',extension:'7',label:'m7♭5'},
+ '10:center':{quality:'dim',extension:'dim7',label:'dim7'},
+ '11:center':{quality:'maj',extension:'7',label:'7'},
 }))
 const embedded=new URLSearchParams(location.search).has('embedded')&&window.parent!==window
 if(embedded){
@@ -31,8 +35,8 @@ if(embedded){
   if(event.origin===location.origin&&event.source===parent&&event.data?.type==='oto-pad-key'&&Number.isInteger(event.data.key)&&event.data.key>=0&&event.data.key<12){
    key.value=String(event.data.key)
    if(['milk','toy','soda'].includes(event.data.skin))document.documentElement.dataset.skin=event.data.skin
-   const nextNotation=event.data.notation==='number'?'number':'roman'
-   if(notation!==nextNotation){notation=nextNotation;refreshPadLabels()}
+   const nextNotation=event.data.notation==='number'?'number':event.data.notation==='chord'?'chord':'roman'
+   notation=nextNotation;refreshPadLabels()
   }
  })
  document.addEventListener('keydown',event=>{
@@ -74,7 +78,7 @@ function chord(index,zone){
  const assigned=assignments.get(index+':'+zone)
  const quality=assigned?.quality ?? (zone==='tl'?'dim':zone==='br'?'min':zone==='bl'?'sus2':zone==='tr'?'maj':index===6?'dim':minor?'min':'maj')
  const extension=assigned?.extension ?? (zone==='tl'?'dim7':zone==='bl'?'none':zone==='tr'||zone==='br'?'7':index===0||index===3?'maj7':'7')
- return {id:customChord({root:degreeRoots[index],quality,extension,alter:index>=7?11:0}),label:assigned?.quality==='slash' ? assigned.label : degrees[index]+(assigned?.label ?? (zone==='tl'?'dim7':zone==='bl'?'sus2':zone==='tr'?'7':zone==='br'?'m7':index===6?'m7♭5':minor?'m7':index===4?'7':'△7'))}
+ return {id:customChord({root:degreeRoots[index],quality,extension,alter:index===7||index===9?1:index>=7?11:0}),label:assigned?.quality==='slash' ? assigned.label : degrees[index]+(assigned?.label ?? (zone==='tl'?'dim7':zone==='bl'?'sus2':zone==='tr'?'7':zone==='br'?'m7':index===6?'m7♭5':minor?'m7':index===4?'7':'△7'))}
 }
 /** @param {string} label */
 function numberLabel(label){
@@ -84,15 +88,16 @@ function numberLabel(label){
 function renderPadLabel(index,zone,button){
  const assignment=assignments.get(index+':'+zone)
  const raw=zone==='center'?chord(index,zone).label:(assignment?.label ?? ({tl:'dim7',tr:'7',bl:'sus2',br:'m7'}[/** @type {'tl'|'tr'|'bl'|'br'} */(zone)] ?? ''))
- const label=notation==='number'?numberLabel(raw):raw
+ const parts=notation==='chord'?displayChordParts(chord(index,zone).id,Number(key.value),'chord'):null
+ const label=parts?parts.main+parts.suffix:notation==='number'?numberLabel(raw):raw
  button.replaceChildren()
  if(zone==='center'&&assignment?.quality!=='slash'){
-  const prefix=notation==='number'?numericDegrees[index]:degrees[index]
+  const prefix=parts?parts.main:notation==='number'?numericDegrees[index]:degrees[index]
   const degree=document.createElement('span');degree.className='pad-degree';degree.textContent=prefix
   const quality=document.createElement('span');quality.className='pad-quality';quality.textContent=label.slice(prefix.length)
   button.append(degree,quality)
  }else button.textContent=label
- button.setAttribute('aria-label',zone==='center'?label:(notation==='number'?numericDegrees[index]:degrees[index])+' '+label)
+ button.setAttribute('aria-label',zone==='center'?label:(notation==='chord'?'':(notation==='number'?numericDegrees[index]:degrees[index])+' ')+label)
 }
 function refreshPadLabels(){
  document.querySelectorAll('.chord-pad').forEach(pad=>{

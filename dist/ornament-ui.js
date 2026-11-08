@@ -27,7 +27,7 @@ export function mountOrnaments(tracks) {
     replacement.append(...Array.from(field.childNodes))
     field.replaceWith(replacement)
   }
-  document.querySelector('.groove-settings')?.prepend(caption)
+  document.querySelector('.mixer-banks')?.append(caption)
   const icons = ['✦', '♪', '≋', '◌']
   const rows = ornamentParts.map((part, index) => {
     const row = document.createElement('div')
@@ -75,12 +75,14 @@ export function mountOrnaments(tracks) {
     render: () => ['基本', '彩り'].map((label, index) => h('button', {
       type: 'button',
       'aria-pressed': String(bank.value === index),
+      'aria-label': label + 'パートを表示',
+      title: label,
       onClick: () => {
         bank.value = index
         basic.forEach(row => { /** @type {HTMLElement} */ (row).hidden = index !== 0 })
         rows.forEach(row => { row.hidden = index === 0 })
       },
-    }, label)),
+    }, index === 0 ? '▴' : '▾')),
   }).mount(caption)
   /** @param {string} styleId */
   return function setStyle(styleId) {

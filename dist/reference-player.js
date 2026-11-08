@@ -37,22 +37,88 @@ export function loopPosition(offset, elapsed, start, end) {
   return position < end ? position : start + (position - end) % (end - start)
 }
 
+/** @param {AudioBuffer} audio @param {number} start @param {number} end */
+function monoClip(audio, start, end) {
+  const first = Math.floor(start * audio.sampleRate)
+  const length = Math.max(0, Math.min(audio.length - first, Math.ceil((end - start) * audio.sampleRate)))
+  const mono = new Float32Array(length)
+  for (let channel = 0; channel < audio.numberOfChannels; channel++) {
+    const data = audio.getChannelData(channel)
+    for (let i = 0; i < length; i++) mono[i] += data[first + i] / audio.numberOfChannels
+  }
+  return mono
+}
+
+/** Separate the complete source once; every arrangement section shares its head and stems.
+ * @param {AudioBuffer} audio
+ * @param {{analyze:ReturnType<typeof createReferenceAnalyzer>['analyze'],
+ * separate:(audio:AudioBuffer,start:number,end:number,signal:AbortSignal)=>Promise<AudioBuffer[]>,
+ * createBuffer:(channels:number,length:number,rate:number)=>AudioBuffer,
+ * bpm:number,key:number,signal:AbortSignal,progress:(message:string)=>void,onAnalyzed?:(result:{bpm:number,key:number})=>Promise<void>,skipStems?:boolean}} options
+ */
+export async function analyzeSharedReference(audio, {analyze, separate, createBuffer, bpm, key, signal, progress, onAnalyzed, skipStems = false}) {
+  signal.throwIfAborted()
+  progress('テンポとキーを読み取っています…')
+  const rate = audio.sampleRate
+  const request = {rate, bpm, key}
+  const tempo = await analyze({...request, kind:'tempo', samples:monoClip(audio, 0, 60)})
+  signal.throwIfAborted()
+  const detectedBpm = Math.round(Math.max(40, Math.min(200, tempo.bpm ?? bpm)))
+  const originalKey = await analyze({...request, bpm:detectedBpm, kind:'key', samples:monoClip(audio, 0, 60)})
+  signal.throwIfAborted()
+  const initialKey = originalKey.keyScores ? originalKey.keyScores.indexOf(Math.max(...originalKey.keyScores)) : key
+  await onAnalyzed?.({bpm:detectedBpm,key:initialKey})
+  signal.throwIfAborted()
+  if (skipStems) return {bpm:detectedBpm, key:initialKey, sections:Array.from({length:4}, () => ({start:0, end:audio.duration, stemStart:0, stems:/** @type {AudioBuffer[]} */ ([])}))}
+  /** @type {AudioBuffer[]} */
+  let stems = []
+  // Stereo 48 kHz PCM16 for 90 seconds stays below the server's 20 MiB limit.
+  for (let start = 0; start < audio.duration; start += 90) {
+    progress(`Stemを分離しています… ${Math.floor(start / 90) + 1}/${Math.ceil(audio.duration / 90)}`)
+    const chunk = await separate(audio, start, Math.min(audio.duration, start + 90), signal)
+    signal.throwIfAborted()
+    if (chunk.length !== 4 || chunk.some(stem => !stem.length || stem.sampleRate !== rate)) throw new Error('Stemの音声形式を確認できませんでした。')
+    if (!stems.length) stems = chunk.map(stem => createBuffer(stem.numberOfChannels, audio.length, rate))
+    const offset = Math.round(start * rate)
+    chunk.forEach((stem, index) => {
+      if (stem.numberOfChannels !== stems[index].numberOfChannels) throw new Error('Stemのチャンネル数が一致しません。')
+      for (let channel = 0; channel < stem.numberOfChannels; channel++) {
+        stems[index].getChannelData(channel).set(stem.getChannelData(channel).subarray(0, audio.length - offset), offset)
+      }
+    })
+  }
+  progress('Stemからテンポとキーを確認しています…')
+  const drumTempo = await analyze({...request, bpm:detectedBpm, kind:'tempo', samples:monoClip(stems[1], 0, 60)})
+  signal.throwIfAborted()
+  const accompaniment = monoClip(stems[3], 0, 60)
+  const bass = monoClip(stems[2], 0, 60)
+  for (let i = 0; i < accompaniment.length; i++) accompaniment[i] += bass[i]
+  const harmony = await analyze({...request, bpm:detectedBpm, kind:'key', samples:accompaniment})
+  signal.throwIfAborted()
+  const scores = harmony.keyScores?.map((score, index) => score + (index === initialKey ? .08 : 0))
+  return {
+    bpm:Math.round(Math.max(40, Math.min(200, drumTempo.bpm ?? detectedBpm))),
+    key:scores ? scores.indexOf(Math.max(...scores)) : initialKey,
+    sections:Array.from({length:4}, () => ({start:0, end:audio.duration, stemStart:0, stems})),
+  }
+}
+
 /**
  * Independent playback of the original audio.
  * @param {ReturnType<typeof import('./main-controls.js').mountReferenceControls>['state']} state
  * @param {(section:number)=>number} [getSectionBars]
- * @param {(result:{bpm:number,key:number,presets:string[],style?:string})=>Promise<void>} applyArrangement
+ * @param {(result:{bpm:number,key:number})=>Promise<void>} applyArrangement
  */
 export function mountReferencePlayer(state, applyArrangement, getSectionBars = () => 16) {
   const currentMeter = () => Number(/** @type {HTMLInputElement | null} */ (document.getElementById('meter'))?.value) || 4
   const file = /** @type {HTMLInputElement} */ (document.getElementById('ref-file'))
   const tempo = /** @type {HTMLInputElement} */ (document.querySelector('#tempo'))
   const key = /** @type {HTMLSelectElement} */ (document.querySelector('#key'))
-  const timingOffsets = [0, 0, 0, 0]
+  const timingOffsets = Array(32).fill(0)
   /** @type {{start:number, end:number, stemStart?:number, stems:AudioBuffer[]}[]} */ let sections = []
+  /** @type {typeof sections | undefined} */ let pendingStemSections
   const analyzer = createReferenceAnalyzer()
   /** @type {AbortController | undefined} */ let activeImport
-  /** @type {{file: File, offset: number} | undefined} */ let loadedReference
 
   /** @param {AudioBuffer} audio @param {number} start @param {number} end @param {AbortSignal} signal */
   async function separateRegion(audio, start, end, signal) {
@@ -71,83 +137,6 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
     }))
   }
 
-  /** @param {AudioBuffer} audio @param {number} start @param {number} end */
-  function monoClip(audio, start, end) {
-    const first = Math.floor(start * audio.sampleRate)
-    const length = Math.min(audio.length - first, Math.ceil((end - start) * audio.sampleRate))
-    const mono = new Float32Array(length)
-    for (let channel = 0; channel < audio.numberOfChannels; channel++) {
-      const data = audio.getChannelData(channel)
-      for (let i = 0; i < length; i++) mono[i] += data[first + i] / audio.numberOfChannels
-    }
-    return mono
-  }
-
-  /** @param {AudioBuffer} audio @param {AbortSignal} signal */
-  async function analyzeReference(audio, signal, chosenStarts = /** @type {number[] | null} */ (null), chosenBpm = 0) {
-    const rate = audio.sampleRate
-    const currentKey = Number(key.value)
-    const tempoAnalysis = chosenBpm ? {bpm:chosenBpm} : await analyzer.analyze({kind:'tempo', samples:monoClip(audio, 0, 60), rate, bpm:Number(tempo.value), key:currentKey})
-    signal.throwIfAborted()
-    const bpm = Math.round(Math.max(40, Math.min(200, chosenBpm || tempoAnalysis.bpm || Number(tempo.value))))
-    const duration = 960 * currentMeter() / bpm
-    const initial = await analyzer.analyze({kind:'key', samples:monoClip(audio, 0, 60), rate, bpm, key:currentKey})
-    signal.throwIfAborted()
-    const detectedKey = Array.from(key.options).find(option => option.textContent === initial.key)
-    const initialKey = detectedKey ? Number(detectedKey.value) : currentKey
-    const starts = chosenStarts ?? [0]
-    const ranges = starts.map(start => ({start, end:Math.min(audio.duration, start + duration)}))
-    setImportStatus('ステムを分離しているよ。ちょっと待っててね…', true)
-    // Keep each local-server request below its 20 MiB WAV limit.
-    /** @type {AudioBuffer[][]} */
-    const chunks = []
-    for (let start = 0; start < audio.duration; start += 90) {
-      signal.throwIfAborted()
-      chunks.push(await separateRegion(audio, start, Math.min(audio.duration, start + 90), signal))
-    }
-    const fullStems = Array.from({length:4}, (_, index) => {
-      const first = chunks[0][index]
-      const length = chunks.reduce((sum, chunk) => sum + chunk[index].length, 0)
-      const combined = /** @type {AudioContext} */ (context).createBuffer(first.numberOfChannels, length, first.sampleRate)
-      let cursor = 0
-      for (const chunk of chunks) {
-        const stem = chunk[index]
-        for (let channel = 0; channel < combined.numberOfChannels; channel++) combined.getChannelData(channel).set(stem.getChannelData(channel), cursor)
-        cursor += stem.length
-      }
-      return combined
-    })
-    signal.throwIfAborted()
-    const separated = []
-    for (const [index, range] of ranges.entries()) {
-      setImportStatus(`セクション${'ABCD'[index]}を分析中だよ。ちょっと待っててね…`, true)
-      const stems = fullStems
-      signal.throwIfAborted()
-      separated.push({...range, stemStart:0, stems})
-    }
-    setImportStatus('伴奏を聴いてキーを確認しているよ…', true)
-    const accompaniment = separated.map(({stems, start, end}) => {
-      const bass = monoClip(stems[2], start, end)
-      const samples = monoClip(stems[3], start, end)
-      for (let i = 0; i < samples.length; i++) samples[i] += bass[i] ?? 0
-      return {samples, bass}
-    })
-    const scores = new Float64Array(12)
-    let analyzedSections = 0
-    for (const {samples} of accompaniment) {
-      const result = await analyzer.analyze({kind:'key', samples:samples.slice(), rate, bpm, key:initialKey})
-      signal.throwIfAborted()
-      if (!result.keyScores) continue
-      analyzedSections++
-      result.keyScores.forEach((score, index) => { scores[index] += score })
-    }
-    // Use the original mix's estimate to break close ties.
-    scores[initialKey] += .08 * analyzedSections
-    const keyIndex = analyzedSections ? scores.indexOf(Math.max(...scores)) : initialKey
-    const presets = separated.map(() => 'royal')
-    const style = undefined
-    return {bpm, key:keyIndex, presets, style, sections:separated}
-  }
   /** @type {AudioContext | undefined} */ let context
   /** @type {AudioBuffer | undefined} */ let buffer
   /** @type {GainNode | undefined} */ let gain
@@ -169,13 +158,14 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
     if (!source || !context) return position
     const elapsed = Math.max(0, context.currentTime - startedAt)
     return source.loop
-      ? loopPosition(source.loopStart, elapsed, source.loopStart, source.loopEnd)
+      ? loopPosition(startOffset, elapsed, source.loopStart, source.loopEnd)
       : Math.min(state.duration, startOffset + elapsed)
   }
 
   function draw() {
     frame = 0
     position = currentPosition()
+    document.dispatchEvent(new CustomEvent('reference-position', {detail:{position, playing:!!source && state.playing}}))
     if (source && analyser) {
       analyser.getFloatTimeDomainData(meterSamples)
       let peak = 0
@@ -183,6 +173,14 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
       state.meterLevel = Math.min(10, Math.max(0, Math.ceil(10 * (1 + 20 * Math.log10(peak) / 48))))
       frame = requestAnimationFrame(draw)
     } else state.meterLevel = 0
+  }
+
+  function activateStems() {
+    if (!pendingStemSections || source) return
+    sections=pendingStemSections
+    pendingStemSections=undefined
+    state.stemsReady=true
+    state.message=''
   }
 
   function stop() {
@@ -201,6 +199,7 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
       level.disconnect()
     }
     state.playing = false
+    activateStems()
     cancelAnimationFrame(frame)
     draw()
   }
@@ -211,7 +210,7 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
     accompanimentOffset = offset
     const originalSection = sections[sectionIndex]
     const shift = timingOffsets[sectionIndex] ?? 0
-    const section = originalSection && {...originalSection, start:originalSection.start + shift, end:Math.min(originalSection.end + shift, originalSection.start + shift + getSectionBars(sectionIndex) * currentMeter() * 60 / Number(tempo.value))}
+    const section = originalSection && {...originalSection, start:originalSection.start + shift, end:Math.min(buffer?.duration ?? originalSection.end, originalSection.end + shift)}
     if (!section) { state.message = `セクション${'ABCD'[sectionIndex]}に原曲の区間が割り当てられていません。`; return }
     if (!context || !buffer || !gain) return
     const request = ++playRequest
@@ -225,6 +224,7 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
       node.loop = true
       node.loopStart = section.start
       node.loopEnd = section.end
+      if(!state.stemsReady)node.connect(gain)
       node.onended = () => {
         if (source !== node) return
         source = undefined
@@ -242,8 +242,8 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
         const level = context.createGain()
         stemNode.buffer = stem
         stemNode.loop = true
-        stemNode.loopStart = section.start - (section.stemStart ?? section.start)
-        stemNode.loopEnd = Math.min(stem.duration, section.end - (section.stemStart ?? section.start))
+        stemNode.loopStart = section.start - (originalSection.stemStart ?? originalSection.start)
+        stemNode.loopEnd = Math.min(stem.duration, section.end - (originalSection.stemStart ?? originalSection.start))
         level.gain.value = state.stemEnabled[i] ? 1 : 0
         stemNode.connect(level)
         level.connect(gain)
@@ -253,6 +253,10 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
       startOffset = loopPosition(section.start, offset, section.start, section.end)
       node.start(startedAt, startOffset)
       source = node
+      document.dispatchEvent(new CustomEvent('reference-playback-start', {detail:{
+        section:sectionIndex, adjustment:shift, sourceOffset:startOffset, scheduledTime:startedAt,
+        stemOffsets:stemSources.map(({node})=>node.loopStart + offset % (node.loopEnd-node.loopStart)),
+      }}))
       draw()
     } catch {
       if (request === playRequest) {
@@ -280,10 +284,10 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
     const lows = new Float32Array(columns)
     const highs = new Float32Array(columns)
     for (let channel = 0; channel < audio.numberOfChannels; channel++) {
-      const samples = audio.getChannelData(channel).subarray(startSample, endSample)
+      const samples = audio.getChannelData(channel)
       for (let x = 0; x < columns; x++) {
-        const start = Math.floor(x * samples.length / columns)
-        const end = Math.floor((x + 1) * samples.length / columns)
+        const start = Math.max(0, startSample + Math.floor(x * (endSample - startSample) / columns))
+        const end = Math.min(samples.length, startSample + Math.floor((x + 1) * (endSample - startSample) / columns))
         for (let i = start; i < end; i++) {
           lows[x] = Math.min(lows[x], samples[i])
           highs[x] = Math.max(highs[x], samples[i])
@@ -320,7 +324,7 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
     state.message = message
     cropDialog.classList.toggle('processing', busy)
     cropPosition.disabled = confirmCrop.disabled = busy
-    removeReference.disabled = busy
+    removeReference.disabled = busy && !buffer
     if (busy) extendCrop.disabled = zoomIn.disabled = zoomOut.disabled = true
     cropBack.disabled = cropForward.disabled = previewButton.disabled = busy
     cancelCrop.textContent = '中断'
@@ -667,8 +671,8 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
     })
   }
 
-  /** @param {File} selected @param {number | null} [previousOffset] */
-  async function loadFile(selected, previousOffset = null) {
+  /** @param {File} selected @param {number | null} [previousOffset] @param {boolean} [skipStems] */
+  async function loadFile(selected, previousOffset = null, skipStems = false) {
     if (activeImport) return
     removeReference.hidden = previousOffset === null
     const request = new AbortController()
@@ -682,76 +686,53 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
       const decoded = await context.decodeAudioData(await selected.arrayBuffer())
       signal.throwIfAborted()
       if (decoded.duration < .1) throw new Error('短すぎる音声です。')
-      if (previousOffset !== null) stop()
-      setImportStatus('テンポを調べているよ…', false)
-      const detected = await analyzer.analyze({kind:'tempo', samples:monoClip(decoded, 0, 60), rate:decoded.sampleRate, bpm:Number(tempo.value), key:Number(key.value)})
-      signal.throwIfAborted()
-      const detectedBpm = Math.round(Math.max(40, Math.min(200, detected.bpm ?? Number(tempo.value))))
-      const sectionDuration = 960 * currentMeter() / detectedBpm
-      setImportStatus('おすすめの開始位置を探しているよ…', true)
-      const detectedSections = await analyzer.analyze({kind:'sections', samples:monoClip(decoded, 0, decoded.duration), rate:decoded.sampleRate, bpm:detectedBpm, key:Number(key.value)})
-      signal.throwIfAborted()
-      const draft = (detectedSections.starts?.length ? detectedSections.starts : Array.from({length:4}, (_, index) => index * sectionDuration))
-        .slice(0, 4).filter(start => start + .1 < decoded.duration)
-      const offset = draft[0] ?? 0
-      const cropped = decoded
-      const result = await analyzeReference(cropped, signal, draft, detectedBpm)
-      signal.throwIfAborted()
-      await applyArrangement(result)
+      // Publish the playable original before analysis or the local separation request.
+      pendingStemSections=undefined
       stop()
-      buffer = cropped
-      timingOffsets.fill(0)
-      sections = result.sections
+      buffer=decoded
+      const offset=Math.max(0,Math.min(decoded.duration-.1,previousOffset ?? 0))
+      timingOffsets.fill(offset)
+      sections=Array.from({length:32},()=>({start:0,end:decoded.duration,stemStart:0,stems:[]}))
+      position=offset
+      state.stemEnabled.fill(true)
+      Object.assign(state,{duration:decoded.duration,filename:selected.name,stemsReady:false,message:'テンポとキーを読み取っています…'})
+      removeReference.disabled=false
+      let touched=false
+      const interactions=new AbortController()
+      const touch=()=>{touched=true}
+      for(const name of ['pointerdown','keydown','input'])document.addEventListener(name,touch,{capture:true,signal:interactions.signal})
       document.dispatchEvent(new Event('reference-timing-refresh'))
-      position = 0
-      loadedReference = {file: selected, offset}
-      if (previousOffset === null) state.stemEnabled.fill(true)
-      Object.assign(state, {duration:cropped.duration, filename:selected.name, stemsReady:true, message:''})
       await nextTick()
-      cropDialog.close()
+      document.dispatchEvent(new Event('reference-loaded'))
+      try {
+        const result=await analyzeSharedReference(decoded,{
+          analyze:analyzer.analyze,separate:separateRegion,
+          createBuffer:(channels,length,rate)=>/** @type {AudioContext} */(context).createBuffer(channels,length,rate),
+          bpm:Number(tempo.value),key:Number(key.value),signal,skipStems,
+          progress:message=>{state.message=message},
+          onAnalyzed:async result=>{
+            // Late analysis never overwrites a manual adjustment or stops playback.
+            if(!touched&&!state.playing){await applyArrangement(result);signal.throwIfAborted();document.dispatchEvent(new Event('reference-analysis-ready'))}
+          },
+        })
+        signal.throwIfAborted()
+        if(!skipStems){
+          pendingStemSections=Array.from({length:32},()=>result.sections[0])
+          if(source)state.message='Stem分離完了 · 次の再生から使用します'
+          else activateStems()
+        }else state.message=''
+      } finally {interactions.abort()}
     } catch (error) {
       if (signal.aborted) return
       setImportStatus(error instanceof Error && error.message ? error.message : '読み込めませんでした。', false)
       confirmCrop.disabled = cropPosition.disabled = extendCrop.disabled = cropBack.disabled = cropForward.disabled = previewButton.disabled = true
-      state.message = importStatus.textContent ?? '読み込めませんでした。'
+      state.message = buffer ? 'Stem分離を完了できませんでした。原音のまま調整・再生できます。' : (importStatus.textContent ?? '読み込めませんでした。')
     } finally {
       if (activeImport === request) {
         activeImport = undefined
         state.importing = false
         removeReference.disabled = false
       }
-    }
-  }
-  async function editSectionHeads() {
-    if (activeImport || !buffer) return
-    const audio = buffer
-    const request = new AbortController()
-    activeImport = request
-    const draft = sections.map(section => section.start)
-    removeReference.hidden = false
-    try {
-      stop()
-      setImportStatus('', false)
-      if (await chooseCrop(audio, draft[0], draft, sections[0].end - sections[0].start) === null || request.signal.aborted) return
-      const updated = []
-      for (const [index, section] of sections.entries()) {
-        request.signal.throwIfAborted()
-        const duration = section.end - section.start
-        const start = Math.min(draft[index], Math.max(0, audio.duration - duration))
-        const end = Math.min(audio.duration, start + duration)
-        setImportStatus(`セクション${'ABCD'[index]}を分析中だよ。ちょっと待っててね…`, true)
-        const stems = start === section.start ? section.stems : await separateRegion(audio, start, end, request.signal)
-        updated.push({...section, start, end, stems})
-      }
-      request.signal.throwIfAborted()
-      sections = updated
-      document.dispatchEvent(new Event('reference-timing-refresh'))
-      timingOffsets.fill(0)
-      cropDialog.close()
-    } catch (error) {
-      if (!request.signal.aborted) setImportStatus(error instanceof Error ? error.message : '調整できませんでした。', false)
-    } finally {
-      if (activeImport === request) activeImport = undefined
     }
   }
 
@@ -764,22 +745,30 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
     removeReference.disabled = false
     stopCropPreview()
   }
+  document.addEventListener('reference-import-cancel',cancelImport)
   cropDialog.addEventListener('close', () => {
     cancelImport()
     setImportStatus('', false)
   })
   removeReference.addEventListener('click', () => {
+    cancelImport()
+    pendingStemSections=undefined
     stop()
-    loadedReference = undefined
     buffer = undefined
     sections = []
     document.dispatchEvent(new Event('reference-timing-refresh'))
     position = 0
     state.stemEnabled.fill(true)
     Object.assign(state, {duration: 0, filename: '', stemsReady: false, message: ''})
+    document.dispatchEvent(new Event('reference-removed'))
     cropDialog.close()
   })
-  file.addEventListener('change', () => { const selected = file.files?.[0]; if (selected) void loadFile(selected); file.value = '' })
+  /** @param {File} selected */
+  function chooseImport(selected) {
+    cancelImport()
+    void loadFile(selected)
+  }
+  file.addEventListener('change', () => { const selected = file.files?.[0]; if (selected) chooseImport(selected); file.value = '' })
   /** @param {Event} event */
   const isDropTarget = event => event.target instanceof Element && event.target.closest('[data-reference-drop]')
   document.addEventListener('dragover', event => {
@@ -795,29 +784,96 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
     event.preventDefault()
     state.dragging = false
     const selected = event.dataTransfer?.files[0]
-    if (selected) void loadFile(selected)
+    if (selected) chooseImport(selected)
   })
   window.addEventListener('pagehide', () => { cancelImport(); stop() })
+  /** @type {AudioBufferSourceNode | undefined} */ let keyPreview
+  /** @type {OscillatorNode | undefined} */ let keyTone
+  /** @type {GainNode | undefined} */ let keyGain
+  let keyPreviewRequest = 0
+  function stopKeyPreview() {
+    keyPreviewRequest++
+    keyPreview?.stop(); keyPreview?.disconnect(); keyPreview = undefined
+    keyTone?.stop(); keyTone?.disconnect(); keyTone = undefined
+    keyGain?.disconnect(); keyGain = undefined
+  }
+  document.addEventListener('reference-removed', stopKeyPreview)
+  window.addEventListener('pagehide', stopKeyPreview)
   return {
+    stopKeyPreview,
+    /** @param {number} root */
+    setKeyPreviewRoot(root) {
+      if (keyTone && Number.isFinite(root)) keyTone.frequency.value = 130.8128 * 2 ** (root / 12)
+    },
+    /** @param {number} root */
+    async previewKey(root) {
+      stopKeyPreview()
+      if (!context || !buffer) return
+      const request = keyPreviewRequest
+      await context.resume()
+      if (request !== keyPreviewRequest) return
+      keyPreview = context.createBufferSource(); keyPreview.buffer = buffer
+      keyPreview.loop = true; keyPreview.loopStart = timingOffsets[0]
+      keyPreview.loopEnd = Math.min(buffer.duration, timingOffsets[0] + 60 / Number(tempo.value))
+      keyGain = context.createGain(); keyGain.gain.value = .18; keyGain.connect(context.destination)
+      keyPreview.connect(keyGain); keyPreview.start(0, keyPreview.loopStart)
+      keyTone = context.createOscillator(); keyTone.type = 'sine'
+      keyTone.frequency.value = 130.8128 * 2 ** (root / 12)
+      const level = context.createGain(); level.gain.value = .25
+      keyTone.connect(level); level.connect(keyGain); keyTone.start()
+    },
     refreshLoopLength() {
       if (!source || !followingAccompaniment) return
       const section = sections[playingSection]
       if (!section) return
-      const end = Math.min(section.end + (timingOffsets[playingSection] ?? 0), source.loopStart + getSectionBars(playingSection) * currentMeter() * 60 / Number(tempo.value))
+      const end = Math.min(buffer?.duration ?? section.end, section.end + (timingOffsets[playingSection] ?? 0))
       source.loopEnd = end
       for (const {node} of stemSources) node.loopEnd = Math.min(node.buffer?.duration ?? end, end - (section.stemStart ?? section.start))
     },
     setVolume, toggleStem,
-    /** @param {number} section @param {number} seconds */
-    timingWaveform(section, seconds) {
+    /** Compact, bounded preview around the actual audio clock. */
+    livePreview() {
+      if(!buffer)return {path:'',energy:0}
+      const samples=buffer.getChannelData(0),rate=buffer.sampleRate,now=currentPosition()
+      let path='',energy=0
+      for(let x=0;x<120;x++){
+        let peak=0
+        for(let j=0;j<8;j++){
+          const i=Math.floor((now-1+x/120*4+j/960*4)*rate)
+          peak=Math.max(peak,Math.abs(samples[i]??0))
+        }
+        path+=`M${x} ${25-peak*24}V${25+peak*24}`
+      }
+      const center=Math.floor(now*rate)
+      for(let j=0;j<256;j++){const v=samples[center+j*8]??0;energy+=v*v}
+      return {path,energy:Math.sqrt(energy/256)}
+    },
+    getPosition() { return currentPosition() },
+    /** @param {number} section @param {number} seconds @param {number} [pageOffset] */
+    timingWaveform(section, seconds, pageOffset = 0) {
       const region = sections[section]
       if (!buffer || !region) return ''
-      return waveformPath(buffer, Math.min(buffer.length, Math.floor((region.start + timingOffsets[section] + seconds) * buffer.sampleRate)), Math.floor((region.start + timingOffsets[section]) * buffer.sampleRate))
+      return waveformPath(buffer, Math.floor((region.start + timingOffsets[section] + pageOffset + seconds) * buffer.sampleRate), Math.floor((region.start + timingOffsets[section] + pageOffset) * buffer.sampleRate))
+    },
+    /** Waveform onset cue only; this does not judge the song's musical downbeat.
+     * @param {number} section @param {number} [secondsAhead] */
+    timingOnsetNear(section, secondsAhead = 0) {
+      const region=sections[section]
+      if(!buffer||!region)return false
+      const data=buffer.getChannelData(0),rate=buffer.sampleRate
+      const center=Math.round((region.start+timingOffsets[section]+secondsAhead)*rate)
+      const energy=(/** @type {number} */ start)=>{
+        let sum=0,count=0
+        for(let i=Math.max(0,start);i<Math.min(data.length,start+rate*.025);i+=8){sum+=data[i]*data[i];count++}
+        return count?Math.sqrt(sum/count):0
+      }
+      const before=energy(center-rate*.035),after=energy(center)
+      return after>.025&&after>before*1.7
     },
     /** @param {number} section */
     timingBounds(section) {
       const region = sections[section]
-      return buffer && region ? {min:-region.start, max:Math.max(0, buffer.duration - region.end)} : {min:0,max:0}
+      return buffer && region ? {min:-region.start, max:Math.max(0, buffer.duration - .1)} : {min:0,max:0}
     },
     /** @param {number} section */
     getTiming(section) { return timingOffsets[section] ?? 0 },
@@ -825,19 +881,23 @@ export function mountReferencePlayer(state, applyArrangement, getSectionBars = (
     setTiming(section, value) {
       if (!Number.isFinite(value) || !buffer || !sections[section]) return
       const region = sections[section]
-      timingOffsets[section] = Math.max(-region.start, Math.min(buffer.duration - region.end, value))
-      if (state.playing && followingAccompaniment && playingSection === section && context) {
+      const limit=buffer.duration-.1
+      const adjusted=Math.max(-region.start,Math.min(limit,value))
+      timingOffsets.fill(adjusted)
+      if (state.playing && followingAccompaniment && context) {
         const now = context.currentTime
         const restartAt = Math.max(now, startedAt)
         const elapsed = Math.max(0, now - startedAt)
         const offset = accompanimentOffset + elapsed
         stop()
-        void play(section, restartAt, offset)
+        void play(playingSection, restartAt, offset)
       }
     },
     /** @param {number} time @param {number} offset @param {number} section */
     startWithAccompaniment(time, offset, section) {
-      if (!state.stemsReady) return
+      stopKeyPreview()
+      document.dispatchEvent(new Event('key-preview-stopped'))
+      if (!buffer) return
       stop()
       void play(section, time, offset)
     },

@@ -74,8 +74,8 @@ export function mountBasicParts(reference, player) {
   }
   createApp({
     render: () => [
-      h('div', {class: ['reference-channel', {'awaiting-file': !reference.duration || !!reference.message}], role: 'group', 'aria-label': 'MP3パート'}, [
-        reference.message ? h('div', {class: 'reference-upload reference-import-status', 'aria-busy': reference.importing}, [
+      h('div', {class: ['reference-channel', {'awaiting-file': !reference.duration}], role: 'group', 'aria-label': 'MP3パート'}, [
+        reference.message && !reference.duration ? h('div', {class: 'reference-upload reference-import-status', 'aria-busy': reference.importing}, [
           reference.importing ? h('span', {class: 'ref-import-spinner', 'aria-hidden': 'true'}) : null,
           h('p', {role: 'status', 'aria-live': 'polite'}, reference.message),
           h('button', {type: 'button', onClick: player.cancelImport}, reference.importing ? '中断' : '閉じる'),
@@ -87,13 +87,12 @@ export function mountBasicParts(reference, player) {
                 fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round'}),
             ]),
             h('span', 'MP3 読み込み'),
-          ]) : h('div', {class: 'reference-stem-switches', role: 'group', 'aria-label': '分離したパート'}, [
+          ]) : !reference.stemsReady ? h('p',{class:'reference-original-label'},'元音源') : h('div', {class: 'reference-stem-switches', role: 'group', 'aria-label': '分離したパート'}, [
           ...[[1, 'Drum'], [2, 'Bass'], [0, 'Vocal'], [3, 'Other']].map(([index, label]) =>
             h('button', {type: 'button', key: index, disabled: !reference.stemsReady,
               'aria-pressed': reference.stemsReady && reference.stemEnabled[Number(index)],
               onClick: () => player.toggleStem(Number(index))}, String(label))),
         ]),
-        reference.duration && !reference.message ? h('button', {type:'button', disabled:reference.importing, onClick:player.remove}, '曲を外す') : null,
         h('div', {class: 'part-mix', role: 'group', 'aria-label': 'MP3のミックス'}, [
           h('button', {id: 'reference-mute', type: 'button', class: 'mix-button', 'aria-label': 'MP3をミュート', 'aria-pressed': 'false'}, 'M'),
           h('button', {id: 'reference-solo', type: 'button', class: 'mix-button', 'aria-label': 'MP3をソロ', 'aria-pressed': 'false'}, 'S'),
@@ -104,9 +103,10 @@ export function mountBasicParts(reference, player) {
           h(referenceMeter),
         ]),
         h('button', {class: 'part-heading track-select reference-play-key', type: 'button',
-          'aria-label': reference.duration ? 'MP3の開始位置を調整' : 'MP3ファイルを選ぶ',
+          'data-track':'reference', 'aria-controls':'detail-reference', 'aria-pressed':'false',
+          'aria-label':'MP3の詳細を表示',
           title: reference.filename || undefined,
-          onClick: () => reference.duration ? player.editReference() : document.getElementById('ref-file')?.click()}, [
+          onClick: () => {}}, [
           h('svg', {class: 'part-icon', viewBox: '0 0 24 24', 'aria-hidden': 'true'}, [
             h('path', {d: 'M2 10v4m4-7v10m4-14v18m4-15v12m4-10v8m4-6v4',
               fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round'}),
@@ -254,4 +254,31 @@ export function mountBasicParts(reference, player) {
       ]),
     ],
   }).mount('#track-grid')
+}
+
+/** @param {ReturnType<typeof mountReferenceControls>['state']} reference
+ * @param {()=>void} remove */
+export function mountReferenceDetail(reference, remove){
+ const panel=document.createElement('section')
+ panel.id='detail-reference';panel.hidden=true;panel.setAttribute('aria-label','MP3の詳細')
+ document.querySelector('.track-details')?.append(panel)
+ const header=document.createElement('div')
+ panel.append(header)
+ createApp({render:()=>[
+  h('h2','MP3'),
+  h('div',{class:'reference-file-details'},[
+   h('p',{class:'reference-filename'},reference.filename || 'MP3ファイルを読み込んでください。'),
+   reference.duration ? h('button',{type:'button',class:'reference-trash',title:'曲を外す','aria-label':'曲を外す',onClick:remove},[h('svg',{viewBox:'0 0 24 24',width:16,height:16,fill:'none',stroke:'currentColor','stroke-width':1.5,'aria-hidden':'true'},[h('path',{d:'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7M14 10v7'})])]) :
+    h('button',{type:'button',class:'reference-remove-key',onClick:()=>document.getElementById('ref-file')?.click()},'MP3を読み込む'),
+  ]),
+  reference.duration && reference.message ? h('div',{class:'reference-background-status',role:'status','aria-live':'polite'},[
+    reference.importing?h('span',{class:'ref-import-spinner','aria-hidden':'true'}):null,
+    h('span',reference.message),
+    reference.importing?h('button',{type:'button',onClick:()=>document.dispatchEvent(new Event('reference-import-cancel'))},'中断'):null,
+  ]):null,
+ ]}).mount(header)
+ // The timing controls own their DOM independently from the reactive file header.
+ const timingHost=document.createElement('div')
+ panel.append(timingHost)
+ return timingHost
 }

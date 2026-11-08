@@ -1,11 +1,18 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { tmpdir } from 'node:os'
+import { tmpdir, availableParallelism } from 'node:os'
 import { join } from 'node:path'
 
 const run = promisify(execFile)
 const stemNames = ['vocals', 'drums', 'bass', 'other']
+/** Limit CPU scheduling overhead without changing the model or separation quality.
+ * Explicit operator thread settings take precedence.
+ * @param {NodeJS.ProcessEnv} [environment] @param {number} [processors] */
+export function stemProcessEnvironment(environment = process.env, processors = availableParallelism()) {
+  const threads = String(Math.max(1, Math.min(4, processors)))
+  return {...environment, OMP_NUM_THREADS:environment.OMP_NUM_THREADS || threads, MKL_NUM_THREADS:environment.MKL_NUM_THREADS || threads}
+}
 export function createStemHandler({ execute = run } = {}) {
   let separating = false
   return async function separate(request, response) {
@@ -44,7 +51,7 @@ export function createStemHandler({ execute = run } = {}) {
       folder = await mkdtemp(join(tmpdir(), 'oto-stems-'))
       const input = join(folder, 'clip.wav')
       await writeFile(input, wav)
-      await execute(process.env.OTO_DEMUCS || 'demucs', ['-n', 'htdemucs', '-d', 'cpu', '--shifts', '0', '--float32', '--clip-mode', 'clamp', '-o', folder, input], {timeout: 300000, signal: controller.signal})
+      await execute(process.env.OTO_DEMUCS || 'demucs', ['-n', 'htdemucs', '-d', 'cpu', '--shifts', '0', '--float32', '--clip-mode', 'clamp', '-o', folder, input], {timeout: 300000, signal: controller.signal, env:stemProcessEnvironment()})
       const stems = await Promise.all(stemNames.map(name => readFile(join(folder, 'htdemucs', 'clip', name + '.wav'))))
       response.writeHead(200, {'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store'})
       for (const stem of stems) {

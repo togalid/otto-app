@@ -25,6 +25,7 @@
             <circle class="buddy-case" cx="14" cy="14" r="11"/>
             <path class="record-grooves" d="M5.5 10A9 9 0 0 1 12 5.5M22.5 18A9 9 0 0 1 16 22.5"/>
             <path class="buddy-eyes" d="M10.5 12v3m7-3v3"/>
+            <path class="buddy-happy-eyes" d="M9 14 Q10.5 11.5 12 14 M16 14 Q17.5 11.5 19 14"/>
             <circle class="record-center" cx="14" cy="15" r="1.2"/>
             <path class="buddy-error-eyes" d="m9 12 3 3m0-3-3 3m7-3 3 3m0-3-3 3"/>
             <path class="buddy-error-mouth" d="M12 19h4"/>
@@ -53,7 +54,16 @@
           </details>
         </div>
       </header>
-      <main>
+      <main data-workspace-view="mixer">
+        <div class="workspace-heading">
+          <fieldset class="segmented-control workspace-switch" aria-label="編集ビュー">
+            <legend class="sr-only">編集ビュー</legend>
+            <label><input type="radio" name="workspace-view" value="melody"><span>メロディ</span></label>
+            <label><input type="radio" name="workspace-view" value="mixer" checked><span>楽器ミキサー</span></label>
+            <label><input type="radio" name="workspace-view" value="score"><span>コード進行</span></label>
+          </fieldset>
+          <div id="score-section-context" aria-live="polite"></div>
+        </div>
         <section
           class="instrument groove progression"
           aria-label="リズム設定"
@@ -111,7 +121,7 @@
               role="region"
               aria-label="ドラムの詳細"
               hidden
-            ><h2 class="track-detail-title">好きなリズムを作ってみよう。</h2><div id="drum-sequencer" class="drum-sequencer" role="group" aria-label="16ステップのドラムシーケンサー"></div></div>
+            ><div class="drum-detail-heading"><h2 class="track-detail-title">好きなリズムを作ってみよう。</h2><fieldset class="segmented-control drum-rate" aria-label="ドラムの速度"><legend class="sr-only">ドラムの速度</legend><label><input type="radio" name="drum-rate" value="0.5"><span>ハーフ</span></label><label><input type="radio" name="drum-rate" value="1" checked><span>通常</span></label><label><input type="radio" name="drum-rate" value="2"><span>ダブル</span></label></fieldset></div><div id="drum-sequencer" class="drum-sequencer" role="group" aria-label="16ステップのドラムシーケンサー"></div></div>
             <div
               id="detail-bass"
               class="bass-detail"
@@ -125,10 +135,10 @@
               role="region"
               aria-label="コード進行"
             >
-              <div class="chord-heading"><h2 class="track-detail-title">コードをつなげてみよう。</h2><div id="section-bar-count"></div><div class="backing-display"><div id="backing-monitor" role="img" aria-label="バッキングの鍵盤表示"></div></div></div>
+              <div class="chord-heading"><div id="section-bar-count" hidden></div><div class="backing-display"><div id="backing-monitor" role="img" aria-label="バッキングの鍵盤表示"></div></div></div>
               <div class="chord-settings">
                 <div class="chord-field chord-start" hidden><label for="preset-group">開始度数</label><select id="preset-group" aria-label="プリセットの開始度数" aria-controls="preset"></select></div>
-                <div class="chord-field chord-preset"><label for="preset">コード進行</label><div class="preset-picker"><select id="preset" aria-label="コード進行プリセット"></select><div class="style-stepper" role="group" aria-label="コード進行を切り替え"><button id="preset-prev" type="button" aria-label="前のコード進行">←</button><button id="preset-next" type="button" aria-label="次のコード進行">→</button></div></div></div>
+                <div class="chord-field chord-preset"><label for="preset">コード進行</label><div class="preset-picker"><select id="preset" aria-label="コード進行プリセット"></select><div class="style-stepper" role="group" aria-label="コード進行を切り替え"><button id="preset-prev" type="button" aria-label="前のコード進行">▲</button><button id="preset-next" type="button" aria-label="次のコード進行">▼</button></div></div></div>
                 <div class="chord-field" hidden><label for="chord-rate">進行の速さ</label><select id="chord-rate"><option value="0.5">½ ハーフ</option><option value="1" selected>1 通常</option><option value="2">2 ダブル</option></select></div>
                 <div class="chord-field chord-key"><label for="key">キー</label><div class="key-control" role="group" aria-label="キー">
                   <select id="key" aria-label="キー（メジャー）"></select>
@@ -176,10 +186,9 @@
             </div>
         </section>
         <section id="detail-melody" class="instrument" aria-labelledby="instrument-title" hidden>
-          <div class="melody-heading"><h2 id="instrument-title" class="track-detail-title">Ottoとセッション。</h2><div class="melody-chord"><span>いまのコード</span><strong id="melody-current-chord"></strong></div></div>
+          <div class="melody-heading"><h2 id="instrument-title" class="track-detail-title">Ottoとセッション。</h2></div>
           <div id="buddy-inline" class="buddy-inline"></div>
-          <div class="melody-legend"><span class="legend-chord">コードトーン</span><span class="legend-tension">テンション</span><span>同じ音も、コードが変わると違う響きに。</span></div>
-          <div class="melody-view" role="group" aria-label="演奏する鍵盤"><button type="button" data-melody-view="pads" aria-pressed="false">8 Pad</button><button type="button" data-melody-view="piano" aria-pressed="true">3オクターブ鍵盤</button></div>
+          <div class="melody-view" role="group" aria-label="演奏する鍵盤"><button type="button" data-melody-view="pads" aria-pressed="false">8 Pad</button><button type="button" data-melody-view="piano" aria-pressed="true">3オクターブ鍵盤</button><button type="button" data-melody-view="magic" aria-pressed="false">マジック鍵盤</button><div class="melody-chord" aria-label="現在のコード"><strong id="melody-current-chord"></strong></div></div>
           <div id="piano-scroll" class="piano-scroll"><div id="piano-keys" role="group" aria-label="C3からC6の鍵盤。押したまま滑らせてグライド。矢印キーで移動、スペースかEnterで演奏。"></div></div>
           <div
             id="pads" hidden

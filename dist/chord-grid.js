@@ -13,10 +13,6 @@ export function mountChordGrid(bars, actions) {
   function modulation(bar) {
     const pair = `${bar + 1}〜${bar + 2}小節`
     return h('div', { class: 'modulation-bar', role: 'group', 'aria-label': pair + 'の設定' }, [
-      h('div', { class: 'bar-play-controls' }, [bar, bar + 1].map(index => {
-        const label = `${index + 1}小節の先頭から再生`
-        return h('button', { type: 'button', title: label, 'aria-label': label, onClick: () => actions.play(index) }, '▶')
-      })),
       h('span', '転調'),
       h('output', { class: 'modulation-value', 'aria-live': 'polite' }),
       h('div', { class: 'key-stepper modulation-stepper', role: 'group', 'aria-label': pair + 'のキーを半音ずつ変更' }, [
@@ -52,12 +48,7 @@ export function mountChordGrid(bars, actions) {
           if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) open(event)
         },
       }),
-      h('button', {
-        type: 'button', class: 'chord-preview', title: 'コードを試聴',
-        'aria-label': label + 'のコードを試聴', onClick: () => actions.preview(bar, beat),
-      }, [h('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false' }, [
-        h('path', { d: 'M4 10h4l5-4v12l-5-4H4zM16 9c1.5 1.5 1.5 4.5 0 6M19 6c3.5 3 3.5 9 0 12' }),
-      ])]),
+
     ])
   }
 

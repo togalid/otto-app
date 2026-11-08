@@ -34,7 +34,7 @@ export function mountStyleChoices() {
   const index = () => ordered.findIndex(item => item.id === selected.value)
 
   /** @param {string} id */
-  async function choose(id) {
+  async function choose(id, notify = true) {
     const item = ordered.find(item => item.id === id)
     if (!item) return
     selected.value = id
@@ -42,7 +42,7 @@ export function mountStyleChoices() {
     await nextTick()
     if (selected.value !== id) return
     style.value = id
-    announce(style)
+    if (notify) announce(style)
   }
   style.addEventListener('change', () => { selected.value = style.value })
   group.addEventListener('change', () => {

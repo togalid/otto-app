@@ -91,6 +91,9 @@ export class MonoLine {
 }
 
 export class Instrument {
+  glideSeconds = .025
+  expressiveVibrato = true
+  singing = false
   /** @param {import('./tone-engine.js').MeterPart} [meterPart] */
   constructor(meterPart) {
     this.meterPart = meterPart
@@ -237,16 +240,22 @@ export class Instrument {
       const Voice = createTimbreVoice(Tone, this.timbre)
       if (this.timbre.startsWith('lead-')) {
         this.synth = new Voice({...options, portamento:0.025}).connect(this.filter)
-        this.vibrato = new Tone.LFO({frequency:5.2,min:-14,max:14,amplitude:0}).connect(this.synth.detune).start()
+        this.vibrato = new Tone.LFO({frequency:5.2,min:this.singing?-65:-14,max:this.singing?65:14,amplitude:0}).connect(this.synth.detune).start()
         this.mono = new MonoLine((midi,time,level,legato) => {
           const frequency = 440 * 2 ** ((midi-69)/12)
+          this.synth.portamento = legato ? this.glideSeconds : 0
           if (legato) this.synth.setNote(frequency,time)
           else this.synth.triggerAttack(frequency,time,level)
           const depth = this.vibrato.amplitude
           depth.cancelScheduledValues(time)
           depth.setValueAtTime(0,time)
-          depth.setValueAtTime(0,time+.32)
-          depth.linearRampToValueAtTime(this.timbre === 'lead-chip' ? .35 : 1,time+.78)
+          depth.setValueAtTime(0,time+(this.singing?.22:.32))
+          depth.linearRampToValueAtTime(this.expressiveVibrato?(this.singing?1:this.timbre === 'lead-chip' ? .35 : 1):0,time+(this.singing?.55:.78))
+          if(this.singing&&this.expressiveVibrato){
+            this.filter.frequency.cancelScheduledValues(time)
+            this.filter.frequency.setValueAtTime(2200,time)
+            this.filter.frequency.linearRampToValueAtTime(7000,time+.6)
+          }
         }, time => {
           this.synth.triggerRelease(time)
           this.vibrato.amplitude.cancelScheduledValues(time)
@@ -256,6 +265,22 @@ export class Instrument {
         this.synth = new Tone.PolySynth({voice:Voice,maxPolyphony:96,options}).connect(this.filter)
       }
       this.activeTimbre = this.timbre
+    }
+  }
+  /** @param {number} bend normalized -1..1, two semitones */
+  setPitchBend(bend) {
+    this.ensureVoice()
+    if(this.synth?.detune)this.synth.detune.rampTo(Math.max(-1,Math.min(1,bend))*200,.02)
+  }
+  /** @param {number} amount normalized 0..1 @param {boolean} [override] */
+  setModulation(amount, override = false) {
+    this.ensureVoice()
+    if(this.filter)this.filter.frequency.rampTo(1800+Math.max(0,Math.min(1,amount))*10000,.04)
+    if(this.vibrato){
+      if(override && this.context)this.vibrato.amplitude.cancelScheduledValues(this.context.currentTime)
+      this.vibrato.min=-65;this.vibrato.max=65
+      this.vibrato.frequency.rampTo(5.2+amount*3,.04)
+      this.vibrato.amplitude.rampTo(Math.min(1,amount*1.5),.04)
     }
   }
   flushMono() {

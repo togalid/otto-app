@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { notes, frequency } from '../dist/music.js'
+import { notes, frequency, keyFromDegree } from '../dist/music.js'
 import { Instrument } from '../dist/audio.js'
 test('pads use unique keys and ascending pentatonic notes', () => {
   assert.equal(notes.length, 8)
@@ -45,4 +45,12 @@ test('sixth-degree slash chords retain the requested voicing in a progression', 
     assert.deepEqual(voicePhrase([{ id: 'C', key: 0 }, { id, key: 2 }])[1], notes.map(note => note + 2))
     assert.equal(bassHarmonyNotes(id, 2)[0] % 12, 11)
   }
+})
+
+test('matched roots infer the key for all seven major degrees', () => {
+  const intervals = [0, 2, 4, 5, 7, 9, 11]
+  for (let key = 0; key < 12; key++) intervals.forEach((offset, degree) => assert.equal(keyFromDegree((key + offset) % 12, degree), key))
+  assert.equal(keyFromDegree(6, 3), 1) // F sharp as IV gives D flat.
+  assert.throws(() => keyFromDegree(12, 0), RangeError)
+  assert.throws(() => keyFromDegree(0, 7), RangeError)
 })

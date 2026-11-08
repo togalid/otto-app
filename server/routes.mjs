@@ -1,5 +1,6 @@
 // Explicit public files: server code, configuration, and user files are never exposed.
 export const routes = new Map([
+  ['/song-score.js', ['song-score.js', 'text/javascript']],
   ['/score-pad.js', ['score-pad.js', 'text/javascript']],
   ['/chord-pad.html', ['chord-pad.html', 'text/html']],
   ['/chord-pad.js', ['chord-pad.js', 'text/javascript']],

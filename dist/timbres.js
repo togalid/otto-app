@@ -124,6 +124,8 @@ export const timbres = Object.freeze([
 /** Voices articulated for single-note melodies, independent of the chord catalog.
  * @type {ReadonlyArray<Timbre>} */
 export const melodyTimbres = Object.freeze([
+  {id:'lead-bass-round',label:'まるいシンセベース（−2オクターブ）',harmonics:[1,.28,.08,.025],cutoff:1800,attack:.008,decay:.25,sustain:.75,release:.12},
+  {id:'lead-bass-saw',label:'ソー・シンセベース（−2オクターブ）',harmonics:[1,.7,.5,.38,.3,.24,.2,.17,.14,.12,.1,.08],cutoff:4800,attack:.006,decay:.18,sustain:.72,release:.09},
   {id:'lead-supersaw',label:'スーパーソー・リード',harmonics:[1,.5,.333,.25,.2,.167,.143,.125,.111,.1,.091,.083,.077,.071,.067,.0625],cutoff:13000,attack:.010,decay:.14,sustain:.90,release:.12},
   {id:'lead-saw',label:'バズ・ソーリード',harmonics:[1,.5,.333,.25,.2,.167,.143,.125,.111,.1,.091,.083,.077,.071,.067,.0625],cutoff:12500,attack:.009,decay:.12,sustain:.88,release:.105},
   {id:'lead-pulse',label:'エッジ・パルスリード',harmonics:[1,.707,.333,0,.2,.236,.143,0,.111,.141,.091,0,.077,.101,.067,0],cutoff:11500,attack:.004,decay:.095,sustain:.84,release:.075},
@@ -159,6 +161,8 @@ export function getTimbre(id) {
  * FM: ratio, index, transient decay. Subtractive: filter sweep in octaves.
  */
 const voiceProfiles = Object.freeze({
+  'lead-bass-round': {fm:false,ratio:1,index:0,transient:.18,sweep:.28},
+  'lead-bass-saw': {fm:false,ratio:1,index:0,transient:.18,sweep:.28},
   'lead-supersaw': {fm:false,ratio:1,index:0,transient:.18,sweep:.28},
   supersaw: {fm:false,ratio:1,index:0,transient:.24,sweep:.4},
   'lead-saw': {fm:false,ratio:1,index:0,transient:.16,sweep:.24},
@@ -214,7 +218,7 @@ export function voiceExpression(id, midi, velocity) {
  * @param {string} id */
 export function timbreOutputGain(id) {
   getTimbre(id)
-  const trims = {supersaw:-9,'lead-supersaw':-8,'lead-saw':-6,'lead-pulse':-6.5,'saw-brass':-7,'pulse-stack':-7.5, 'lead-round':-1,'lead-glass':6,'lead-flute':2,'lead-reed':-2,'lead-bowed':-3,'lead-chip':-4,'lead-marimba':8,'lead-box':7, soft: 0, piano: 1.5, electric: 9, felt: 3,
+  const trims = {'lead-bass-round':-1,'lead-bass-saw':3,supersaw:-9,'lead-supersaw':-8,'lead-saw':-6,'lead-pulse':-6.5,'saw-brass':-7,'pulse-stack':-7.5, 'lead-round':-1,'lead-glass':6,'lead-flute':2,'lead-reed':-2,'lead-bowed':-3,'lead-chip':-4,'lead-marimba':8,'lead-box':7, soft: 0, piano: 1.5, electric: 9, felt: 3,
     mallet: 10, bell: 9, organ: -3, strings: -2, pad: 2, pluck: 2 }
   return 10 ** (trims[/** @type {keyof typeof trims} */ (id)] / 20)
 }

@@ -8,12 +8,13 @@ export function pianoKey(midi) {
   const pitch=midi%12
   return {midi,black:[1,3,6,8,10].includes(pitch),label:['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'][pitch]+(Math.floor(midi/12)-1)}
 }
-/** @param {{ready:()=>Promise<void>,attack:(midi:number,glide:boolean)=>void,release:(midi:number)=>void,stop:()=>void,key?:()=>number,onError:(error:unknown)=>void}} source */
+/** @param {{ready:()=>Promise<void>,attack:(midi:number,glide:boolean)=>void,release:(midi:number)=>void,stop:()=>void,key?:()=>number,bass?:()=>boolean,bpm?:()=>number,resolve?:(midi:number)=>number,onError:(error:unknown)=>void}} source */
 export function mountKeyboard(source) {
   const original=source
   const sounding=new Map()
+  let octave = 0
   const board=/** @type {HTMLElement} */ (document.querySelector('#piano-keys'))
-  source={...original,attack:(midi,glide)=>{const pitch=midi+(board.dataset.magic==='true'?(original.key?.()??0):0);sounding.set(midi,pitch);original.attack(pitch,glide)},release:midi=>{original.release(sounding.get(midi)??midi);sounding.delete(midi)}}
+  source={...original,attack:(midi,glide)=>{const pitch=midi+12*octave+(board.dataset.magic==='true'?(original.key?.()??0):0);sounding.set(midi,pitch);original.attack(pitch,glide)},release:midi=>{original.release(sounding.get(midi)??midi);sounding.delete(midi)}}
   const scroll=/** @type {HTMLElement} */ (document.querySelector('#piano-scroll'))
   const pads=/** @type {HTMLElement} */ (document.querySelector('#pads'))
   /** @type {Map<number,HTMLButtonElement>} */
@@ -31,7 +32,7 @@ export function mountKeyboard(source) {
       type: 'button', class: key.black ? 'piano-key piano-black' : 'piano-key piano-white',
       'data-midi': key.midi, 'aria-label': key.label + 'を鳴らす',
       tabindex: key.midi === 60 ? 0 : -1, style: { left: key.left },
-    }, [h('span', key.label)])),
+    }, key.midi % 12 === 0 ? [h('span', {'aria-hidden':'true'}, key.label)] : [])),
   }).mount(board)
   for (const button of Array.from(board.querySelectorAll('button'))) {
     buttons.set(Number(button.dataset.midi), button)
@@ -107,14 +108,45 @@ export function mountKeyboard(source) {
     void source.ready().then(()=>{if(ticket!==token)return;source.attack(midi,false);setTimeout(()=>{if(ticket===token)source.release(midi)},250)}).catch(source.onError)
   })
   board.addEventListener('focusout',event=>{if(!board.contains(/** @type {Node|null} */(event.relatedTarget)))release()})
-  for(const button of Array.from(document.querySelectorAll('[data-melody-view]')))button.addEventListener('click',()=>{
+  function refreshLabels() {
+    const offset = octave - (original.bass?.() ? 2 : 0)
+    board.setAttribute('aria-label', `C${3 + offset}からC${6 + offset}の鍵盤`)
+    buttons.forEach((button,midi)=>{
+      const label = pianoKey(midi).label.replace(/\d+$/, String(Math.floor(midi / 12) - 1 + offset))
+      button.setAttribute('aria-label', label+'を鳴らす')
+      const text = button.querySelector('span')
+      if (text) text.textContent = label
+    })
+  }
+  const octaveOutput = document.querySelector('#keyboard-octave')
+  const octaveDown = document.querySelector('#octave-down')
+  const octaveUp = document.querySelector('#octave-up')
+  /** @param {number} direction */
+  function stepOctave(direction) {
+    const next = octave + direction
+    if (next < -2 || next > 2) return
     release()
-    const selected=/** @type {HTMLElement} */(button).dataset.melodyView
-    const piano=selected!=='pads'
-    board.dataset.magic=String(selected==='magic')
+    for (const midi of sounding.keys()) source.release(midi)
+    octave = next
+    if (octaveOutput) octaveOutput.textContent = octave > 0 ? `+${octave}` : String(octave)
+    octaveDown?.toggleAttribute('disabled', octave === -2)
+    octaveUp?.toggleAttribute('disabled', octave === 2)
+    refreshLabels()
+  }
+  octaveDown?.addEventListener('click', () => stepOctave(-1))
+  octaveUp?.addEventListener('click', () => stepOctave(1))
+  refreshLabels()
+  document.addEventListener('melody-timbre-change', refreshLabels)
+  const magicToggle = document.querySelector('#magic-toggle')
+  magicToggle?.addEventListener('click', () => {
+    release()
+    const enabled = board.dataset.magic !== 'true'
+    board.dataset.magic = String(enabled)
+    magicToggle.setAttribute('aria-checked', String(enabled))
+    refreshLabels()
     document.dispatchEvent(new Event('melody-keyboard-change'))
-    pads.hidden=piano;scroll.hidden=!piano
-    document.querySelectorAll('[data-melody-view]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)))
+    pads.hidden = true
+    scroll.hidden = false
   })
   window.addEventListener('blur',release)
   document.addEventListener('visibilitychange',()=>{if(document.hidden)release()})
@@ -126,7 +158,7 @@ export function mountKeyboard(source) {
 export function mountMidiInput(source) {
  const button=document.createElement('button')
  button.type='button';button.className='reference-remove-key melody-midi-button';button.textContent='MIDIを接続'
- document.querySelector('.melody-heading')?.append(button)
+ document.querySelector('.settings-options')?.prepend(button)
  /** @type {MIDIAccess|undefined} */ let access
  /** @type {Map<string,Map<number,number>>} */ const held=new Map()
  /** @param {string} id */
@@ -169,4 +201,29 @@ export function mountMidiInput(source) {
  window.addEventListener('blur',silence)
  window.addEventListener('pagehide',silence)
  document.addEventListener('visibilitychange',()=>{if(document.hidden)silence()})
+}
+
+/** Shared note lifecycle for screen and MIDI keyboards.
+ * @param {{enabled:()=>boolean,bpm:()=>number,resolve:(note:number)=>number,attack:(note:number,glide:boolean)=>void,release:(note:number)=>void}} source */
+export function createMagicVoice(source) {
+ /** @type {Map<number,{pitch:number,timer:ReturnType<typeof setTimeout>|undefined}>} */
+ const held=new Map()
+ let generation=0
+ return {
+  attack(/** @type {number} */ note,glide=false){
+   const previous=held.get(note);if(previous){clearTimeout(previous.timer);source.release(previous.pitch)}
+   const ticket=++generation
+   const state={pitch:note,timer:/** @type {ReturnType<typeof setTimeout>|undefined} */(undefined)}
+   held.set(note,state);source.attack(note,glide)
+   const target=source.enabled()?source.resolve(note):note
+   if(target!==note)state.timer=setTimeout(()=>{
+    state.timer=undefined
+    if(ticket!==generation||held.get(note)!==state||!source.enabled())return
+    source.attack(target,false);source.release(state.pitch);state.pitch=target
+   },60000/Math.max(40,source.bpm())/8)
+  },
+  release(/** @type {number} */ note){const state=held.get(note);if(!state)return;clearTimeout(state.timer);held.delete(note);source.release(state.pitch)},
+  get heldCount(){return held.size},
+  stop(){generation++;for(const state of held.values()){clearTimeout(state.timer);source.release(state.pitch)}held.clear()}
+ }
 }

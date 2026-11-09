@@ -922,3 +922,68 @@ test('drum rate repeats or stretches a pattern across bars without changing othe
   assert.deepEqual(drumEventsAtRate(hits, 4, 1, 4, .5).map(x=>x.beat), [0,2])
   assert.deepEqual(drumEventsAtRate(hits, 4, 0, 4, 1).map(x=>x.beat), [0,1,2,3])
 })
+
+test('automatic pad hits follow scheduled attacks and clear on stop', async () => {
+  const { player, instrument, calls } = fixture()
+  const drums = [], bass = [], hits = []
+  player.drums = { hitAt: (...args) => drums.push(args), silence() {} }
+  player.bass = { playAt: (...args) => bass.push(args), silence() {} }
+  player.onPadHit = hit => hits.push(hit)
+  await player.start()
+  clearInterval(player.timer)
+  assert.deepEqual(hits, [])
+  instrument.context.currentTime = calls[0][1]
+  player.tick()
+  assert.ok(hits.some(hit => hit.part === 'chord' && hit.chord === player.slots[0]))
+  assert.ok(hits.some(hit => hit.part === 'bass' && hit.midi === bass[0][0]))
+  assert.ok(hits.some(hit => hit.part === 'drums' && hit.sound === drums[0][0]))
+  assert.ok(player.pendingPadHits.length > 0)
+  player.stop()
+  assert.deepEqual(player.pendingPadHits, [])
+})
+
+test('Otto accompaniment styles override the pattern only for the selected part in Otto mode', async () => {
+  const { player } = fixture()
+  const drums = [], bass = []
+  player.rhythm = 'off'
+  player.bassPattern = 'support_hold'
+  player.ottoAccompanimentStyle = { drums: 'eight_straight', bass: 'line_octave' }
+  player.drums = { hitAt: (...args) => drums.push(args), silence() {} }
+  player.bass = { playAt: (...args) => bass.push(args), silence() {} }
+
+  async function playBar(drumMode, bassMode) {
+    drums.length = bass.length = 0
+    player.accompanimentModes = { drums: drumMode, bass: bassMode, chord: 'auto' }
+    await player.start(0)
+    player.stop()
+    return { drums: drums.map(([sound]) => sound), bass: bass.map(([midi]) => midi) }
+  }
+
+  const auto = await playBar('auto', 'auto')
+  const ottoDrums = await playBar('otto', 'auto')
+  const ottoBass = await playBar('auto', 'otto')
+  assert.deepEqual(auto.drums, [])
+  assert.ok(ottoDrums.drums.includes('snare'))
+  assert.deepEqual(ottoDrums.bass, auto.bass)
+  assert.deepEqual(ottoBass.drums, auto.drums)
+  assert.notDeepEqual(ottoBass.bass, auto.bass)
+  assert.deepEqual(await playBar('auto', 'auto'), auto)
+})
+
+
+test('Otto drum attacks illuminate pads at the scheduled time', async () => {
+  const { player, instrument, calls } = fixture()
+  const hits = []
+  player.drums = { hitAt() {}, silence() {} }
+  player.onPadHit = hit => hits.push(hit)
+  assert.deepEqual(player.ottoAccompanimentStyle, { drums: 'eight_straight', bass: 'support_hold' })
+  player.accompanimentModes.drums = 'otto'
+  await player.start()
+  clearInterval(player.timer)
+  for (let time = calls[0][1]; time < calls[0][1] + 1; time += .025) {
+    instrument.context.currentTime = time
+    player.tick()
+  }
+  assert.ok(hits.some(hit => hit.part === 'drums' && hit.sound === 'kick'))
+  player.stop()
+})

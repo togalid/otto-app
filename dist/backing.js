@@ -1,6 +1,9 @@
+import { swungBassBeat } from './groove.js'
+
 export const backingPatterns = Object.freeze([
   { id: 'trance-weave', label: '16分アルペジオ・往復' },
-  { id: 'satin-comp', label: 'サテン・コンピング' },
+  { id: 'satin-comp', label: 'シンコペーション・軽め' },
+  { id: 'sync-varied', label: 'シンコペーション・変化' },
   { id: 'whole', label: '白玉（のばす）' },
   { id: 'quarters', label: '4分刻み' },
   { id: 'eighths', label: '8分刻み' },
@@ -9,7 +12,7 @@ export const backingPatterns = Object.freeze([
   { id: 'bass-chord', label: 'ベース＋コード' },
   { id: 'key-run', label: '鍵盤の折り返し' },
   { id: 'cutting', label: '16分カッティング' },
-  { id: 'stabs', label: 'シンコペーション・スタブ' },
+  { id: 'stabs', label: 'シンコペーション・食い込み' },
   { id: 'chip-riff', label: 'チップ・リフ' },
   { id: 'strum', label: 'ストラム' },
 ])
@@ -22,6 +25,7 @@ export function backingEvents(notes, pattern, bassPitch, bar = 0) {
   if (!notes.length) return []
   if (!backingPatterns.some((item) => item.id === pattern))
     throw new RangeError('Unknown backing')
+  if (pattern === 'sync-varied') return (bar % 2 ? [[.5,.3,.7],[1.75,.2,.55],[2.5,.65,1],[3.5,.35,.8]] : [[0,.7,1],[1.5,.3,.7],[3,.55,.85]]).map(([beat,duration,level])=>({beat,duration,level,notes}))
   if (pattern === 'trance-weave') {
     const ordered = [...notes].sort((a, b) => a - b)
     const cycle = ordered.length === 1 ? ordered : [...ordered, ...ordered.slice(1, -1).reverse()]
@@ -108,4 +112,58 @@ export function backingEvents(notes, pattern, bassPitch, bar = 0) {
     notes,
     level: eighths ? (index % 2 === 0 ? 0.9 : 0.62) : index % 2 === 0 ? 0.92 : 0.7,
   }))
+}
+
+/** Adjust the authored articulation while keeping 50% as the original sound.
+ * @param {number} duration @param {number} level @param {{length:number,dynamics:number,touch?:string}|undefined} expression */
+export function backingArticulation(duration, level, expression) {
+  const length = expression?.length ?? 50, dynamics = expression?.dynamics ?? 50
+  return {duration: duration * (0.3 + length * 0.014) * (expression?.touch === 'cutting' ? .45 : 1), level: Math.max(0, Math.min(1, 1 + (level - 1) * dynamics * .02))}
+}
+
+/** @param {readonly number[]} notes @param {string|undefined} touch */
+export function backingAttacks(notes,touch) {
+ return touch==='strum' ? notes.map((note,index)=>({notes:[note],delay:index*.012,gain:1/Math.sqrt(notes.length)})) : [{notes:[...notes],delay:0,gain:1}]
+}
+
+/** Plan chord attacks in seconds relative to the requested start beat.
+ * @param {{changes:{beat:number,chord:string,notes:number[],bassNotes:readonly number[]}[],
+ * startBeat:number,beatsPerBar:number,bpm:number,duration:number,swing:number,pattern:string,
+ * steps?:{enabled:boolean,duration:number,level:number}[],expression?:Parameters<typeof backingArticulation>[2],
+ * eventsFor:(notes:number[],pattern:string,root:number)=>BackingEvent[]}} bar
+ */
+export function* planBackingBar(bar) {
+  const {changes,startBeat,beatsPerBar,bpm,duration,swing,pattern,steps,expression,eventsFor} = bar
+  if (!changes.length) return
+  if (steps) {
+    let index = 0
+    for (const [stepIndex,step] of steps.entries()) {
+      const beat = stepIndex / 4
+      if (!step.enabled || beat < startBeat || beat >= beatsPerBar) continue
+      while (changes[index + 1]?.beat <= beat) index++
+      const {notes,chord} = changes[index]
+      const end = changes[index + 1]?.beat ?? beatsPerBar
+      const art = backingArticulation(step.duration,step.level,expression)
+      yield {notes,chord,offset:(beat-startBeat)*60/bpm,length:Math.min(art.duration,end-beat)*60/bpm,level:art.level}
+    }
+    return
+  }
+  for (const [index,change] of changes.entries()) {
+    const end = changes[index + 1]?.beat ?? beatsPerBar
+    if (pattern === 'whole') {
+      if (end <= startBeat) continue
+      const from = Math.max(change.beat,startBeat)
+      const art = backingArticulation((end-from)*.92,1,expression)
+      yield {notes:change.notes,chord:change.chord,offset:(from-startBeat)*duration/beatsPerBar,
+        length:Math.min(art.duration,end-from)*duration/beatsPerBar,level:art.level}
+      continue
+    }
+    for (const event of eventsFor(change.notes,pattern,change.bassNotes[0])) {
+      const beat = swungBassBeat(event.beat*2,swing)
+      if (beat < change.beat || beat < startBeat || beat >= end) continue
+      const art = backingArticulation(event.duration,event.level ?? 1,expression)
+      yield {notes:event.notes,chord:change.chord,offset:(beat-startBeat)*duration/beatsPerBar,
+        length:(Math.min(art.duration,end-beat)/beatsPerBar)*duration,level:art.level}
+    }
+  }
 }

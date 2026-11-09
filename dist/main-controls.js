@@ -1,3 +1,5 @@
+import { keys } from './music.js'
+import { features } from './features.js'
 import { meterParts, partMeter } from './tone-engine.js'
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 
@@ -66,15 +68,16 @@ export function mountReferenceControls() {
 }
 
 /** @param {ReturnType<typeof mountReferenceControls>['state']} reference
- * @param {{editReference:()=>void, toggleStem:(index:number)=>void, cancelImport:()=>void, remove:()=>void}} player */
+ * @param {{editReference:()=>void, toggleStem:(index:number)=>void, separateStems:()=>void, cancelImport:()=>void, remove:()=>void}} player */
 export function mountBasicParts(reference, player) {
   const referenceMeter = {
     render: () => h('span', {class: 'channel-meter', 'aria-hidden': 'true'},
       Array.from({length: 8}, (_, i) => h('i', {class: {lit: i < Math.ceil(reference.meterLevel * .8)}}))),
   }
   createApp({
-    render: () => [
-      h('div', {class: ['reference-channel', {'awaiting-file': !reference.duration}], role: 'group', 'aria-label': 'MP3パート'}, [
+    render: () => {
+      const parts = [
+      h('div', {key:'reference', class: ['reference-channel', {'awaiting-file': !reference.duration}], role: 'group', 'aria-label': 'MP3パート'}, [
         reference.message && !reference.duration ? h('div', {class: 'reference-upload reference-import-status', 'aria-busy': reference.importing}, [
           reference.importing ? h('span', {class: 'ref-import-spinner', 'aria-hidden': 'true'}) : null,
           h('p', {role: 'status', 'aria-live': 'polite'}, reference.message),
@@ -87,7 +90,11 @@ export function mountBasicParts(reference, player) {
                 fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round'}),
             ]),
             h('span', 'MP3 読み込み'),
-          ]) : !reference.stemsReady ? h('p',{class:'reference-original-label'},'元音源') : h('div', {class: 'reference-stem-switches', role: 'group', 'aria-label': '分離したパート'}, [
+          ]) : !reference.stemsReady ? h('div', {class:'reference-stem-panel'}, [
+            h('div', {class:'reference-stem-header'}, [h('span', '元音源'), features.stemSeparation ? h('button', {type:'button', class:'reference-stem-action', disabled:reference.importing || reference.message.includes('次の再生'), onClick:player.separateStems}, 'Stem') : null]),
+            reference.message ? h('span', {class:'reference-stem-status', role:'status'}, reference.message) : null,
+            reference.importing ? h('button', {type:'button', class:'reference-stem-cancel', onClick:player.cancelImport}, '中断') : null,
+          ]) : h('div', {class: 'reference-stem-switches', role: 'group', 'aria-label': '分離したパート'}, [
           ...[[1, 'Drum'], [2, 'Bass'], [0, 'Vocal'], [3, 'Other']].map(([index, label]) =>
             h('button', {type: 'button', key: index, disabled: !reference.stemsReady,
               'aria-pressed': reference.stemsReady && reference.stemEnabled[Number(index)],
@@ -114,7 +121,7 @@ export function mountBasicParts(reference, player) {
           h('span', {class: 'track-name'}, 'MP3'),
         ]),
       ]),
-      h("div", {"class": "drum-controls", "role": "group", "aria-label": "ドラムパート"}, [
+      h("div", {key:"drums", "class": "drum-controls", "role": "group", "aria-label": "ドラムパート"}, [
         h("button", {"class": "part-heading track-select", "type": "button", "data-track": "drums", "aria-controls": "detail-drums", "aria-label": "ドラムの詳細を表示", "title": "ドラムの設定を表示", "aria-pressed": "false"}, [
           h("svg", {"class": "part-icon", "aria-hidden": "true", "focusable": "false", "viewBox": "0 0 24 24"}, [
             h("path", {"class": "stamp", "d": "M3 9q9 5 18 0l-2 9q-7 5-14 0z"}),
@@ -144,7 +151,7 @@ export function mountBasicParts(reference, player) {
           ]),
         ]),
       ]),
-      h("div", {"class": "bass-controls", "role": "group", "aria-label": "ベースパート"}, [
+      h("div", {key:"bass", "class": "bass-controls", "role": "group", "aria-label": "ベースパート"}, [
         h("button", {"class": "part-heading track-select", "type": "button", "data-track": "bass", "aria-controls": "detail-bass", "aria-label": "ベースの詳細を表示", "title": "ベースの設定を表示", "aria-pressed": "false"}, [
           h("svg", {"class": "part-icon", "aria-hidden": "true", "focusable": "false", "viewBox": "0 0 24 24"}, [
             h("path", {"class": "stamp", "d": "m13 9 6-7 3 2-7 8q2 4-2 8-4 4-8 1t-2-8q2-4 6-3z"}),
@@ -198,14 +205,14 @@ export function mountBasicParts(reference, player) {
           ]),
         ]),
       ]),
-      h("div", {"class": "chord-sound-controls part-controls", "role": "group", "aria-label": "コードの音色とバッキング"}, [
-        h("button", {"class": "part-heading track-select", "type": "button", "data-track": "chord", "aria-controls": "detail-chord", "aria-label": "コードの詳細を表示", "title": "コードの設定を表示", "aria-pressed": "true"}, [
+      h("div", {key:"chord", "class": "chord-sound-controls part-controls", "role": "group", "aria-label": "バッキングパート"}, [
+        h("button", {"class": "part-heading track-select", "type": "button", "data-track": "chord", "aria-controls": "detail-chord", "aria-label": "バッキングの詳細を表示", "title": "バッキングの設定を表示", "aria-pressed": "true"}, [
           h("svg", {"class": "part-icon", "aria-hidden": "true", "focusable": "false", "viewBox": "0 0 24 24"}, [
             h("rect", {"class": "stamp", "x": "1", "y": "4", "width": "22", "height": "16", "rx": "2"}),
             h("path", {"class": "cut", "d": "M7 10v8m5-8v8m5-8v8"}),
             h("path", {"class": "print", "d": "M5 4h3v8H5zm10 0h3v8h-3z"}),
           ]),
-          h("span", {"class": "track-name", "aria-hidden": "true"}, "コード"),
+          h("span", {"class": "track-name", "aria-hidden": "true"}, "バッキング"),
         ]),
         h("label", {"class": "select-control", "for": "chord-timbre"}, [
           h("span", {"class": "sr-only"}, "コードの音色"),
@@ -224,7 +231,7 @@ export function mountBasicParts(reference, player) {
           ]),
         ]),
       ]),
-      h("div", {"class": "melody-controls", "role": "group", "aria-label": "メロディパート"}, [
+      h("div", {key:"melody", "class": "melody-controls", "role": "group", "aria-label": "メロディパート"}, [
         h("button", {"class": "part-heading track-select melody-track", "type": "button", "data-track": "melody", "aria-controls": "detail-melody", "aria-label": "メロディの詳細を表示", "title": "メロディの設定を表示", "aria-pressed": "false"}, [
           h("svg", {"class": "part-icon", "aria-hidden": "true", "focusable": "false", "viewBox": "0 0 24 24"}, [
             h("path", {"class": "stamp", "d": "M8 5 21 2v15c0 4-8 6-8 2 0-2 3-4 6-4V7l-9 2v10c0 4-8 6-8 2 0-2 3-4 6-4z"}),
@@ -239,8 +246,9 @@ export function mountBasicParts(reference, player) {
         h("label", {"class": "select-control", "for": "melody-mode"}, [
           h("span", {"class": "sr-only"}, "メロディの演奏方法"),
           h("select", {"id": "melody-mode"}, [
-            h("option", {"value": "all-you"}, "自分で"),
-            h("option", {"value": "all-pc"}, "自動演奏"),
+            h("option", {"value": "all-you"}, "自分で弾く"),
+            h("option", {"value": "all-pc"}, "Ottoに弾いてもらう"),
+            h("option", {"value": "session"}, "Ottoとセッション"),
           ]),
         ]),
         h("div", {"class": "part-mix", "role": "group", "aria-label": "メロディのミックス"}, [
@@ -252,7 +260,17 @@ export function mountBasicParts(reference, player) {
           ]),
         ]),
       ]),
-    ],
+      ]
+      const [referencePart, drums, bass, backing, melody] = parts
+      return [
+        h('div', {key:'mp3-label', class:'compact-mixer-caption compact-mixer-mp3'}, 'MP3'),
+        referencePart,
+        h('div', {key:'play-label', class:'compact-mixer-caption compact-mixer-play'}, 'Play'),
+        melody,
+        h('div', {key:'accompaniment-label', class:'compact-mixer-caption compact-mixer-accompaniment'}, '伴奏'),
+        drums, bass, backing,
+      ]
+    },
   }).mount('#track-grid')
 }
 
@@ -281,4 +299,132 @@ export function mountReferenceDetail(reference, remove){
  const timingHost=document.createElement('div')
  panel.append(timingHost)
  return timingHost
+}
+
+/** @param {HTMLInputElement} input @param {number} sensitivity @param {boolean} [integer] */
+export function bindKnobDrag(input, sensitivity, integer = false) {
+  const knob = input.parentElement
+  if (!knob) return
+  // Drag relative to the starting value so touching the knob never jumps it.
+  input.addEventListener('pointerdown', event => {
+    if (!event.isPrimary || event.button !== 0) return
+    event.preventDefault()
+    input.focus({ preventScroll: true })
+    const startX = event.clientX
+    const startY = event.clientY
+    const startValue = Number(input.value)
+    knob.setPointerCapture(event.pointerId)
+    /** @param {PointerEvent} move */
+    const onMove = move => {
+      if (move.pointerId !== event.pointerId) return
+      const change = (move.clientX - startX) - (move.clientY - startY)
+      const previous = input.value
+      input.value = String(integer ? Math.round(startValue + change * sensitivity) : startValue + change * sensitivity)
+      if (input.value !== previous) {
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+    }
+    /** @param {PointerEvent} end */
+    const onEnd = end => {
+      if (end.pointerId !== event.pointerId) return
+      knob.removeEventListener('pointermove', onMove)
+      knob.removeEventListener('pointerup', onEnd)
+      knob.removeEventListener('pointercancel', onEnd)
+      knob.removeEventListener('lostpointercapture', onEnd)
+    }
+    knob.addEventListener('pointermove', onMove)
+    knob.addEventListener('pointerup', onEnd)
+    knob.addEventListener('pointercancel', onEnd)
+    knob.addEventListener('lostpointercapture', onEnd)
+  })
+}
+
+
+/** @param {HTMLSelectElement} drumTimbre @param {HTMLSelectElement} bassTimbre */
+export function mountPartIcons(drumTimbre, bassTimbre) {
+// Pictograms are printed in the same two inks as the existing part keys.
+const partIcons = {
+  drums: {
+    acoustic: '<path class="stamp" d="M3 9q9 5 18 0l-2 9q-7 5-14 0z"/><ellipse class="print" cx="12" cy="7" rx="9" ry="3"/><path class="cut" d="m6 12 2 5 3-4m3 0 2 4 2-5"/>',
+    electronic: '<rect class="stamp" x="2" y="3" width="20" height="18" rx="3"/><circle class="icon-cutout" cx="7" cy="8" r="2"/><circle class="icon-cutout" cx="17" cy="8" r="2"/><circle class="icon-cutout" cx="7" cy="16" r="2"/><circle class="icon-cutout" cx="17" cy="16" r="2"/>',
+  },
+  bass: {
+    electric: '<path class="stamp" d="m13 9 6-7 3 2-7 8q2 4-2 8-4 4-8 1t-2-8q2-4 6-3z"/><path class="print" d="m5 15 4 4 2-2-4-4z"/><path class="cut" d="m10 14 8-9"/>',
+    acoustic: '<path class="stamp" d="M13 2h3v8c3 1 4 3 4 6 0 4-3 6-8 6s-8-2-8-6c0-3 2-5 5-6l1-3h3z"/><circle class="print" cx="12" cy="15" r="2.5"/><path class="cut" d="M13 4v12m2-12v12"/>',
+    synth: '<path class="stamp" d="M3 3h18v18H3z"/><path class="cut" fill="none" d="M5 15h3v-5h3v5h3v-5h3v5h2"/><circle class="print" cx="7" cy="6.5" r="1"/><circle class="print" cx="12" cy="6.5" r="1"/><circle class="print" cx="17" cy="6.5" r="1"/>',
+  },
+}
+function updatePartIcons() {
+  for (const [track, value] of [['drums', drumTimbre.value], ['bass', bassTimbre.value]]) {
+    const icon = document.querySelector(`[data-track="${track}"] .part-icon`)
+    const designs = track === 'drums' ? partIcons.drums : partIcons.bass
+    const svg = Reflect.get(designs, value)
+    if (icon && typeof svg === 'string') icon.innerHTML = svg
+  }
+}
+updatePartIcons()
+
+return updatePartIcons
+}
+
+/** Range controls keep the version-1 baseline inputs mounted for persistence.
+ * @param {{workspace:HTMLElement, progression:import('./progression.js').Progression,
+ * editingSection:{value:number}, mixerKey:HTMLInputElement, meterInput:HTMLInputElement,
+ * tempo:HTMLInputElement, keySelect:HTMLSelectElement, contextChanged:()=>void, harmonyChanged:()=>void}} controls */
+export function mountSectionKnobs({workspace, progression, editingSection, mixerKey, meterInput, tempo, keySelect, contextChanged, harmonyChanged}) {
+// Section knobs edit range metadata without changing the song's fallback settings.
+const baselineControls=document.createElement('div')
+baselineControls.hidden=true
+workspace.append(baselineControls)
+const sectionKnobs = /** @type {(()=>void)[]} */ ([])
+for (const [source, field, caption] of /** @type {[HTMLInputElement, 'key'|'meter'|'bpm', string][]} */ ([[mixerKey,'key','キー'],[meterInput,'meter','拍子'],[tempo,'bpm','テンポ']])) {
+  const original=/** @type {HTMLElement} */(source.closest(field==='bpm'?'.timing-control':'.mixer-key, .mixer-meter'))
+  const clone=/** @type {HTMLElement} */(original.cloneNode(true))
+  clone.querySelectorAll('[id]').forEach(element=>element.id='section-'+element.id)
+  clone.querySelectorAll('[for]').forEach(element=>element.setAttribute('for','section-'+element.getAttribute('for')))
+  original.before(clone)
+  baselineControls.append(original)
+  const input=/** @type {HTMLInputElement} */(clone.querySelector('input[type=range]'))
+  input.setAttribute('aria-label',`セクションの${caption}`)
+  const numeric=/** @type {HTMLInputElement|null} */(clone.querySelector('input[type=number]'))
+  if(numeric)numeric.setAttribute('aria-label','セクションのテンポを数値で入力')
+  const output=clone.querySelector('output')
+  const knob=/** @type {HTMLElement} */(input.parentElement)
+  function refresh() {
+    const section=progression.sections[editingSection.value]
+    const value=(field==='bpm' ? progression.referenceBpm : null) ?? section[field] ?? (field==='key'?progression.key:Number(source.value))
+    input.value=String(field==='key'&&value>6?value-12:value)
+    const text=field==='key'?keys[value].name:field==='meter'?`${value}/4`:String(value)
+    if(output)output.textContent=text
+    if(numeric)numeric.value=String(value)
+    input.setAttribute('aria-valuetext',text)
+    knob.style.setProperty('--angle',`${field==='key'?Number(input.value)*11.25:field==='meter'?(value-4)*90:(value-120)*1.6875}deg`)
+  }
+  input.addEventListener('input',()=>{
+    const value=Number(input.value)
+    if (field === 'bpm' && progression.referenceBpm !== null) {
+      tempo.value = input.value
+      tempo.dispatchEvent(new Event('input', {bubbles:true}))
+      return
+    }
+    progression.sections[editingSection.value][field]=field==='key'?(value%12+12)%12:value
+    contextChanged()
+    refresh()
+    if(field!=='bpm'){harmonyChanged()}
+  })
+  if(numeric)numeric.addEventListener('keydown',event=>{if(event.key==='Enter')numeric.blur();if(event.key==='Escape'){refresh();numeric.blur()}})
+  if(numeric)numeric.addEventListener('blur',()=>{
+    const value=Number(numeric.value)
+    if(Number.isFinite(value)&&value>=40&&value<=200){input.value=String(Math.round(value*10)/10);input.dispatchEvent(new Event('input',{bubbles:true}))}
+    else refresh()
+  })
+  bindKnobDrag(input,field==='bpm'?.6:field==='meter'?.035:.12,true)
+  sectionKnobs.push(refresh)
+}
+const refreshSectionKnobs=()=>sectionKnobs.forEach(refresh=>refresh())
+refreshSectionKnobs()
+
+for (const control of [tempo,meterInput,keySelect]) control.addEventListener(control===keySelect?'change':'input',()=>{contextChanged();refreshSectionKnobs()})
+
+return refreshSectionKnobs
 }

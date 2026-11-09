@@ -18,8 +18,13 @@
     <div class="shell">
       <header class="player-header">
         <div class="player-left"><div class="player-brand">
-        <a class="logo" href="./" aria-label="oto ホーム">oto<span>●</span></a
-        >
+        <a class="logo" href="./" aria-label="Otto ホーム">
+          <svg class="logo-face" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <circle cx="32" cy="35" r="25" fill="currentColor"/>
+            <path d="M15 24q5-9 16-11m-7 18v7m16-7v7m-3 14q8-2 12-9" fill="none" stroke="var(--oto-key)" stroke-width="3.5" stroke-linecap="round"/>
+            <circle cx="32" cy="39" r="2.8" fill="var(--oto-accent)"/>
+          </svg>tto
+        </a>
         <div class="buddy-guide"><button id="oto-buddy" type="button" aria-label="Otto（オットー）にあいさつ" title="やあ。" data-mood="idle">
           <svg viewBox="0 0 28 28" aria-hidden="true" focusable="false">
             <circle class="buddy-case" cx="14" cy="14" r="11"/>
@@ -56,7 +61,7 @@
       </header>
       <main data-workspace-view="mixer">
         <div class="workspace-heading">
-          <fieldset class="segmented-control workspace-switch" aria-label="編集ビュー">
+          <fieldset class="segmented-control workspace-switch" aria-label="編集ビュー" hidden>
             <legend class="sr-only">編集ビュー</legend>
             <label><input type="radio" name="workspace-view" value="melody"><span>メロディ</span></label>
             <label><input type="radio" name="workspace-view" value="mixer" checked><span>楽器ミキサー</span></label>
@@ -70,6 +75,13 @@
         >
 
 
+          <div class="mixer-layout-tools">
+            <fieldset class="segmented-control workspace-switch" aria-label="ミキサーの表示">
+              <label><input type="radio" name="mixer-layout" value="simple" checked><span>簡易</span></label>
+              <label><input type="radio" name="mixer-layout" value="detail"><span>詳細</span></label>
+            </fieldset>
+            <button type="button" class="reference-remove-key mixer-score-link" aria-pressed="false"><svg class="score-link-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h14M3 8h14M3 12h14M3 16h14" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="7" cy="8" r="2" fill="currentColor"/><circle cx="13" cy="12" r="2" fill="currentColor"/></svg><span>コード進行</span></button>
+          </div>
           <div class="mixer-watermark" aria-hidden="true"><span>Arrange Mixer</span></div>
           <div class="genre-row" role="group" aria-label="ジャンルを選択">
             <label class="groove-field">ジャンル<select id="genre-group" aria-label="ジャンルの大分類"></select></label>
@@ -114,7 +126,11 @@
           <div id="track-grid" class="track-grid" aria-label="パートの設定"></div></div>
           <p id="progression-status" role="status"></p>
         </section>
-        <section class="instrument track-details" aria-label="トラックの詳細">
+        <section class="instrument mixer-quick-edit" aria-label="パートの基本設定" hidden>
+          <h2 class="track-detail-title"></h2>
+          <div class="mixer-quick-fields"></div>
+        </section>
+        <section id="mixer-track-details" class="instrument track-details" aria-label="トラックの詳細">
             <div
               id="detail-drums"
               class="drum-detail"
@@ -138,7 +154,7 @@
               <div class="chord-heading"><div id="section-bar-count" hidden></div><div class="backing-display"><div id="backing-monitor" role="img" aria-label="バッキングの鍵盤表示"></div></div></div>
               <div class="chord-settings">
                 <div class="chord-field chord-start" hidden><label for="preset-group">開始度数</label><select id="preset-group" aria-label="プリセットの開始度数" aria-controls="preset"></select></div>
-                <div class="chord-field chord-preset"><label for="preset">コード進行</label><div class="preset-picker"><select id="preset" aria-label="コード進行プリセット"></select><div class="style-stepper" role="group" aria-label="コード進行を切り替え"><button id="preset-prev" type="button" aria-label="前のコード進行">▲</button><button id="preset-next" type="button" aria-label="次のコード進行">▼</button></div></div></div>
+                <div class="chord-field chord-preset"><label for="preset">コード進行</label><div class="preset-picker part-choice-picker"><select id="preset" aria-label="コード進行プリセット"></select><div class="style-stepper part-choice-steps" role="group" aria-label="コード進行を切り替え"><button id="preset-prev" type="button" aria-label="前のコード進行">▲</button><button id="preset-next" type="button" aria-label="次のコード進行">▼</button></div></div></div>
                 <div class="chord-field" hidden><label for="chord-rate">進行の速さ</label><select id="chord-rate"><option value="0.5">½ ハーフ</option><option value="1" selected>1 通常</option><option value="2">2 ダブル</option></select></div>
                 <div class="chord-field chord-key"><label for="key">キー</label><div class="key-control" role="group" aria-label="キー">
                   <select id="key" aria-label="キー（メジャー）"></select>
@@ -188,15 +204,21 @@
         <section id="detail-melody" class="instrument" aria-labelledby="instrument-title" hidden>
           <div class="melody-heading"><h2 id="instrument-title" class="track-detail-title">Ottoとセッション。</h2></div>
           <div id="buddy-inline" class="buddy-inline"></div>
-          <div class="melody-view" role="group" aria-label="演奏する鍵盤"><button type="button" data-melody-view="pads" aria-pressed="false">8 Pad</button><button type="button" data-melody-view="piano" aria-pressed="true">3オクターブ鍵盤</button><button type="button" data-melody-view="magic" aria-pressed="false">マジック鍵盤</button><div class="melody-chord" aria-label="現在のコード"><strong id="melody-current-chord"></strong></div></div>
-          <div id="piano-scroll" class="piano-scroll"><div id="piano-keys" role="group" aria-label="C3からC6の鍵盤。押したまま滑らせてグライド。矢印キーで移動、スペースかEnterで演奏。"></div></div>
+          <div class="melody-view" role="group" aria-label="鍵盤の設定"><button type="button" id="magic-toggle" role="switch" aria-checked="true"><span class="magic-switch-track" aria-hidden="true"></span>マジック鍵盤</button><div class="keyboard-octave" role="group" aria-label="画面鍵盤のオクターブ">
+            <span aria-hidden="true">Oct</span>
+            <div class="style-stepper">
+              <button type="button" id="octave-down" aria-label="1オクターブ下げる">−</button>
+              <output id="keyboard-octave" aria-label="オクターブ移動量">0</output>
+              <button type="button" id="octave-up" aria-label="1オクターブ上げる">+</button>
+            </div>
+          </div><div class="melody-chord" aria-label="現在のコード"><strong id="melody-current-chord"></strong></div></div>
+          <div id="piano-scroll" class="piano-scroll"><div id="piano-keys" data-magic="true" role="group" aria-label="C3からC6の鍵盤。押したまま滑らせてグライド。矢印キーで移動、スペースかEnterで演奏。"></div></div>
           <div
             id="pads" hidden
             class="pads"
             role="group"
             aria-label="8つの音のパッド"
           ></div>
-          <p id="melody-feedback" class="melody-feedback" aria-live="polite"></p>
           <p id="status" role="status"></p>
         </section>
       </main>

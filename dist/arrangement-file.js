@@ -46,6 +46,9 @@ function validSection(data) {
   const chord = (/** @type {unknown} */ value) =>
     typeof value === 'string' && value.length < 100 && chordConfig(value) !== undefined
   return (data?.name === undefined || typeof data.name === 'string' && data.name.length<=40) &&
+    (data?.backingExpression?.voicing === undefined || ['auto','open','closed'].includes(data.backingExpression.voicing)) &&
+    (data?.backingExpression?.touch === undefined || ['block','cutting','strum'].includes(data.backingExpression.touch)) &&
+    (data?.backingExpression === undefined || !!data.backingExpression && ['length','dynamics'].every(key => { const value = Reflect.get(/** @type {object} */ (data.backingExpression), key); return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100 })) &&
     (data?.backingSteps === undefined || Array.isArray(data.backingSteps) && data.backingSteps.length>=12 && data.backingSteps.length<=20 && data.backingSteps.every(step=>step && typeof step.enabled==='boolean' && Number.isFinite(step.duration) && step.duration>0 && step.duration<=5 && Number.isFinite(step.level) && step.level>=0 && step.level<=1)) &&
     (data?.startBar === undefined || Number.isInteger(data.startBar) && Number.isInteger(data.endBar) && data.startBar >= 0 && (data.endBar ?? 0) > data.startBar && (data.endBar ?? 0) <= (data.slots?.length ?? 0)) &&
     (data?.bpm === undefined || Number.isFinite(data.bpm) && data.bpm >=40 && data.bpm<=200) &&
@@ -143,6 +146,7 @@ export function decodeArrangement(text, rules) {
       ...(section.style === undefined ? {} : {style:section.style}),
       ...(section.name === undefined ? {} : {name:section.name}),
       ...(section.startBar === undefined ? {} : {startBar:section.startBar,endBar:section.endBar}),
+      ...(section.backingExpression === undefined ? {} : {backingExpression:{...section.backingExpression}}),
       ...(section.backingSteps === undefined ? {} : {backingSteps:section.backingSteps.map(step=>({...step}))}),
       ...(section.bpm === undefined ? {} : {bpm:section.bpm}),
       ...(section.meter === undefined ? {} : {meter:section.meter}),

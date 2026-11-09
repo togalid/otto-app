@@ -54,3 +54,21 @@ test('matched roots infer the key for all seven major degrees', () => {
   assert.throws(() => keyFromDegree(12, 0), RangeError)
   assert.throws(() => keyFromDegree(0, 7), RangeError)
 })
+
+test('Pad upper structures preserve the selected bass and upper chord through transposition',async()=>{
+ const {customChord,padChordNotes}=await import('../dist/music.js')
+ for(let key=0;key<12;key++)for(let offset=0;offset<12;offset++){
+  const id=customChord({root:0,alter:0,quality:'slash',extension:`pad_${offset}_maj7`})
+  const notes=padChordNotes(id,key)
+  assert.equal(Math.min(...notes)%12,key)
+  for(const interval of [0,4,7,11])assert.ok(notes.some(note=>note%12===(key+offset+interval)%12))
+ }
+})
+
+test('open and closed voicings keep harmonic pitches and bass while changing spacing',async()=>{
+ const {voicePhrase}=await import('../dist/music.js')
+ const cells=['CM7','Dm7','G7','CM7'].map(id=>({id,key:0}))
+ const closed=voicePhrase(cells.map(c=>({...c,voicing:'closed'}))), open=voicePhrase(cells.map(c=>({...c,voicing:'open'})))
+ assert.notDeepEqual(open,closed)
+ open.forEach((notes,i)=>{assert.equal(notes[0]%12,closed[i][0]%12);assert.deepEqual([...new Set(notes.map(n=>n%12))].sort(),[...new Set(closed[i].map(n=>n%12))].sort());assert.ok(Math.max(...notes)<=84)})
+})

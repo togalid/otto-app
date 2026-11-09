@@ -33,9 +33,12 @@ export function chordWeights(notes, chord, key) {
   })
 }
 
+/** @typedef {{attack:number,decay:number,sustain:number,release:number}} EnvelopeSettings */
+/** @typedef {{cutoff?:number,resonance?:number,amp:Partial<EnvelopeSettings>,filter:EnvelopeSettings & {amount:number}}} ToneSettings */
+
 /** Expressive voice used independently by chord polyphony and the monophonic melody.
- * @param {any} Tone @param {string} id */
-export function createTimbreVoice(Tone, id) {
+ * @param {any} Tone @param {string} id @param {() => Partial<EnvelopeSettings>} [ampOverrides] */
+export function createTimbreVoice(Tone, id, ampOverrides) {
   const profile = timbreProfile(id)
   const Base = profile.fm ? Tone.FMSynth : Tone.MonoSynth
   return class ExpressiveVoice extends Base {
@@ -45,7 +48,7 @@ export function createTimbreVoice(Tone, id) {
       const frequency = this.toFrequency(note)
       const midi = 69 + 12 * Math.log2(frequency / 440)
       const expression = voiceExpression(id, midi, velocity)
-      this.envelope.set(expression.envelope)
+      this.envelope.set({...expression.envelope, ...ampOverrides?.()})
       if (profile.fm) {
         this.modulationIndex.value = expression.modulationIndex
         this.modulationEnvelope.decay = expression.transientDecay
@@ -118,6 +121,9 @@ export class Instrument {
   volume = 0.4
   timbre = 'soft'
   activeTimbre = ''
+  /** @type {ToneSettings} */
+  toneSettings = { amp:{}, filter:{attack:.03, decay:.18, sustain:.25, release:.15, amount:0} }
+  filterCutoff = 0
   /** @type {MonoLine | undefined} */
   mono
   /** @type {ReturnType<typeof setInterval> | undefined} */
@@ -175,7 +181,7 @@ export class Instrument {
     const velocity = level / Math.sqrt(midis.length)
     const ordered = [...midis].sort((a, b) => a - b)
     midis.forEach((midi, index) => {
-      const frequency = 440 * 2 ** ((midi - 69) / 12)
+      const frequency = 440 * 2 ** ((midi - 69 - (this.timbre.startsWith('lead-bass-') ? 24 : 0)) / 12)
       // A compact hand gesture, bounded even for dense tension voicings.
       const rank = ordered.indexOf(midi)
       const spread = midis.length > 1 ? Math.min(0.028, duration * 0.014) : 0
@@ -211,8 +217,9 @@ export class Instrument {
         }
         destination = highpass
       }
+      this.filterCutoff = recipe.cutoff
       this.filter = new Tone.Filter({
-        frequency: recipe.cutoff,
+        frequency: this.adjustedCutoff(),
         type: 'lowpass',
         rolloff: -12,
       }).connect(destination)
@@ -237,12 +244,13 @@ export class Instrument {
             release: recipe.release,
           },
       }
-      const Voice = createTimbreVoice(Tone, this.timbre)
+      const Voice = createTimbreVoice(Tone, this.timbre, () => this.toneSettings.amp)
+      if (this.toneSettings.resonance !== undefined) this.filter.Q.value = this.toneSettings.resonance
       if (this.timbre.startsWith('lead-')) {
         this.synth = new Voice({...options, portamento:0.025}).connect(this.filter)
         this.vibrato = new Tone.LFO({frequency:5.2,min:this.singing?-65:-14,max:this.singing?65:14,amplitude:0}).connect(this.synth.detune).start()
         this.mono = new MonoLine((midi,time,level,legato) => {
-          const frequency = 440 * 2 ** ((midi-69)/12)
+          const frequency = 440 * 2 ** ((midi-69-(this.timbre.startsWith('lead-bass-')?24:0))/12)
           this.synth.portamento = legato ? this.glideSeconds : 0
           if (legato) this.synth.setNote(frequency,time)
           else this.synth.triggerAttack(frequency,time,level)
@@ -251,13 +259,27 @@ export class Instrument {
           depth.setValueAtTime(0,time)
           depth.setValueAtTime(0,time+(this.singing?.22:.32))
           depth.linearRampToValueAtTime(this.expressiveVibrato?(this.singing?1:this.timbre === 'lead-chip' ? .35 : 1):0,time+(this.singing?.55:.78))
-          if(this.singing&&this.expressiveVibrato){
+          if (!legato && this.toneSettings.filter.amount > 0) {
+            const { attack, decay, sustain, amount } = this.toneSettings.filter
+            const frequency = this.filter.frequency
+            const base = this.adjustedCutoff()
+            const sweep = (/** @type {number} */ level) => Math.min(18000, base * 2 ** (amount * level))
+            frequency.cancelScheduledValues(time)
+            frequency.setValueAtTime(base, time)
+            frequency.linearRampToValueAtTime(sweep(1), time + attack)
+            frequency.linearRampToValueAtTime(sweep(sustain), time + attack + decay)
+          } else if(this.singing&&this.expressiveVibrato && this.toneSettings.cutoff === undefined){
             this.filter.frequency.cancelScheduledValues(time)
             this.filter.frequency.setValueAtTime(2200,time)
             this.filter.frequency.linearRampToValueAtTime(7000,time+.6)
           }
         }, time => {
           this.synth.triggerRelease(time)
+          if (this.toneSettings.filter.amount > 0) {
+            const frequency = this.filter.frequency
+            frequency.cancelAndHoldAtTime(time)
+            frequency.linearRampToValueAtTime(this.adjustedCutoff(), time + this.toneSettings.filter.release)
+          }
           this.vibrato.amplitude.cancelScheduledValues(time)
           this.vibrato.amplitude.setValueAtTime(0,time)
         })
@@ -272,10 +294,23 @@ export class Instrument {
     this.ensureVoice()
     if(this.synth?.detune)this.synth.detune.rampTo(Math.max(-1,Math.min(1,bend))*200,.02)
   }
+  adjustedCutoff() {
+    return this.toneSettings.cutoff ?? this.filterCutoff
+  }
+  /** @param {'cutoff'|'resonance'} control @param {number} value */
+  setFilterControl(control, value) {
+    this.toneSettings[control] = value
+    if (!this.filter) return
+    const parameter = control === 'cutoff' ? this.filter.frequency : this.filter.Q
+    parameter.rampTo(value, .04)
+  }
   /** @param {number} amount normalized 0..1 @param {boolean} [override] */
   setModulation(amount, override = false) {
     this.ensureVoice()
-    if(this.filter)this.filter.frequency.rampTo(1800+Math.max(0,Math.min(1,amount))*10000,.04)
+    if (this.filter) {
+      this.filterCutoff = 1800 + Math.max(0, Math.min(1, amount)) * 10000
+      if (!this.toneSettings.filter.amount) this.filter.frequency.rampTo(this.adjustedCutoff(), .04)
+    }
     if(this.vibrato){
       if(override && this.context)this.vibrato.amplitude.cancelScheduledValues(this.context.currentTime)
       this.vibrato.min=-65;this.vibrato.max=65
@@ -300,7 +335,7 @@ export class Instrument {
       this.synth.portamento = .025
       return
     }
-    if (this.context && this.synth) this.synth.triggerAttack(440 * 2 ** ((midi - 69) / 12), this.context.currentTime + 0.01, 0.8)
+    if (this.context && this.synth) this.synth.triggerAttack(440 * 2 ** ((midi - 69 - (this.timbre.startsWith('lead-bass-') ? 24 : 0)) / 12), this.context.currentTime + 0.01, 0.8)
   }
   /** @param {number} midi */
   release(midi) {
@@ -311,7 +346,7 @@ export class Instrument {
       }
       return
     }
-    if (this.context && this.synth) this.synth.triggerRelease(440 * 2 ** ((midi - 69) / 12), this.context.currentTime + 0.01)
+    if (this.context && this.synth) this.synth.triggerRelease(440 * 2 ** ((midi - 69 - (this.timbre.startsWith('lead-bass-') ? 24 : 0)) / 12), this.context.currentTime + 0.01)
   }
   silence() {
     clearInterval(this.monoTimer); this.monoTimer = undefined

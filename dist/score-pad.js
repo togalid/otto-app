@@ -4,7 +4,7 @@
 export function mountScorePad(actions) {
  const dock=document.createElement('section')
  dock.className='score-pad-dock';dock.hidden=true;dock.setAttribute('aria-label','コードPad入力')
- dock.innerHTML='<div class="score-pad-tools"><div class="style-stepper pad-navigation" role="group" aria-label="入力位置を移動"><button type="button" class="prev" aria-label="前の入力位置">←</button><button type="button" class="next" aria-label="次の入力位置">→</button></div><label class="oto-checkbox"><input type="checkbox" checked> <span>順に入力</span></label><fieldset class="segmented-control pad-interval" aria-label="Pad入力の間隔"><label><input type="radio" name="pad-interval" value="bar" checked><span>1小節</span></label><label><input type="radio" name="pad-interval" value="2"><span>2拍</span></label><label><input type="radio" name="pad-interval" value="1"><span>1拍</span></label></fieldset><button type="button" class="close">閉じる</button></div><span class="score-pad-announcement" role="status" aria-live="polite"></span><iframe title="コード入力Pad" src="/chord-pad.html?embedded=1"></iframe>'
+ dock.innerHTML='<div class="score-pad-tools"><div class="style-stepper pad-navigation" role="group" aria-label="入力位置を移動"><button type="button" class="prev" aria-label="前の入力位置">←</button><button type="button" class="next" aria-label="次の入力位置">→</button></div><label class="oto-checkbox"><input type="checkbox" checked> <span>順に入力</span></label><fieldset class="segmented-control pad-interval" aria-label="Pad入力の間隔"><label><input type="radio" name="pad-interval" value="2" checked><span>2拍</span></label><label><input type="radio" name="pad-interval" value="1"><span>1拍</span></label></fieldset><button type="button" class="close">閉じる</button></div><span class="score-pad-announcement" role="status" aria-live="polite"></span><iframe title="コード入力Pad" src="/chord-pad.html?embedded=1"></iframe>'
  document.body.append(dock)
  const position=/** @type {HTMLElement} */(dock.querySelector('.score-pad-announcement'))
  const frame=/** @type {HTMLIFrameElement} */(dock.querySelector('iframe'))
@@ -42,7 +42,7 @@ export function mountScorePad(actions) {
  /** @param {number} direction */
  function move(direction){
   if(section!==actions.section()){close();return}
-  const step=advance.checked?(interval()==='bar'?actions.beats(bar):Number(interval())):1
+  const step=advance.checked?Number(interval()):1
   const position=barStart(bar)+beat+direction*step
   seek(position);sync()
   document.querySelector('.pad-input-target')?.scrollIntoView({block:'nearest',behavior:'smooth'})
@@ -57,7 +57,7 @@ export function mountScorePad(actions) {
   const id=event.data.id
   actions.write(bar,beat,id)
   if(advance.checked){
-   const step=interval()==='bar'?actions.beats(bar):Number(interval())
+   const step=Number(interval())
    const next=barStart(bar)+beat+step
    if(next<totalBeats())seek(next)
   }
@@ -74,7 +74,7 @@ export function mountScorePad(actions) {
   beat=Array.from(slot.querySelectorAll('.beat-chord')).indexOf(cell)
   const chord=actions.read(bar,beat)
   if(chord)actions.preview(bar,beat,chord)
-  const preferredInterval = beat === 0 ? 'bar' : beat === 2 ? '2' : '1'
+  const preferredInterval = beat % 2 === 0 && actions.beats(bar) - beat >= 2 ? '2' : '1'
   const choice = /** @type {HTMLInputElement | null} */ (dock.querySelector(`input[name=pad-interval][value="${preferredInterval}"]`))
   if (choice) choice.checked = true
   section=actions.section();opener=/** @type {HTMLElement} */(target)

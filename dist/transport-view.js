@@ -42,3 +42,37 @@ export function mountTransport(togglePlayback) {
   }).mount('#transport')
   return { running, beat }
 }
+
+/** Presentation only: seeking and restarting audio remain with the application.
+ * @param {{current:()=>number, count:()=>number, seek:(bar:number)=>void}} actions */
+export function mountPlayhead(actions) {
+  const element = document.createElement('div')
+  element.className = 'melody-playhead'
+  element.setAttribute('aria-label', '現在の再生位置')
+  document.querySelector('.mixer-score-link')?.before(element)
+  const reset = () => { input.value = String(actions.current() + 1) }
+  createApp({render: () => [
+    h('div', {class:'style-stepper melody-navigation melody-navigation-start'}, [
+      h('button', {type:'button', 'aria-label':'1小節目に戻る', onClick:()=>actions.seek(0)}, '|<'),
+    ]),
+    h('label', {class:'melody-bar-input'}, [
+      h('input', {type:'number', min:1, step:1, value:1, 'aria-label':'移動する小節',
+        onFocus:()=>{ input.max = String(actions.count()) },
+        onChange:()=>{
+          const value = Number(input.value)
+          if (input.value.trim() && Number.isFinite(value)) actions.seek(value - 1)
+          else reset()
+        },
+        onKeydown:(/** @type {KeyboardEvent} */ event)=>{
+          if (event.key === 'Enter') input.blur()
+          if (event.key === 'Escape') { reset(); input.blur() }
+        },
+      }), h('span', '小節'),
+    ]),
+    h('div', {class:'style-stepper melody-navigation'}, [-1,1].map(direction =>
+      h('button', {type:'button', 'aria-label':direction<0?'前の小節へ':'次の小節へ', onClick:()=>actions.seek(actions.current()+direction)}, direction<0?'←':'→'),
+    )),
+  ]}).mount(element)
+  const input = /** @type {HTMLInputElement} */ (element.querySelector('input'))
+  return {element, input}
+}

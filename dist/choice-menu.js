@@ -72,3 +72,46 @@ export function createChoiceMenu(kind) {
     },
   }
 }
+
+/** Mount the shared native-select adapter once at application startup. */
+export function mountSelectMenus() {
+const selectMenu = createChoiceMenu('select')
+/** @param {HTMLSelectElement} select */
+function openSelectMenu(select) {
+  if (select.disabled || selectMenu.busy) return
+  const groups = Array.from(select.children, child => {
+    const group = child instanceof HTMLOptGroupElement ? child : null
+    const options = group ? Array.from(group.children) : [child]
+    return {
+      heading: group?.label,
+      choices: options.flatMap(option => {
+        if (!(option instanceof HTMLOptionElement) || option.disabled || option.hidden || group?.disabled) return []
+        return [{ label: option.textContent || '', value: option.value, selected: option.selected }]
+      }),
+    }
+  })
+  const label = select.getAttribute('aria-label') || select.closest('label')?.childNodes[0]?.textContent?.trim() || '選択肢'
+  const rect = select.getBoundingClientRect()
+  const width = Math.min(Math.max(rect.width, 180), window.innerWidth - 16)
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
+  const height = Math.min(320, window.innerHeight - 16)
+  const top = Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - height - 8))
+  void selectMenu.open(select, label, groups, { left, top, width, height })
+}
+document.addEventListener('pointerdown', event => {
+  const select = event.target instanceof Element ? event.target.closest('select') : null
+  if (!select || select.classList.contains('quality-select') || select.disabled) return
+  event.preventDefault()
+  openSelectMenu(select)
+})
+document.addEventListener('keydown', event => {
+  const select = event.target instanceof HTMLSelectElement ? event.target : null
+  if (!select || select.classList.contains('quality-select') || select.disabled) return
+  if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
+    event.preventDefault()
+    openSelectMenu(select)
+  }
+})
+
+
+}

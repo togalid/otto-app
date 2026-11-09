@@ -196,3 +196,11 @@ test('trance weave turns through chord tones on sixteenths, satin leaves space f
   assert.ok(satin.slice(1).every(event => !event.notes.includes(60)))
   assert.ok(satin.some(event => event.beat % 1 !== 0))
 })
+
+test('backing articulation preserves defaults and adjusts length and strength', async () => {
+  const {backingArticulation}=await import('../dist/backing.js')
+  assert.deepEqual(backingArticulation(1,.8,undefined),{duration:1,level:.8})
+  const short=backingArticulation(1,.8,{length:0,dynamics:0})
+  const long=backingArticulation(1,.8,{length:100,dynamics:100})
+  assert.ok(short.duration<1 && long.duration>1 && short.level===1 && long.level<.8)
+})

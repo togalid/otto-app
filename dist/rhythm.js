@@ -165,13 +165,13 @@ export class DrumSynth {
     this.volume = Math.max(0, Math.min(1, value))
     this.instrument.engine?.drums.setVolume(this.volume)
   }
-  /** @param {string} sound @param {number} time @param {number} [velocity] @param {number} [duration] */
-  hitAt(sound, time, velocity, duration) {
+  /** @param {string} sound @param {number} time @param {number} [velocity] @param {number} [duration] @param {number} [pitch] @param {boolean} [accent] */
+  hitAt(sound, time, velocity, duration, pitch, accent) {
     const tone = this.instrument.engine?.drums
     if (!tone || !['kick', 'snare', 'hat'].includes(sound)) return
     tone.timbre = this.timbre
     tone.setVolume(this.volume)
-    tone.hitAt(sound, time, velocity, duration)
+    tone.hitAt(sound, time, velocity, duration, pitch, accent)
   }
   silence() {
     this.instrument.engine?.drums.silence()

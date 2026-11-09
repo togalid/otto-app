@@ -108,3 +108,11 @@ test('section key and style round trip with validation and legacy fallback',()=>
  for(const key of [-1,12,1.5]){f.sections[1].key=key;assert.throws(decode)}
  f.sections[1].key=9;f.sections[1].style='missing-style';assert.throws(decode)
 })
+
+test('backing expression round trips and rejects invalid values', () => {
+  const f=fixture(); f.sections[0].backingExpression={length:35,dynamics:70}
+  const decode=()=>decodeArrangement(encodeArrangement(f.controls,f.mix,f.score,f.sections),f.rules)
+  assert.deepEqual(decode().sections[0].backingExpression,{length:35,dynamics:70})
+  assert.equal(decode().sections[1].backingExpression,undefined)
+  for (const value of [-1,101,NaN]) { f.sections[0].backingExpression.length=value; assert.throws(decode) }
+})

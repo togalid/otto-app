@@ -2,10 +2,11 @@ import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { styleOrnaments } from './style-ornaments.js'
 import { ornamentParts, ornamentPatterns } from './ornaments.js'
 
-/** Mount a second bank in the same four-row space. @param {{id:string,pattern:string,voice:{setTimbre:(id:string)=>void,silence:()=>void}}[]} tracks */
-export function mountOrnaments(tracks) {
+/** Mount a second bank in the same four-row space. @param {{id:string,pattern:string,voice:{setTimbre:(id:string)=>void,silence:()=>void}}[]} tracks
+ * @param {ReturnType<import('./part-settings.js').createPartSettings>} partSettings */
+export function mountOrnaments(tracks, partSettings) {
   const grid = /** @type {HTMLElement} */ (document.querySelector('#track-grid'))
-  const basic = Array.from(grid.children).filter(row => !row.classList.contains('reference-channel'))
+  const basic = Array.from(grid.querySelectorAll('.drum-controls, .bass-controls, .chord-sound-controls'))
   const caption = document.createElement('div')
   caption.className = 'part-bank'
   caption.setAttribute('role', 'group')
@@ -27,7 +28,7 @@ export function mountOrnaments(tracks) {
     replacement.append(...Array.from(field.childNodes))
     field.replaceWith(replacement)
   }
-  document.querySelector('.mixer-banks')?.append(caption)
+  grid.querySelector('.compact-mixer-accompaniment')?.append(caption)
   const icons = ['✦', '♪', '≋', '◌']
   const rows = ornamentParts.map((part, index) => {
     const row = document.createElement('div')
@@ -42,7 +43,7 @@ export function mountOrnaments(tracks) {
     createApp({
       render: () => [
         h('button', { type: 'button', class: 'part-heading track-select ornament-select',
-          'aria-pressed': String(index === 0), 'aria-label': mixLabel + 'を表示' }, [
+          'data-track': part.id, 'aria-pressed': 'false', 'aria-label': mixLabel + 'を表示' }, [
           h('span', { class: 'ornament-icon', 'aria-hidden': 'true' }, icons[index]),
           h('span', { class: 'track-name' }, part.label),
         ]),
@@ -63,12 +64,9 @@ export function mountOrnaments(tracks) {
     const track = tracks[index]
     const timbre = /** @type {HTMLSelectElement} */ (row.querySelector(`#${part.id}-timbre`))
     const pattern = /** @type {HTMLSelectElement} */ (row.querySelector(`#${part.id}-pattern`))
-    timbre.addEventListener('change', () => track.voice.setTimbre(timbre.value))
+    partSettings.bind(timbre, () => track.voice.setTimbre(timbre.value))
     pattern.value = track.pattern
-    pattern.addEventListener('change', () => { track.pattern = pattern.value; track.voice.silence() })
-    row.querySelector('button')?.addEventListener('click', () => {
-      for (const other of rows) other.querySelector('button')?.setAttribute('aria-pressed', String(other === row))
-    })
+    partSettings.bind(pattern, () => { track.pattern = pattern.value; track.voice.silence() })
     return row
   })
   createApp({
@@ -79,10 +77,15 @@ export function mountOrnaments(tracks) {
       title: label,
       onClick: () => {
         bank.value = index
+        grid.dataset.ornamentBank = String(index)
         basic.forEach(row => { /** @type {HTMLElement} */ (row).hidden = index !== 0 })
-        rows.forEach(row => { row.hidden = index === 0 })
+        rows.forEach((row, rowIndex) => { row.hidden = index === 0 || ornamentParts[rowIndex].id === 'fx' })
+        const selected = grid.querySelector('.track-select[aria-pressed="true"]')
+        if (selected?.closest('[hidden]')) {
+          grid.querySelector('.melody-track')?.dispatchEvent(new MouseEvent('click', { bubbles:true }))
+        }
       },
-    }, index === 0 ? '▴' : '▾')),
+    }, label)),
   }).mount(caption)
   /** @param {string} styleId */
   return function setStyle(styleId) {
@@ -92,11 +95,9 @@ export function mountOrnaments(tracks) {
       const track = tracks.find(track => track.id === setting.id)
       if (!track) continue
       const timbre = /** @type {HTMLSelectElement} */ (document.querySelector(`#${setting.id}-timbre`))
-      timbre.value = setting.timbre
-      track.voice.setTimbre(setting.timbre)
+      partSettings.apply(timbre, setting.timbre)
       const pattern = /** @type {HTMLSelectElement} */ (document.querySelector(`#${setting.id}-pattern`))
-      pattern.value = setting.pattern
-      pattern.dispatchEvent(new Event('change', {bubbles:true}))
+      partSettings.apply(pattern, setting.pattern)
       const volume = /** @type {HTMLInputElement} */ (document.querySelector(`#${setting.id}-volume`))
       volume.value = String(Math.round(setting.volume * 100))
       volume.dispatchEvent(new Event('input', {bubbles:true}))

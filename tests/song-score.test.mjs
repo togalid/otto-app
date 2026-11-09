@@ -95,3 +95,37 @@ test('section keys apply by song bar and invalidate cached voicings without chan
  assert.deepEqual(player.slots,original)
  assert.equal(player.keyForBar(16),2)
 })
+
+test('song loop returns to the first bar and keeps the transport running',async()=>{
+ const context={currentTime:0,state:'running'}, played=[]
+ const player=new Progression({context,async ready(){},silence(){},playAt(){}},()=>{},message=>assert.fail(message))
+ player.sections=migrateSongSections(legacy());player.songMode=true;player.loopSong=true;player.bpm=120
+ player.onScheduleBar=(bar)=>played.push(bar)
+ await player.start(31);clearInterval(player.timer)
+ context.currentTime=player.nextTime+.01;player.tick()
+ assert.equal(player.running,true);assert.deepEqual(played,[31,0]);assert.deepEqual(player.positionAt(32),{bar:0,section:0})
+ player.stop()
+})
+
+test('reference tempo controls accompaniment and seek offsets across section overrides', async () => {
+ const context = {currentTime:0,state:'running'}
+ const player = new Progression({context,async ready(){},silence(){},playAt(){}},()=>{},message=>assert.fail(message))
+ player.sections = migrateSongSections(legacy())
+ player.songMode = true
+ player.sections[0].bpm = 128
+ player.sections[1].bpm = 80
+ player.referenceBpm = 120
+ let offset
+ player.onStart = (_time, seconds) => { offset = seconds }
+ await player.start(8, 1)
+ clearInterval(player.timer)
+ assert.equal(offset, 16.5)
+ assert.equal(player.scheduledTempo.bpm, 120)
+ player.referenceBpm = 100
+ context.currentTime = player.nextTime
+ player.tick()
+ assert.equal(player.scheduledTempo.bpm, 100)
+ player.stop()
+ player.referenceBpm = null
+ assert.equal(player.bpmForBar(8), 80)
+})

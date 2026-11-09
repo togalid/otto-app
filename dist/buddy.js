@@ -1,380 +1,29 @@
-import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
+import { mountBuddyView, mountBuddyLab, mountPhraseHistory } from './buddy-view.js'
+import { ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { ottoStyleFor } from './otto-style.js'
 import { Instrument } from './audio.js'
 import { Progression } from './progression.js'
-import { swungBassBeat } from './groove.js'
 
-const invitation = [{step:0,at:0,duration:.75},{step:2,at:1,duration:.75},{step:4,at:2,duration:1.5},{step:2,at:4,duration:.75},{step:1,at:5,duration:.75},{step:0,at:6,duration:1.5}]
+import { modulationAt, ottoReply, gentleOpening, defaultOttoLab, ottoLabPhrase, developingSolo, performOttoStyle, followPlayerMotion, conversationTurn, addChromaticApproaches } from './otto-phrases.js'
+export { modulationAt, grooveGrid, echoPhrase, melodicMotionCost, ottoReply, gentleOpening, defaultOttoLab, ottoLabPhrase, developingSolo, performOttoStyle, followPlayerMotion, conversationScore, conversationTurn, performanceMatch } from './otto-phrases.js'
+/** @typedef {import('./otto-phrases.js').PhraseNote} PhraseNote */
+/** @typedef {import('./otto-phrases.js').OttoLabSettings} OttoLabSettings */
 
-/** @typedef {{step:number, at:number, duration:number, midi?:number, category?:string, level?:number, kind?:string, modulation?:Array<{at:number,value:number}>}} PhraseNote */
-/** @param {Array<{at:number,value:number}>} points @param {number} elapsed */
-export function modulationAt(points, elapsed) {
- let value=0
- for(const point of points) { if(point.at>elapsed) break; value=point.value }
- return value
+/** @type {Record<string,{play:string[],listen:string[]}>} */
+const ottoLines={
+ craft:{play:['こうかな？ いい感じじゃない？','この音、つないでみよう','少し隙間を空けてみるね'],listen:['おぉ…いいじゃん…！','その間、好きだな','うん、その続きを聴きたい']},
+ imitate:{play:['さっきのフレーズ、こうかな？','君の音を、少しだけ変えてみたよ','この感じ、受け取れたかな？'],listen:['そのフレーズ、覚えておこう','おっ、その入り方いいね','うんうん、聴いてるよ']},
+ gentle:{play:['こんなふうに、ゆっくりどう？','一音ずつ、置いてみよう','この余韻、気持ちいいね'],listen:['うん、いい感じだね','その音、やさしく響くね','急がなくていいよ、聴いてる']},
+ classical:{play:['この音から、着地してみよう','旋律をつなぐと、こうかな？','少し歌うように弾いてみるね'],listen:['おぉ、そのつながりいいね','きれいに歌ってるね','その終わり方、好きだな']},
+ shred:{play:['ちょっと駆け上がってみるね！','ここ、勢いつけてみよう','ふぅ！ こんなのはどう？'],listen:['おぉ…いいじゃん…！','今の、勢いがあっていいね！','よし、僕も乗ってきた！']},
+ scale:{play:['こんなスケールの響きはどうかな？','この音の並び、試してみよう','少し違う道を通ってみるね'],listen:['おっ、その音を選ぶんだね','その並び、おもしろいね','いいね、そこからどう行く？']},
+ jazz:{play:['ちょっと裏から入ってみよう','この響き、どうかな？','少しためると…こんな感じ'],listen:['おぉ、そのノリいいね','今の間、気持ちいいな','うん、いいところに置いたね']},
 }
-/** Nearest audible sixteenth, using the exact swing mapping of the accompaniment.
- * @param {number} beat @param {number} swing */
-export function grooveGrid(beat, swing) {
-  let nearest = 0, distance = Infinity
-  for (let tick = 0; tick <= 32; tick++) {
-    const candidate = swungBassBeat(tick / 2, swing)
-    if (Math.abs(candidate - beat) < distance) { nearest = candidate; distance = Math.abs(candidate - beat) }
-  }
-  return nearest
-}
-/** Preserve pitches, rests and note lengths; never push attacks to later grid cells.
- * @param {readonly PhraseNote[]} phrase @param {number} swing */
-export function echoPhrase(phrase, swing) {
-  return phrase.map(note => {
-    const at = Math.min(swungBassBeat(15.5, swing), grooveGrid(note.at, swing))
-    const end = grooveGrid(Math.min(8, note.at + note.duration), swing)
-    return {...note, at, duration: Math.min(8 - at, Math.max(0.08, end - at))}
-  })
-}
-/** Prefer nearby scale steps; recover gently after larger intervals.
- * @param {readonly number[]} history @param {number} next */
-export function melodicMotionCost(history, next) {
-  if (!history.length) return 0
-  const last = history[history.length - 1]
-  const distance = Math.abs(next - last)
-  const previous = history.length > 1 ? last - history[history.length - 2] : 0
-  return distance * .5 + Math.max(0, distance - 2) * 2 +
-    (distance === 0 ? 1.8 : 0) +
-    (Math.abs(previous) > 4 && distance > 2 ? 6 : 0)
-}
-
-/** A restrained, connected melody following the harmony at the audible attack.
- * @param {readonly PhraseNote[]} input @param {(beat:number)=>Palette} suppliedPalette @param {number} swing @param {number} [bpm] @param {ReturnType<typeof ottoStyleFor>} [style]
- * @returns {PhraseNote[]} */
-export function ottoReply(input, suppliedPalette, swing, bpm = 100, style) {
-  void bpm
-  const motif = style?.invitation ?? invitation
-  /** @type {PhraseNote[]} */
-  const source = input.length ? echoPhrase(input, swing) : motif.map(note => {
-    const at = swungBassBeat(note.at * 2, swing)
-    return {...note, at, duration: swungBassBeat((note.at + note.duration) * 2, swing) - at}
-  })
-  /** @type {PhraseNote[]} */
-  const result = []
-  /** @type {number[]} */
-  const history = []
-  for (const [index, note] of source.entries()) {
-    const at = Math.max(0, note.at)
-    if (at >= 8) continue
-    const palette = suppliedPalette(at).filter(p => !p.clash)
-    if (!palette.length) continue
-    const strong = Math.abs(at - Math.round(at / 2) * 2) < .05
-    const arrival = index === source.length - 1 || note.duration >= 1
-    const chordTones = palette.filter(p => p.category === 'chord')
-    const candidates = !input.length && (strong || arrival) && chordTones.length ? chordTones : palette
-    const previous = history.at(-1) ?? style?.register ?? 72
-    const target = input.length && note.midi !== undefined ? note.midi : previous
-    const selected = [...candidates].sort((a,b) => {
-      /** @param {Palette[number]} p */
-      const cost = p => input.length ? Math.abs(p.midi - target) :
-        melodicMotionCost(history, p.midi) + Math.abs(p.midi - (style?.register ?? 72)) * .12 +
-        // A small arch supplies direction without forcing jumps or extra notes.
-        (history.length && Math.sign(p.midi - previous) !== (index < source.length / 2 ? 1 : -1) ? .6 : 0)
-      return cost(a) - cost(b)
-    })[0]
-    let duration = Math.min(note.duration, 8 - at, (source[index + 1]?.at ?? 8) - at)
-    // Harmony changes occur on quarter-note boundaries. Never spill an avoid
-    // or an out-of-scale pitch across the next chord, even for a grace period.
-    for (let beat = (Math.floor(at * 4) + 1) / 4; beat < at + duration - 1e-9; beat += .25) {
-      if (!suppliedPalette(beat).some(p => p.midi % 12 === selected.midi % 12 && !p.clash)) {
-        duration = beat - at
-        break
-      }
-    }
-    if (duration <= 0) continue
-    result.push({...note, midi: selected.midi, category: selected.category, duration,
-      kind: 'quote', level: strong ? .9 : .78})
-    history.push(selected.midi)
-  }
-  return result
-}
-
-/** A simple, varied first bar; subsequent bars retain the selected style.
- * @param {(beat:number)=>Palette} paletteAt @param {number} meter @param {number} variant @returns {PhraseNote[]} */
-export function gentleOpening(paletteAt, meter, variant) {
- const patterns = [[0,1,2.5],[0,.75,2],[.5,1.5,2.5],[0,1.5,3]]
- const times = patterns[((variant % patterns.length)+patterns.length)%patterns.length].filter(at=>at<meter)
- const notes = /** @type {PhraseNote[]} */ ([])
- let previous=68 + ((variant % 3)-1)*2
- for (const at of times) {
-  const palette=paletteAt(at).filter(note=>!note.clash && note.category==='chord' && note.midi>=60 && note.midi<=79)
-  if (!palette.length) continue
-  const target=previous+(notes.length===1 ? (variant%2?2:-2) : 0)
-  const selected=[...palette].sort((a,b)=>Math.abs(a.midi-target)-Math.abs(b.midi-target))[0]
-  notes.push({step:0,at,duration:Math.min(.85,meter-at),midi:selected.midi,category:selected.category,level:.68,kind:'quote'})
-  previous=selected.midi
- }
- return notes.map((note,i)=>({...note,duration:Math.min(note.duration,(notes[i+1]?.at??meter)-note.at)}))
-}
-
-/** @typedef {{pentatonic:boolean,chromatic:boolean,pickup:boolean,repeat:boolean,resolve:boolean,phraseBars:number,tension:number,avoid:number,leaps:number,density:number,syncopation:number,rests:number,variation:number,contrast:number,gate:number,register:number,ending:string,omit?:number,wholeTone?:boolean,maxLeap?:number,highest?:number,ornamentLength?:number,soloFlair?:boolean,playStyle?:string}} OttoLabSettings */
-export const defaultOttoLab = Object.freeze({pentatonic:true,chromatic:true,pickup:false,repeat:true,resolve:true,phraseBars:2,tension:0,avoid:0,leaps:0,density:90,syncopation:0,rests:5,variation:25,contrast:15,gate:95,register:72,ending:'chord',omit:9,wholeTone:true,maxLeap:7,highest:84,ornamentLength:32,playStyle:'craft'})
-/** Deterministic, monophonic two-bar slice of a two/four-bar experiment.
- * @param {(beat:number)=>Palette} paletteAt @param {OttoLabSettings} settings
- * @param {number} block @param {number} meter @param {number} key
- * @param {number} [previousMidi]
- * @returns {PhraseNote[]} */
-export function ottoLabPhrase(paletteAt,settings,block,meter,key,previousMidi) {
- let seed=(block+1)*173+17
- const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296}
- const maxLeap=settings.maxLeap??7, highest=settings.highest??84
- const length=meter*settings.phraseBars, notes=/** @type {PhraseNote[]} */([])
- // Group silence into one-beat breaths; the control sets their chance per beat.
- const silentBeats=Array.from({length},()=>random()<settings.rests/100)
- // A compact four-note vocabulary: walk neighbouring scale notes instead of
- // repeatedly targeting the register centre or re-filtering to each chord.
- if(settings.pentatonic){
-  if(settings.density<=0||settings.rests>=100)return []
-  const allDegrees=[0,2,4,7,9]
-  const omitted=allDegrees[(block*3+Math.floor(block/5))%allDegrees.length]
-  const degrees=allDegrees.filter(degree=>degree!==omitted)
-  const base=key+12*Math.floor((Math.min(settings.register,highest)-key)/12)
-  const pitches=degrees.map(degree=>Math.max(48,Math.min(84,base+degree))).filter(midi=>midi<=highest)
-  if(!pitches.length)return []
-  let index=previousMidi===undefined?block%pitches.length:pitches.reduce((best,pitch,i)=>Math.abs(pitch-previousMidi)<Math.abs(pitches[best]-previousMidi)?i:best,0)
-  if(previousMidi!==undefined&&block%2===1)index=index===pitches.length-1?index-1:index+1
-  let direction=block%2===0?1:-1
-  for(let at=0,step=0;at<length;step++){
-   const final=at>=length-1
-   const span=final?length-at:random()<settings.density/100?.5:1
-   if(step>0){
-    if(index===0)direction=1
-    else if(index===pitches.length-1)direction=-1
-    else if(step%4===0||random()<settings.variation/300)direction*=-1
-    if(random()>.2)index=Math.max(0,Math.min(pitches.length-1,index+direction*(random()<settings.leaps/100?2:1)))
-   }
-   const lastMidi=notes.at(-1)?.midi
-   if(settings.leaps===0&&lastMidi!==undefined&&Math.abs(pitches[index]-lastMidi)>5)index=pitches.indexOf(lastMidi)
-   if(!silentBeats[Math.floor(at)]&&!(at===0&&settings.pickup)){
-    const palette=paletteAt(at)
-    const safe=pitches.filter(pitch=>palette.some(p=>p.midi%12===pitch%12&&!p.clash)&&(lastMidi===undefined||Math.abs(pitch-lastMidi)<=maxLeap))
-    if(!safe.length){at+=span;continue}
-    if(!safe.includes(pitches[index]))index=pitches.indexOf(safe.sort((a,b)=>Math.abs(a-pitches[index])-Math.abs(b-pitches[index]))[0])
-    const midi=pitches[index]
-    notes.push({step:0,at,midi,category:palette.find(p=>p.midi===midi)?.category??'scale',duration:span*settings.gate/100,level:final?.72:.8,kind:'quote'})
-   }
-   at+=span
-  }
-  if(settings.resolve&&notes.length){
-   const last=notes[notes.length-1],palette=paletteAt(last.at)
-   const choices=pitches.filter(midi=>(notes.length<2||Math.abs(midi-(notes.at(-2)?.midi??midi))<=maxLeap)&&palette.some(p=>p.midi%12===midi%12&&!p.clash)&&Math.abs(midi-(last.midi??midi))<=4&&(settings.ending==='tonic'?[0,4,7].includes((midi-key+120)%12):palette.some(p=>p.midi===midi&&p.category==='chord')))
-   choices.sort((a,b)=>Math.abs(a-(last.midi??a))-Math.abs(b-(last.midi??b)))
-   if(choices.length)last.midi=choices[0]
-  }
-  if(settings.soloFlair&&block%3!==0&&notes.length){
-   const from=length-2
-   let previous=notes.filter(n=>n.at<from).at(-1)?.midi??settings.register
-   const run=/** @type {PhraseNote[]} */([])
-   for(let i=0;i<8;i++){
-    const at=from+i*.25
-    const candidates=paletteAt(at).filter(p=>!p.clash&&p.midi>=48&&p.midi<=highest&&Math.abs(p.midi-previous)<=maxLeap)
-    const direction=block%2===0?1:-1
-    candidates.sort((a,b)=>Math.abs(a.midi-(previous+direction*(i===0?maxLeap:2)))-Math.abs(b.midi-(previous+direction*(i===0?maxLeap:2))))
-    if(candidates.length){previous=candidates[0].midi;run.push({step:0,at,midi:previous,duration:.2,level:.82,kind:'quote'})}
-   }
-   if(run.length){notes.splice(0,notes.length,...notes.filter(n=>n.at+n.duration<=from),...run)}
-  }
-  return addChromaticApproaches(notes,settings.chromatic,settings.wholeTone??false,random,highest,maxLeap,settings.ornamentLength??32)
- }
- let previous=settings.register
- const pattern=[0,2,1,3,2,1,0,2]
- for(let tick=0;tick<length*2;tick++) {
-  const at=tick/2
-  const slow=settings.contrast>0&&(block*2+Math.floor(at/meter))%2===1
-  if(silentBeats[Math.floor(at)]||random()>settings.density/100*(slow?1-settings.contrast/150:1))continue
-  if(at===0&&settings.pickup&&block%2===0)continue
-  const shifted=Math.round(Math.max(0,at-(tick%2===0&&random()<settings.syncopation/100?.25:0))*4)/4
-  let candidates=paletteAt(shifted).filter(p=>p.midi>=48&&p.midi<=highest&&(notes.length===0||Math.abs(p.midi-(notes.at(-1)?.midi??p.midi))<=maxLeap))
-  const allowAvoid=random()<settings.avoid/100
-  if(!allowAvoid)candidates=candidates.filter(p=>!p.clash)
-  if(settings.pentatonic)candidates=candidates.filter(p=>[0,2,4,7,9].includes((p.midi-key+120)%12))
-  const color=random()<settings.tension/100
-  const preferred=candidates.filter(p=>color?p.category!=='chord':p.category==='chord')
-  if(preferred.length)candidates=preferred
-  if(!candidates.length)continue
-  const jump=random()<settings.leaps/100
-  const target=settings.repeat?settings.register+pattern[tick%pattern.length]:previous
-  candidates.sort((a,b)=>Math.abs(a.midi-target)-Math.abs(b.midi-target))
-  let selected=candidates[Math.min(candidates.length-1,jump?Math.floor(random()*candidates.length):random()<settings.variation/100?1:0)]
-  let midi=selected.midi
-  notes.push({step:0,at:shifted,midi,category:selected.category,duration:Math.min(length-shifted,(slow?1:.5)*settings.gate/100),level:tick%2===0?.85:.7,kind:'quote'})
-  previous=midi
- }
- if(settings.resolve&&notes.length){
-  const last=notes[notes.length-1],palette=paletteAt(last.at)
-  const ending=palette.filter(p=>p.midi<=highest&&(notes.length<2||Math.abs(p.midi-(notes.at(-2)?.midi??p.midi))<=maxLeap)).filter(p=>settings.ending==='tonic'?[0,4,7].includes((p.midi-key+120)%12):p.category==='chord'&&!p.clash&&(!p.degree||['R','3','♭3','5'].includes(p.degree)))
-  ending.sort((a,b)=>Math.abs(a.midi-(last.midi??72))-Math.abs(b.midi-(last.midi??72)))
-  if(ending.length)last.midi=ending[0].midi
- }
- return addChromaticApproaches(notes.map((note,i)=>({...note,duration:Math.max(.04,Math.min(note.duration,(notes[i+1]?.at??length)-note.at))})),settings.chromatic,settings.wholeTone??false,random,highest,maxLeap,settings.ornamentLength??32)
-}
-
-/** Insert short chromatic approaches on sixteenth-note positions before a target.
- * @param {PhraseNote[]} notes @param {boolean} enabled @param {boolean} wholeTone @param {()=>number} random @param {number} highest @param {number} maxLeap @param {number} ornamentLength @returns {PhraseNote[]} */
-function addChromaticApproaches(notes,enabled,wholeTone,random,highest,maxLeap,ornamentLength) {
- if(!enabled&&!wholeTone)return notes
- const result=/** @type {PhraseNote[]} */([])
- for(let i=0;i<notes.length;i++){
-  const note={...notes[i]},next=notes[i+1]
-  if(next?.midi!==undefined&&note.midi!==undefined&&next.at-note.at>=.5&&random()<.3){
-   const at=next.at-.25, interval=enabled&&Math.abs(next.midi-note.midi)===4?1:enabled&&wholeTone?(random()<.5?1:2):wholeTone?2:1
-   let pitch=next.midi+(note.midi<next.midi?-interval:interval)
-   if(pitch===note.midi||pitch>highest||pitch<48||Math.abs(pitch-note.midi)>maxLeap)pitch=next.midi+(pitch<next.midi?interval:-interval)
-   if(pitch>=48&&pitch<=highest&&pitch!==note.midi&&Math.abs(pitch-note.midi)<=maxLeap&&interval<=maxLeap){
-    note.duration=Math.min(note.duration,at-note.at)
-    result.push(note,{step:0,at,midi:pitch,duration:Math.max(.025,Math.min(.25,.25*ornamentLength/100)),category:'chromatic',level:.42,kind:'quote'})
-    continue
-   }
-  }
-  result.push(note)
- }
- return result
-}
-
-/** Developing solo: descending sequences, turns, and short approach notes.
- * @param {readonly number[]} pitches @param {number} from @param {number} beats @param {number} variation @returns {PhraseNote[]} */
-export function developingSolo(pitches,from,beats,variation) {
- const sorted=[...new Set(pitches)].sort((a,b)=>a-b)
- if(!sorted.length)return []
- const result=/** @type {PhraseNote[]} */([])
- // Short descending cells with an answering turn, rather than a repeating run.
- const shapes=[[0,-1,-3,-5],[-2,-3,0,1],[2,1,3,4],[1,1,0,-1]]
- const rhythms=[[.5,.25,.25,1],[.5,.5,.25,.75],[.25,.25,.5,1]]
- let at=0,step=0
- const peak=Math.max(0,sorted.length-2-variation%3)
- while(at<beats){
-  const cell=Math.floor(step/4), shape=shapes[(cell+variation)%shapes.length]
-  const index=Math.max(0,Math.min(sorted.length-1,peak+shape[step%4]))
-  const midi=sorted[index],span=Math.min(rhythms[(variation+cell)%3][step%4],beats-at)
-  result.push({step:0,at:from+at,midi,duration:span*.85,level:step%4===0?.86:.72,kind:'quote'})
-  at+=span;step++
- }
- return result
-}
-
-/** Distinct performance vocabulary, shared by solo and call/response modes.
- * @param {PhraseNote[]} notes @param {string} style @param {number} beats
- * @param {(beat:number)=>Palette} paletteAt @param {number} key @param {number} block
- * @param {boolean} quote @returns {PhraseNote[]} */
-export function performOttoStyle(notes,style,beats,paletteAt,key,block,quote=false) {
- if(style==='shred'||style==='scale') {
-  const from=quote?1:0
-  const result=notes.filter(n=>n.at<from)
-  const scale=block%5===3?[0,2,4,6,7,9,11]:[0,2,4,5,7,9,11]
-  let step=0,at=from
-  while(at<beats-.001) {
-   const palette=paletteAt(at).filter(p=>!p.clash&&p.midi>=60&&p.midi<=84)
-   let pitches=style==='shred'?[...new Set(palette.filter(p=>p.category==='chord').map(p=>p.midi))].sort((a,b)=>a-b):
-    Array.from({length:25},(_,i)=>60+i).filter(m=>scale.includes(((m-key)%12+12)%12))
-   if(style==='shred'&&pitches.length){const base=pitches[Math.floor(pitches.length/4)] ;pitches=pitches.filter(p=>p>=base&&p<=base+12)}
-   if(!pitches.length)pitches=[...new Set(palette.map(p=>p.midi))].sort((a,b)=>a-b)
-   if(!pitches.length)break
-   const cycle=Math.max(1,pitches.length-1),phase=step%(cycle*2)
-   const stair=[0,1,2,1,2,3,2,3,4,3,4,5]
-   const index=style==='shred'?(block%2?stair[step%stair.length]%pitches.length:step%pitches.length):(block%2?cycle-Math.abs(cycle-phase):Math.abs(cycle-phase))
-   const progress=(at-from)/Math.max(.001,beats-from)
-   const span=style==='shred'?(progress<.3?.5:progress<.65?.25:step%4===0?.125:.25):.25
-   const duration=Math.min(span+(style==='shred'?.15:.01),beats-at)
-   result.push({step:0,at,midi:pitches[Math.min(pitches.length-1,index)],duration,level:step%4===0?.88:.76,kind:'quote'})
-   at+=span;step++
-  }
-  return result
- }
- if(style==='jazz') {
-  const result=notes.map((n,i)=>{
-   const beat=Math.floor(n.at), offbeat=(i+block)%3!==0
-   return {...n,at:beat+(offbeat?2/3:1/3)}
-  }).filter(n=>n.at<beats).sort((a,b)=>a.at-b.at).filter((n,i,a)=>!i||n.at>a[i-1].at)
-  return result.map((n,i)=>({...n,duration:Math.min((result[i+1]?.at??beats)-n.at,n.duration),level:i%3===0?.92:.7}))
- }
- return notes
-}
-
-/** Keep replies close to the player's register and interval vocabulary.
- * @param {PhraseNote[]} response @param {readonly PhraseNote[]} input
- * @param {(beat:number)=>Palette} paletteAt @returns {PhraseNote[]} */
-export function followPlayerMotion(response,input,paletteAt) {
- const played=input.filter(n=>n.midi!==undefined)
- if(!played.length)return response
- const pitches=played.map(n=>/** @type {number} */(n.midi))
- const jump=Math.min(12,Math.max(2,...pitches.slice(1).map((n,i)=>Math.abs(n-pitches[i])+2)))
- const low=Math.min(...pitches)-2,high=Math.max(...pitches)+2
- let previous=pitches.at(-1)??pitches[0]
- const result=/** @type {PhraseNote[]} */([])
- for(const note of response){
-  if(note.midi===undefined)continue
-  const near=played.reduce((best,n)=>Math.abs(n.at-note.at)<Math.abs(best.at-note.at)?n:best,played[0]).midi??previous
-  const allowed=(/** @type {number} */ midi)=>midi>=low&&midi<=high&&Math.abs(midi-previous)<=jump&&Math.abs(midi-near)<=jump
-  let midi=note.midi
-  if(!allowed(midi)){
-   const candidates=paletteAt(note.at).filter(p=>!p.clash&&allowed(p.midi)).sort((a,b)=>Math.abs(a.midi-near)-Math.abs(b.midi-near)||Math.abs(a.midi-previous)-Math.abs(b.midi-previous))
-   if(!candidates.length)continue
-   midi=candidates[0].midi
-  }
-  result.push({...note,midi});previous=midi
- }
- return result
-}
-
 const modeLines = {
   pc: '僕と交互にメロディをプレイしよう',
   you: '君からメロディをプレイしてね',
   'all-you': '一緒に弾こう',
   'all-pc': '僕がメロディ奏でてみるよ',
-}
-
-/** Keep the authored eight-bar timeline unchanged.
- * @param {import('./progression.js').Progression} source */
-export function conversationScore(source) {
-  return source.slots.map((chord, index) => ({chord, changes: [...source.beatSlots[index]], key: source.keyForBar(index)}))
-}
-/** @param {number} beat @param {boolean | string} mode @param {number} [beatsPerBar] @param {number} [turnBars] */
-export function conversationTurn(beat, mode, beatsPerBar = 4, turnBars = 2) {
-  const block = Math.floor(Math.max(0, beat) / (beatsPerBar * turnBars))
-  return {block, local: Math.max(0, beat) % (beatsPerBar * turnBars), pc: mode === 'all-pc' || (mode !== 'all-you' && block % 2 === (mode === true || mode === 'pc' ? 0 : 1)), bar: Math.floor(Math.max(0, beat) / beatsPerBar) % 8 + 1}
-}
-
-/** @param {HTMLElement} ui @param {{join:()=>void,imitate:()=>void,keepPlaying:()=>void,first?:(user:boolean)=>void,shift?:(direction:number)=>void,bars?:(bars:number)=>void}} actions */
-function mountBuddyView(ui, actions) {
-  const originalBuddy = /** @type {HTMLElement} */ (document.querySelector('#oto-buddy'))
-  const view = ref({
-    line: '', status: '', speaking: false, look: originalBuddy.dataset.look ?? '',
-    hideContinue: true, hideJoin: true, hideImitate: true,
-    turnProgress:0,turnRemaining:0,sessionVisible:false,sessionRunning:false,userFirst:false,turnBars:2,
-  }).value
-  createApp({
-    render: () => [
-      view.sessionVisible?h('div',{class:'session-turn-display'},[
-        h('div',{class:'session-ring-column'},[h('div',{class:'session-turn-ring','aria-hidden':'true'},[
-          h('svg',{viewBox:'0 0 100 100'},[
-            h('circle',{cx:50,cy:50,r:42,class:view.userFirst?'turn-user':'turn-otto',fill:'none','stroke-width':8,'stroke-dasharray':'131.95 131.95',transform:'rotate(-90 50 50)'}),
-            h('circle',{cx:50,cy:50,r:42,class:view.userFirst?'turn-otto':'turn-user',fill:'none','stroke-width':8,'stroke-dasharray':'131.95 131.95',transform:'rotate(90 50 50)'}),
-            h('circle',{cx:50,cy:8,r:5,class:'turn-marker',transform:`rotate(${view.turnProgress*360} 50 50)`}),
-          ]),
-          h('div',{class:'session-turn-count'},[h('strong',view.sessionRunning?String(view.turnRemaining):`${view.turnBars}＋${view.turnBars}`),h('small',view.sessionRunning?(view.speaking?'Ottoの番':'あなたの番'):'小節')]),
-        ]),h('label',{class:'session-length'},['交代 ',h('select',{'aria-label':'交代する小節数',value:view.turnBars,onChange:(/** @type {Event} */ event)=>{const bars=Number((/** @type {HTMLSelectElement} */ (event.target)).value);view.turnBars=bars;actions.bars?.(bars)}},[2,4,8].map(bars=>h('option',{value:bars},`${bars}小節`)))])]),
-        h('div',[h('strong',`Ottoと${view.turnBars}小節ずつ`),h('fieldset',{class:'segmented-control session-first','aria-label':'先に弾く人'},...[['Ottoが先',false],['自分が先',true]].map(([label,user])=>h('label',[h('input',{type:'radio',name:'session-first',checked:view.userFirst===user,onChange:()=>{view.userFirst=Boolean(user);actions.first?.(Boolean(user))}}),h('span',String(label))]))),h('div',{class:'style-stepper session-phase'},[h('button',{type:'button','aria-label':'交代位置を1小節前へ',onClick:()=>actions.shift?.(-1)},'← 1小節'),h('button',{type:'button','aria-label':'交代位置を1小節後へ',onClick:()=>actions.shift?.(1)},'1小節 →')])]),
-      ]):null,
-      h('div', {class: 'talk-companion'}, [
-        h('div', {class: 'talk-face', 'aria-hidden': 'true', 'data-speaking': String(view.speaking), 'data-listening':String(view.sessionRunning&&!view.speaking)}, [
-          h('div', {class: 'talk-avatar', 'data-mood': 'idle', 'data-look': view.look}),
-        ]),
-        h('p', {class: 'talk-bubble'}, view.line),
-      ]),
-      h('p', {id: 'buddy-status', class: 'sr-only', role: 'status', 'aria-live': 'polite'}, view.status),
-    ],
-  }).mount(ui)
-  const drawing = originalBuddy.querySelector('svg')
-  if (drawing) ui.querySelector('.talk-avatar')?.append(drawing.cloneNode(true))
-  new MutationObserver(() => { view.look = originalBuddy.dataset.look ?? '' })
-    .observe(originalBuddy, {attributes:true, attributeFilter:['data-look']})
-  return view
 }
 
 /** @typedef {ReturnType<typeof import('./music.js').melodyPalette>} Palette */
@@ -385,6 +34,22 @@ export function mountBuddy(source, mountView = mountBuddyView) {
   const ui = /** @type {HTMLElement} */ (document.querySelector('#buddy-inline'))
   const open = /** @type {HTMLButtonElement} */ (document.querySelector('#buddy-talk-open'))
   const view = mountView(ui, {join, imitate, keepPlaying,first:user=>{userFirst=user;setMode(user?'you':'pc')},bars:bars=>{turnBars=bars;if(active){partner.silence();scheduled.clear();recorded=[];lastBlock=-1;const turn=sessionTurn(Math.max(0,position()));replyPlan=turn.pc?makeResponse(turn.block):[];tick()}},shift:direction=>{if(active){origin+=direction*meter()*60/sessionBpm;partner.silence();scheduled.clear();lastBlock=-1;recorded=[];replyPlan=makeResponse(sessionTurn(Math.max(0,position())).block);tick()}}})
+  const {captureNote: recordPhraseNote} = mountPhraseHistory(mountView === mountBuddyView ? ui : null, () => source.progression.running)
+
+  /** @param {PhraseNote} note @param {number} start */
+  function captureNote(note, start) {
+    recordPhraseNote(note, start, () => {
+      const beats = meter()
+      const bars = Math.ceil(phraseBeats() / beats)
+      const {slots, nextStep} = transport
+      return {
+        bpm: sessionBpm,
+        key: transport.keyForBar(Math.floor(Math.max(0, position()) / beats)),
+        beats, bars,
+        chords: Array.from({length:bars}, (_, index) => slots[(nextStep + index) % slots.length]),
+      }
+    })
+  }
   const pianoKeys = Array.from(document.querySelectorAll('#piano-keys [data-midi]'))
   const pads = Array.from(document.querySelectorAll('#pads button'))
   const transport = source.progression
@@ -393,7 +58,7 @@ export function mountBuddy(source, mountView = mountBuddyView) {
   partner.singing = true
   const lab=ref(/** @type {OttoLabSettings} */ ({...defaultOttoLab}))
   const labMode=ref(false)
-  const sessionMode=ref(mountView===mountBuddyView)
+  const sessionMode=ref(false)
   view.sessionVisible=sessionMode.value
   /** @type {PhraseNote[]} */
   let recorded = []
@@ -418,12 +83,13 @@ export function mountBuddy(source, mountView = mountBuddyView) {
   let sessionBpm = 100
   /** @type {ReturnType<typeof setInterval> | undefined} */
   let timer
-  function stop() {
+  /** @param {boolean} [stopTransport] */
+  function stop(stopTransport = true) {
     const owned = active || preparing
     generation++; active = false; preparing = false
     listening = false; firstEcho = false; answeringUntil = 0; tempoChange = undefined
     clearInterval(timer); timer = undefined
-    if (owned) { transport.stop(); player.silence() }
+    if (owned && stopTransport) { transport.stop(); player.silence() }
     panel.dataset.ottoPlaying = 'false'
     delete panel.dataset.inviting
     partner.silence(); lastReplyModulation = -1
@@ -437,6 +103,12 @@ export function mountBuddy(source, mountView = mountBuddyView) {
     source.refreshTransport()
     view.sessionRunning=false;view.turnProgress=0;view.turnRemaining=0
     view.status = '停止'
+  }
+  let dialogueKey='',dialogueText='',dialogueIndex=0
+  function dialogue(/** @type {'play'|'listen'} */ kind,/** @type {number} */ block) {
+    const style=lab.value.playStyle ?? 'craft', key=`${style}:${kind}:${block}`
+    if(key!==dialogueKey){const lines=(ottoLines[style] ?? ottoLines.craft)[kind];dialogueText=lines[dialogueIndex++%lines.length];dialogueKey=key}
+    return dialogueText
   }
   function selectedLine() {
     return Reflect.get(modeLines, mode) ?? '一緒に遊ぼう。'
@@ -542,11 +214,11 @@ export function mountBuddy(source, mountView = mountBuddyView) {
   function tick() {
     if (!active || !player.context) return
     if (!transport.running) { stop(); return }
-    if (transport.bpm !== sessionBpm && !tempoChange) {
-      const time = transport.nextTime
-      tempoChange = {time, beat:(time - origin) / (60 / sessionBpm), bpm:transport.bpm}
+    const { bpm, time } = transport.scheduledTempo
+    if (bpm !== sessionBpm && !tempoChange) {
+      tempoChange = {time, beat:(time - origin) / (60 / sessionBpm), bpm}
     }
-    if (tempoChange && player.context.currentTime >= tempoChange.time - .1) {
+    if (tempoChange && player.context.currentTime >= tempoChange.time) {
       sessionBpm = tempoChange.bpm
       origin = tempoChange.time - tempoChange.beat * 60 / sessionBpm
       tempoChange = undefined
@@ -571,9 +243,9 @@ export function mountBuddy(source, mountView = mountBuddyView) {
         replyPlan = response
         echoStart = startTime
         echoBeatSeconds = 60 / sessionBpm
-        response.forEach(note => { if (note.midi !== undefined) partner.playAt([note.midi], startTime + note.at * 60 / sessionBpm, note.duration * 60 / sessionBpm, note.level ?? .8) })
+        response.forEach(note => { if (note.midi !== undefined) partner.playAt([note.midi], startTime + note.at * 60 / sessionBpm, note.duration * 60 / sessionBpm, note.level ?? .8);captureNote(note,startTime) })
         answeringUntil = startTime + Math.max(0, ...response.map(note => note.at + note.duration)) * 60 / sessionBpm
-        view.line = 'Ottoの番 ♪'
+        view.line = dialogue('play',Math.floor(beat/phraseBeats()))
       }
       if (answeringUntil && now >= answeringUntil) {
         listening = false; answeringUntil = 0; recorded = []; scheduled.clear()
@@ -583,7 +255,7 @@ export function mountBuddy(source, mountView = mountBuddyView) {
         panel.dataset.ottoPlaying = String(Boolean(answeringUntil))
         panel.dataset.ottoInterruptible = 'true'
         view.hideContinue = true; view.hideJoin = !answeringUntil; view.hideImitate = true
-        if (!answeringUntil) view.line = '聴いてるよ'
+        if (!answeringUntil) view.line = '聴いてるよ、続けてみて'
         const sounding = new Set(replyPlan.flatMap(note => {
           const start = echoStart + note.at * echoBeatSeconds
           return answeringUntil && note.midi !== undefined && now >= start && now < start + note.duration * echoBeatSeconds ? [note.midi] : []
@@ -621,7 +293,7 @@ export function mountBuddy(source, mountView = mountBuddyView) {
     const speaking = String(turn.pc)
     view.speaking = turn.pc
     if (firstEcho && !panel.dataset.inviting) panel.dataset.inviting = 'true'
-    const line = turn.pc ? 'Ottoの番 ♪' : firstEcho ? '一音、聞かせて' : '君の番 ♪'
+    const line = turn.pc ? dialogue('play',turn.block) : firstEcho ? '一音、聞かせて' : '君の番だよ。聴いてるね'
     view.line = line
     if (panel.dataset.ottoPlaying !== speaking) panel.dataset.ottoPlaying = speaking
     if (panel.dataset.ottoInterruptible !== 'false') panel.dataset.ottoInterruptible = 'false'
@@ -633,9 +305,10 @@ export function mountBuddy(source, mountView = mountBuddyView) {
     replyPlan.forEach((note, index) => {
       const time = replyStart + note.at * 60 / sessionBpm
       const id = `${targetBlock}:${index}`
-      if (turn.pc && mode !== 'all-you' && !scheduled.has(id) && time <= now + 0.12 && time >= now - 0.05 && note.midi !== undefined) {
+      if (turn.pc && mode !== 'all-you' && !scheduled.has(id) && time < (tempoChange?.time ?? Infinity) && time <= now + 0.12 && time >= now - 0.05 && note.midi !== undefined) {
         scheduled.add(id)
         partner.playAt([note.midi], time, note.duration * 60 / sessionBpm, note.level ?? 0.8)
+        captureNote(note,replyStart)
       }
       if (turn.pc && now >= time && now < time + note.duration * 60 / sessionBpm) {
         if (note.midi !== undefined) sounding.add(note.midi)
@@ -680,13 +353,13 @@ export function mountBuddy(source, mountView = mountBuddyView) {
     const ticket = generation
     preparing = true; source.refreshTransport()
     view.line = view.status = '音を準備中…'
-    sessionBpm = transport.bpm
     partner.setTimbre(player.timbre)
     partner.setVolume(player.volume)
     pads.forEach(pad => { /** @type {HTMLButtonElement} */ (pad).disabled = true; pad.classList.remove('playing') })
     try {
       await Promise.all([player.ready(), partner.ready(), transport.instrument.ready(), transport.melody?.ready(), ...transport.ornaments.map(track => track.voice.ready())])
       if (ticket !== generation) return
+      sessionBpm = transport.bpmForBar(startBar)
       const beatSeconds = 60 / sessionBpm
       const countControl = /** @type {HTMLInputElement} */ (document.querySelector('#count-in'))
       countBeats = countControl.checked ? (countControl.value === '2' ? 2 : 4) : 0
@@ -700,7 +373,8 @@ export function mountBuddy(source, mountView = mountBuddyView) {
       for (let i = 0; countIn && i < countBeats; i++) source.drums.hitAt('hat', countStart + i * beatSeconds, i === 0 ? 0.9 : 0.6, 0.06)
       replyPlan = makeResponse(0)
       if (sessionTurn(0).pc) replyPlan.forEach((note, index) => {
-        if (note.midi !== undefined) partner.playAt([note.midi], origin + note.at * beatSeconds, note.duration * beatSeconds, note.level ?? 0.8)
+        if (note.at >= meter()) return
+        if (note.midi !== undefined) {partner.playAt([note.midi], origin + note.at * beatSeconds, note.duration * beatSeconds, note.level ?? 0.8);captureNote(note,origin)}
         scheduled.add(`0:${index}`)
       })
       lastBlock = -1; active = true; preparing = false
@@ -709,6 +383,34 @@ export function mountBuddy(source, mountView = mountBuddyView) {
       timer = setInterval(tick, 25)
     } catch (error) {
       if (ticket === generation) { stop(); view.line = view.status = error instanceof Error ? error.message : '音を準備できませんでした。もう一度試してね。' }
+    }
+  }
+  async function joinPlayback() {
+    if (!transport.running || active || preparing) return
+    const ticket = ++generation
+    preparing = true
+    partner.setTimbre(player.timbre)
+    partner.setVolume(player.volume)
+    try {
+      await partner.ready()
+      if (ticket !== generation || !transport.running) return
+      sessionBpm = transport.scheduledTempo.bpm || transport.bpm
+      origin = transport.nextTime - transport.nextAbsoluteBar * meter() * 60 / sessionBpm
+      const turn = sessionTurn(Math.max(0, position()))
+      replyPlan = turn.pc ? makeResponse(turn.block) : []
+      lastBlock = turn.block
+      active = true
+      preparing = false
+      source.refreshTransport()
+      tick()
+      timer = setInterval(tick, 25)
+    } catch (error) {
+      if (ticket === generation) {
+        stop(false)
+        view.status = error instanceof Error ? error.message : '音を準備できませんでした。'
+      }
+    } finally {
+      if (ticket === generation && !active) preparing = false
     }
   }
   /** @param {number} step */
@@ -797,6 +499,17 @@ export function mountBuddy(source, mountView = mountBuddyView) {
     }
     view.line = selectedLine(); source.onModeChange(value)
   }
+  /** @param {string} value */
+  function setPlayMode(value) {
+    if (!['session', 'all-pc', 'all-you'].includes(value)) return
+    sessionMode.value = value === 'session'
+    view.sessionVisible = sessionMode.value
+    labMode.value = value === 'all-pc'
+    setMode(sessionMode.value ? (userFirst ? 'you' : 'pc') : value)
+    source.onModeChange(sessionMode.value ? 'session' : value)
+    if (value === 'all-you') stop(false)
+    else if (transport.running && !active && !preparing) void joinPlayback()
+  }
   window.addEventListener('blur', () => { if (active || preparing) stop() })
   document.addEventListener('visibilitychange', () => { if (document.hidden && (active || preparing)) stop() })
   view.line = selectedLine()
@@ -821,35 +534,10 @@ export function mountBuddy(source, mountView = mountBuddyView) {
     replyPlan = makeResponse(turn.block)
     scheduled.clear()
   }
-  if(mountView===mountBuddyView){
-  const labHost=document.createElement('div');labHost.className='otto-lab-host';panel.querySelector('.melody-heading')?.after(labHost)
-  const groups=[
-    {name:'音階',toggles:[['repeat','音形を繰り返す'],['resolve','終わりを着地させる']],knobs:[['tension','テンション',0,100],['avoid','半音のぶつかり',0,100],['leaps','跳躍',0,100],['register','音域の中心',48,84],['maxLeap','最大跳躍（半音）',1,24],['highest','最高音',48,84]]},
-    {name:'リズム',toggles:[['pickup','助走を入れる']],knobs:[['density','音の密度',0,100],['syncopation','食い気味にずらす',0,100],['gate','音の長さ',10,100],['ornamentLength','飾りの音の長さ',10,100]]},
-    {name:'聴きやすさ',toggles:[],knobs:[['rests','休符',0,100],['contrast','緩急',0,100]]},
-  ]
-  const update=(/** @type {string} */ id,/** @type {number|boolean|string} */ value)=>{if(id==='playStyle')source.onPlayStyleChange?.(String(value));Reflect.set(lab.value,id,value)}
-  createApp({render:()=>{view.status;return [
-    h('fieldset',{class:'segmented-control otto-play-mode','aria-label':'メロディの演奏者'},[h('legend',{class:'sr-only'},'メロディの演奏者'),...[['session','Ottoとセッション'],['auto','Ottoに弾いてもらう'],['manual','自分で弾く']].map(([value,label])=>h('label',[h('input',{type:'radio',name:'otto-lab-mode',value,checked:value==='session'?sessionMode.value:value==='auto'?labMode.value:!labMode.value&&!sessionMode.value,onChange:()=>{sessionMode.value=value==='session';view.sessionVisible=sessionMode.value;labMode.value=value==='auto';setMode(sessionMode.value?'pc':labMode.value?'all-pc':'all-you');if(value==='manual')stop();}}),h('span',label)]))]),
-    h('label',{class:'otto-style-choice'},['Ottoのプレイスタイル ',h('select',{'aria-label':'Ottoのプレイスタイル',value:lab.value.playStyle??'craft',onChange:(/** @type {Event} */ e)=>update('playStyle',(/** @type {HTMLSelectElement} */(e.target)).value)},...[['imitate','丁寧に真似する'],['gentle','やさしい'],['classical','クラシック上がり'],['shred','高速ピロピロマン'],['scale','スケール大好き'],['jazz','ジャズ好き'],['craft','職人ソロプレイヤー']].map(([value,label])=>h('option',{value},label)))]),
-    labMode.value?h('div',{class:'otto-lab'},[
-      h('div',{class:'otto-lab-toolbar'},[h('button',{type:'button',class:'reference-remove-key',onClick:()=>{if(active)stop();else void start()}},active?'停止':'▶ フレーズを再生'),h('button',{type:'button',class:'reference-remove-key',onClick:()=>{source.onPlayStyleChange?.(defaultOttoLab.playStyle);lab.value={...defaultOttoLab}}},'初期値に戻す'),h('span','変更は次のフレーズから反映')]),
-      ...groups.map(group=>h('section',{class:'otto-lab-group'},[h('h3',group.name),...group.toggles.map(([id,label])=>h('label',{class:'oto-checkbox'},[h('input',{type:'checkbox',checked:Reflect.get(lab.value,id),onChange:(/** @type {Event} */ e)=>update(id,(/** @type {HTMLInputElement} */(e.target)).checked)}),h('span',label)])),
-      h('div',{class:'otto-lab-knobs'},group.knobs.map(([id,label,min,max])=>{
-        const value=Number(Reflect.get(lab.value,String(id)))
-        return h('label',{class:'otto-lab-knob'},[h('span',String(label)),h('span',{class:'volume-knob',style:`--angle:${-135+(value-Number(min))/(Number(max)-Number(min))*270}deg`},[h('input',{type:'range',min,max,step:1,value,disabled:lab.value.pentatonic&&['tension','avoid','syncopation','contrast'].includes(String(id)),'aria-label':String(label),onInput:(/** @type {Event} */ e)=>update(String(id),Number((/** @type {HTMLInputElement} */(e.target)).value)),onPointerdown:(/** @type {PointerEvent} */ event)=>{
-          if(event.button!==0||(/** @type {HTMLInputElement} */(event.target)).disabled)return;event.preventDefault()
-          const input=/** @type {HTMLInputElement} */(event.target),x=event.clientX,y=event.clientY
-          input.focus();input.setPointerCapture(event.pointerId)
-          const move=(/** @type {PointerEvent} */ e)=>update(String(id),Math.round(Math.max(Number(min),Math.min(Number(max),value+(e.clientX-x-e.clientY+y)*.5))))
-          const end=()=>{input.removeEventListener('pointermove',move);input.removeEventListener('pointerup',end);input.removeEventListener('pointercancel',end)}
-          input.addEventListener('pointermove',move);input.addEventListener('pointerup',end);input.addEventListener('pointercancel',end)
-        }}),h('span',{'aria-hidden':'true'})]),h('output',String(value)+(id==='register'||id==='highest'?' MIDI':id==='maxLeap'?' 半音':'%'))])
-      })),group.name==='音階'?h('label',['終わりの音 ',h('select',{'aria-label':'終わりの音',value:lab.value.ending,onChange:(/** @type {Event} */ e)=>update('ending',(/** @type {HTMLSelectElement} */(e.target)).value)},[h('option',{value:'chord'},'コードのR・3・5度'),h('option',{value:'tonic'},'キーの1・3・5度')])]):null,
-      group.name==='リズム'?h('label',['フレーズ ',h('select',{'aria-label':'フレーズの小節数',value:lab.value.phraseBars,onChange:(/** @type {Event} */ e)=>update('phraseBars',Number((/** @type {HTMLSelectElement} */(e.target)).value))},[h('option',{value:2},'2小節'),h('option',{value:4},'4小節')])]):null])),
-    ]):null,
-  ]}}).mount(labHost)
-  }
+  if (mountView === mountBuddyView) mountBuddyLab(panel, {
+    view, player, partner, lab, labMode, sessionMode, setPlayMode,
+    onPlayStyleChange:source.onPlayStyleChange,
+  })
   /** @param {number} amount */
   function rememberModulation(amount) {
     midiModulation=Math.max(0,Math.min(1,amount))
@@ -858,5 +546,5 @@ export function mountBuddy(source, mountView = mountBuddyView) {
     const local=listening ? beat-listenStart : beat%phraseBeats()
     held.forEach(note=>{if(note.modulation && local>=note.at)note.modulation.push({at:Math.max(0,local-note.at),value:midiModulation})})
   }
-  return {harmonyChanged, styleChanged, timbreChanged, rememberModulation, get autoPlay() { return labMode.value || sessionMode.value }, get active() { return active || preparing }, start, setMode, attack, attackMidi: (/** @type {number} */ midi, glide = false) => attack(100+midi,midi,glide), releaseMidi: (/** @type {number} */ midi) => release(100+midi), release, stop}
+  return {harmonyChanged, styleChanged, timbreChanged, rememberModulation, setPlayMode, get autoPlay() { return labMode.value || sessionMode.value }, get active() { return active || preparing }, start, setMode, attack, attackMidi: (/** @type {number} */ midi, glide = false) => attack(100+midi,midi,glide), releaseMidi: (/** @type {number} */ midi) => release(100+midi), release, stop}
 }

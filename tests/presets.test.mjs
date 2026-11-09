@@ -178,3 +178,16 @@ test('preset levels distinguish diatonic pitches, chromatic chords, and modulati
   }
   assert.equal(presetLevel({pattern, changes: [], modulation: [0, 0, 2, 0]}), 3)
 })
+
+test('curated choices retain every starting degree and resolve legacy recipes', async () => {
+  const {presetChoiceIds} = await import('../dist/presets.js')
+  const {genres, styleChoiceIds} = await import('../dist/groove.js')
+  assert.equal(new Set(presetChoiceIds).size, presetChoiceIds.length)
+  assert.equal(new Set(styleChoiceIds).size, styleChoiceIds.length)
+  for (const id of presetChoiceIds) assert.ok(presets.some(item => item.id === id), id)
+  for (const id of styleChoiceIds) assert.ok(genres.some(item => item.id === id), id)
+  for (const group of presetGroups) assert.ok(presets.some(item => item.group === group.id && presetChoiceIds.includes(item.id)), group.id)
+  assert.ok(presetChoiceIds.length <= presets.length / 2)
+  assert.ok(styleChoiceIds.length <= genres.length / 2)
+  for (const item of presets) assert.equal(presetSlots(item.id).length, 8)
+})

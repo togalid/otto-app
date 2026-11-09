@@ -1,7 +1,8 @@
-import {padChordNotes, customChord, qualityGroups, displayChordParts} from './music.js'
+import {padChordNotes, customChord, qualityGroups, displayChordParts, chordConfig} from './music.js'
 import {createChoiceMenu} from './choice-menu.js'
 const degrees=['I','II','III','IV','V','VI','VII','♯I','♭III','♯IV','♭VI','♭VII']
 const numericDegrees=['1','2','3','4','5','6','7','♯1','♭3','♯4','♭6','♭7']
+/** @type {'number'|'chord'|'roman'} */
 let notation='roman'
 const degreeRoots=[0,1,2,3,4,5,6,0,2,3,5,6]
 const layout=[7,8,9,10,3,4,5,11,0,1,2,6]
@@ -27,16 +28,40 @@ const assignments=new Map(Object.entries({
  '10:center':{quality:'dim',extension:'dim7',label:'dim7'},
  '11:center':{quality:'maj',extension:'7',label:'7'},
 }))
-const embedded=new URLSearchParams(location.search).has('embedded')&&window.parent!==window
+// Curated upper structures: [upper pitch class, upper quality], bass stays on the Pad.
+const slashDefaults=[
+ [[2,'maj'],[7,'maj']], [[0,'maj7'],[9,'min7']], [[2,'min7'],[0,'maj']],
+ [[7,'maj'],[0,'maj']], [[5,'maj'],[9,'min7']], [[7,'maj'],[5,'maj7']],
+ [[9,'maj'],[5,'maj']], [[4,'maj'],[9,'maj']], [[1,'maj'],[10,'maj']],
+ [[4,'maj7'],[8,'maj']], [[6,'maj'],[3,'maj']], [[8,'maj'],[5,'maj']],
+]
+const pitchDegrees=['I','♭II','II','♭III','III','IV','♯IV','V','♭VI','VI','♭VII','VII']
+const bassPitches=[0,2,4,5,7,9,11,1,3,6,8,10]
+slashDefaults.forEach((choices,index)=>choices.forEach(([upper,quality],choice)=>{
+ const bass=bassPitches[index],offset=(Number(upper)-bass+12)%12
+ const suffix=quality==='maj7'?'△7':quality==='min7'?'m7':''
+ assignments.set(`${index}:${choice===0?'tl':'bl'}`,{quality:'slash',extension:`pad_${offset}_${quality}`,label:`${pitchDegrees[Number(upper)]}${suffix}/${degrees[index]}`})
+}))
+const params=new URLSearchParams(location.search)
+const backing=params.has('backing')
+const embedded=params.has('embedded')&&window.parent!==window
+if(backing) document.body.classList.add('backing-pad')
 if(embedded){
  document.documentElement.classList.add('embedded-pad-root')
  document.body.classList.add('embedded-pad')
  window.addEventListener('message',event=>{
-  if(event.origin===location.origin&&event.source===parent&&event.data?.type==='oto-pad-key'&&Number.isInteger(event.data.key)&&event.data.key>=0&&event.data.key<12){
-   key.value=String(event.data.key)
-   if(['milk','toy','soda'].includes(event.data.skin))document.documentElement.dataset.skin=event.data.skin
-   const nextNotation=event.data.notation==='number'?'number':event.data.notation==='chord'?'chord':'roman'
-   notation=nextNotation;refreshPadLabels()
+  if(event.origin!==location.origin || event.source!==parent)return
+  const data=event.data
+  if(backing && data?.type==='oto-pad-clear'){clearChordFlash();return}
+  if(!Number.isInteger(data?.key) || data.key<0 || data.key>=12)return
+  if(backing && data.type==='oto-pad-hit' && typeof data.chord==='string'){
+   flashChord(data.chord)
+  } else if(data.type==='oto-pad-key'){
+   clearChordFlash()
+   key.value=String(data.key)
+   if(['milk','toy','soda'].includes(data.skin))document.documentElement.dataset.skin=data.skin
+   notation=data.notation==='number'?'number':data.notation==='chord'?'chord':'roman'
+   refreshPadLabels()
   }
  })
  document.addEventListener('keydown',event=>{
@@ -105,6 +130,26 @@ function refreshPadLabels(){
   pad.querySelectorAll('button').forEach(button=>renderPadLabel(index,button.classList.contains('pad-center')?'center':['tl','tr','bl','br'].find(zone=>button.classList.contains(zone)) ?? '',button))
  })
 }
+/** @type {{button:HTMLButtonElement, timer:ReturnType<typeof setTimeout>}|undefined} */
+let chordFlash
+function clearChordFlash(){
+ if(!chordFlash)return
+ clearTimeout(chordFlash.timer)
+ chordFlash.button.classList.remove('sequencer-hit')
+ chordFlash=undefined
+}
+/** @param {string} id */
+function flashChord(id){
+ clearChordFlash()
+ const canonical=customChord(chordConfig(id))
+ const button=Array.from(document.querySelectorAll('button[data-zone]')).find(node=>{
+  const candidate=/** @type {HTMLButtonElement} */(node)
+  return chord(Number(candidate.parentElement?.dataset.degree),candidate.dataset.zone ?? '').id===canonical
+ })
+ if(!(button instanceof HTMLButtonElement))return
+ button.classList.add('sequencer-hit')
+ chordFlash={button,timer:setTimeout(clearChordFlash,150)}
+}
 /** @param {number} index @param {string} zone */
 function sound(index,zone){try{context??=new AudioContext();void context.resume();const now=context.currentTime;for(const midi of padChordNotes(chord(index,zone).id,Number(key.value))){const osc=context.createOscillator();const gain=context.createGain();osc.type='triangle';osc.frequency.value=440*2**((midi-69)/12);gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(.07,now+.015);gain.gain.exponentialRampToValueAtTime(.001,now+.65);osc.connect(gain).connect(context.destination);osc.start(now);osc.stop(now+.7)}}catch{status.textContent='音声を開始できません。Padは記録できます。'}}
 /** @param {string} zone */
@@ -118,7 +163,7 @@ function finish(commit){
   if(embedded)parent.postMessage({type:'oto-pad-chord',id:selected.id},location.origin)
   resultChord.textContent=selected.label
   status.textContent=notes.map(midi=>names[(midi%12+12)%12]+(Math.floor(midi/12)-1)).join('  ·  ')
-  sound(active.index,active.zone)
+  if(!backing) sound(active.index,active.zone)
  }
  active=null
 }
@@ -128,6 +173,7 @@ layout.forEach(index=>{
  pad.dataset.degree=String(index)
  for(const [zone,label] of [['tl','dim7'],['tr','7'],['center',chord(index,'center').label],['bl','sus2'],['br','m7']]) {
   const button=document.createElement('button'); button.type='button'; button.className=zone==='center'?'pad-center':'corner '+zone
+  button.dataset.zone=zone
   renderPadLabel(index,zone,button)
   let timer=/** @type {ReturnType<typeof setTimeout>|undefined} */(undefined)
   let held=false

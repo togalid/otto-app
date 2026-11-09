@@ -1,12 +1,14 @@
 // Explicit public files: server code, configuration, and user files are never exposed.
 export const routes = new Map([
+  ['/features.js', ['features.js', 'text/javascript']],
   ['/song-score.js', ['song-score.js', 'text/javascript']],
   ['/score-pad.js', ['score-pad.js', 'text/javascript']],
   ['/chord-pad.html', ['chord-pad.html', 'text/html']],
   ['/chord-pad.js', ['chord-pad.js', 'text/javascript']],
   ['/chord-pad.css', ['chord-pad.css', 'text/css']],
-  ...['arrangement-file.js', 'arrangement-selects.js', 'bass-detail.js', 'mobile-chord-editor.js', 'main-controls.js', 'part-steppers.js', 'chord-grid.js', 'choice-menu.js', 'transport-view.js', 'drum-grid.js', 'chord-monitor.js', 'appearance-dialog.js', 'song-dialog.js', 'melody-view.js', 'reference-player.js', 'reference-analysis.js', 'reference-song-analysis.js', 'reference-performance.js', 'reference-analysis-worker.js', 'reference-analysis-client.js', 'ornaments.js', 'ornament-audio.js', 'ornament-ui.js', 'style-ornaments.js', 'otto-style.js'].map(file => [`/${file}`, [file, 'text/javascript']]),
+  ...['arrangement-file.js', 'part-settings.js', 'reference-timing-grid.js', 'reference-key-preview.js', 'arrangement-selects.js', 'bass-detail.js', 'backing-detail.js', 'quick-mixer.js', 'reference-timing-view.js', 'main-controls.js', 'part-steppers.js', 'chord-grid.js', 'choice-menu.js', 'transport-view.js', 'drum-grid.js', 'chord-monitor.js', 'appearance-dialog.js', 'song-dialog.js', 'melody-view.js', 'reference-player.js', 'reference-import.js', 'otto-phrases.js', 'chord-harmony.js', 'chord-voicing.js', 'reference-analysis.js', 'reference-song-analysis.js', 'reference-performance.js', 'reference-analysis-worker.js', 'reference-analysis-client.js', 'ornaments.js', 'ornament-audio.js', 'ornament-ui.js', 'style-ornaments.js', 'otto-style.js'].map(file => [`/${file}`, [file, 'text/javascript']]),
   ['/keyboard.js', ['keyboard.js', 'text/javascript']],
+  ['/buddy-view.js', ['buddy-view.js', 'text/javascript']],
   ['/buddy.js', ['buddy.js', 'text/javascript']],
   ['/vendor/vue.runtime.esm-browser.prod.js', ['vendor/vue.runtime.esm-browser.prod.js', 'text/javascript']],
   ['/vendor/VUE-LICENSE.txt', ['vendor/VUE-LICENSE.txt', 'text/plain']],

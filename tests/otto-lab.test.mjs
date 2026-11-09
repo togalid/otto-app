@@ -146,3 +146,11 @@ test('opening varies while staying restrained and on safe chord tones', async ()
   assert.ok(notes.every(n=>n.at>=0 && n.at+n.duration<=4 && n.level<=.68 && palette().some(p=>p.midi===n.midi && p.category==='chord' && !p.clash)))
  }
 })
+
+ test('low MIDI replies retain notes instead of falling outside the lead palette',()=>{
+ const input=[36,38,40,38].map((midi,i)=>({step:0,midi,at:i,duration:.5}))
+ const response=[72,74,76,74].map((midi,i)=>({step:0,midi,at:i,duration:.5}))
+ const notes=followPlayerMotion(response,input,palette)
+ assert.equal(notes.length,response.length)
+ assert.ok(notes.every(n=>n.midi>=34&&n.midi<=42))
+ })

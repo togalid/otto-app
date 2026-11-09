@@ -1,35 +1,41 @@
-import { migrateSongSections, splitSongSection } from './song-score.js'
+import { createPartSettings } from './part-settings.js'
+import { mountQuickMixer, bassPadNotes } from './quick-mixer.js'
+import { mountReferenceTiming } from './reference-timing-view.js'
+import { padChordNotes } from './music.js'
+import { createBackingDetail } from './backing-detail.js'
+import { performanceMatch } from './buddy.js'
+import { migrateSongSections } from './song-score.js'
 import { sectionControlIds, arrangementControlIds, arrangementMixIds, decodeArrangement, encodeArrangement, restoreArrangement } from './arrangement-file.js'
 import { mountBassDetail } from './bass-detail.js'
 import { mountStyleChoices, mountPresetChoices } from './arrangement-selects.js'
-import { mountMobileChordEditor } from './mobile-chord-editor.js'
-import { mountBasicParts, mountReferenceControls, mountReferenceDetail } from './main-controls.js'
-import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
-import { mountPartSteppers, mountTimbreSteppers } from './part-steppers.js'
-import { mountChordGrid } from './chord-grid.js'
-import { createChoiceMenu } from './choice-menu.js'
-import { mountTransport } from './transport-view.js'
+import { mountBasicParts, mountReferenceControls, mountReferenceDetail, bindKnobDrag, mountPartIcons, mountSectionKnobs } from './main-controls.js'
+import { ref } from './vendor/vue.runtime.esm-browser.prod.js'
+import { drumPadSound, mountMelodyVoiceChoice, mountPartSteppers, mountTimbreSteppers } from './part-steppers.js'
+import { mountChordGrid, mountScoreContext, mountScoreSections, mountScorePaging, mountMobileScoreTools } from './chord-grid.js'
+import { createChoiceMenu, mountSelectMenus } from './choice-menu.js'
+import { mountTransport, mountPlayhead } from './transport-view.js'
 import { mountDrumGrid } from './drum-grid.js'
 import { mountChordMonitor } from './chord-monitor.js'
-import { createMelodyView } from './melody-view.js'
+import { createMelodyView, mountMelodyPads, mountMelodyLayout, mountBuddyFeedback } from './melody-view.js'
 import { mountReferencePlayer } from './reference-player.js'
 const playerDisplay = mountReferenceControls()
 const referenceView = playerDisplay.state
 const referenceTrack = mountReferencePlayer(referenceView, applyReferenceArrangement, section => progression.barCount(section))
 mountBasicParts(referenceView, {
   toggleStem: referenceTrack.toggleStem,
+  separateStems: referenceTrack.separateStems,
   editReference: referenceTrack.editReference,
   cancelImport: referenceTrack.cancelImport,
   remove: referenceTrack.remove,
 })
 const referenceTimingHost = mountReferenceDetail(referenceView, referenceTrack.remove)
+const partSettings = createPartSettings()
 const { style: genreSelect, choose: chooseStyle } = mountStyleChoices()
 const { preset: presetSelect, set: setPreset, choose: choosePreset, selected: selectedPreset } = mountPresetChoices()
 import { OrnamentPlayer } from './ornament-audio.js'
 import { mountOrnaments } from './ornament-ui.js'
 import {
   notes,
-  keyFromDegree,
   keys,
   presets,
   presetSlots,
@@ -83,12 +89,11 @@ async function play(index, hold = false) {
       heldPads.set(index,held)
       await instrument.ready()
       if (heldPads.get(index) !== held) return
+      recordManualMatch(note.midi)
       instrument.attack(note.midi)
-    } else await instrument.play(note.midi)
+    } else { recordManualMatch(note.midi); await instrument.play(note.midi) }
     lastMelodyMidi = note.midi
     lastMelodyDegree = note.degree
-    const feedback = document.querySelector('#melody-feedback')
-    if (feedback) feedback.textContent = `${note.label} · ${note.degree} — ${note.hint}`
     clearTimeout(animations.get(button))
     button.classList.add('playing')
     animations.set(
@@ -104,32 +109,7 @@ async function play(index, hold = false) {
   }
 }
 
-createApp({
-  render: () => notes.map((note, index) => h('button', {
-    class: 'pad',
-    type: 'button',
-    style: { '--pad-color': note.color },
-    'aria-label': `${note.label} ${index >= 5 ? '高い音' : ''}を鳴らす（${note.key.toUpperCase()}キー）`,
-    onPointerdown: (/** @type {PointerEvent} */ event) => {
-      if (event.button !== 0) return
-      const button = /** @type {HTMLButtonElement} */ (event.currentTarget)
-      button.setPointerCapture(event.pointerId)
-      void play(index, true)
-    },
-    onPointerup: () => releasePad(index),
-    onPointercancel: () => releasePad(index),
-    onLostpointercapture: () => releasePad(index),
-    onClick: (/** @type {MouseEvent} */ event) => {
-      if (event.detail === 0) { void play(index); buddyController?.release(index) }
-    },
-  }, [
-    h('span', { class: 'pad-number' }, String(index + 1).padStart(2, '0')),
-    h('span', { class: 'pad-note' }, note.label),
-    h('span', { class: 'pad-role' }),
-    h('kbd', note.key.toUpperCase()),
-  ])),
-}).mount('#pads')
-buttons.push(...Array.from(document.querySelectorAll('#pads button'), button => /** @type {HTMLButtonElement} */ (button)))
+buttons.push(...mountMelodyPads({ play, release: releasePad, clickRelease: index => buddyController?.release(index) }))
 
 document.addEventListener('keydown', (event) => {
   if (event.target instanceof Element && event.target.closest('dialog[open]')) return
@@ -174,7 +154,7 @@ document.addEventListener('keydown', (event) => {
   if (event.target instanceof Element && event.target.closest('#piano-keys')) return
   if (event.code !== 'Space' || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return
   const spaceTarget = event.target instanceof Element ? event.target : null
-  if (spaceTarget?.closest('.score-pad-dock button, .score-pad-dock input, .score-pad-dock select')) return
+  if (spaceTarget?.closest('.score-pad-dock button, .score-pad-dock input, .score-pad-dock select, .session-turn-ring')) return
   event.preventDefault()
   event.stopPropagation()
   if (!event.repeat) {
@@ -232,19 +212,8 @@ let playableNotes = melodyPalette(0, activeChord, 0, 'key')
 let lastMelodyMidi
 let lastMelodyDegree = ''
 const melodyView = createMelodyView(buttons)
-let lastMagicKey = -1
 function refreshMelody() {
-  if(activeKey!==lastMagicKey&&document.querySelector('#piano-keys button')){
-    lastMagicKey=activeKey
-    if(((activeKey%12)+12)%12!==0)document.querySelector('[data-melody-view="magic"]')?.dispatchEvent(new MouseEvent('click',{bubbles:true}))
-  }
   const state = melodyView.update(Number(keySelect.value), activeChord, activeKey, lastMelodyMidi, lastMelodyDegree)
-  const chordPitches = new Set(melodyPalette(activeKey, activeChord, activeKey, 'chord')
-    .filter(note => note.category === 'chord').map(note => note.midi % 12))
-  document.querySelectorAll('#piano-keys [data-midi]').forEach(key => {
-    const matches = chordPitches.has((Number(key.getAttribute('data-midi')) + (document.querySelector('#piano-keys')?.getAttribute('data-magic')==='true'?activeKey:0)) % 12)
-    if (key.hasAttribute('data-harmony') !== matches) key.toggleAttribute('data-harmony', matches)
-  })
   playableNotes = state.notes
   lastMelodyDegree = state.degree
 }
@@ -252,12 +221,29 @@ document.addEventListener('melody-keyboard-change', refreshMelody)
 let resumeMelodyBar = 0
 let melodyPlayhead = /** @type {HTMLElement | undefined} */ (undefined)
 let melodyExpressionBar = -1
+let manualBeatTime = -Infinity
+let manualMatchTotal = 0, manualMatchCount = 0, manualMatchRate = 0
+/** @type {ReturnType<typeof setTimeout>|undefined} */
+let humanMotionTimer
+function showHumanPlaying() {
+ const panel=document.querySelector('#detail-melody')
+ panel?.setAttribute('data-human-playing','true')
+ clearTimeout(humanMotionTimer)
+ humanMotionTimer=setTimeout(()=>panel?.removeAttribute('data-human-playing'),Math.max(700,120000/progression.bpm))
+}
+window.addEventListener('blur',()=>{clearTimeout(humanMotionTimer);document.querySelector('#detail-melody')?.removeAttribute('data-human-playing')})
+/** @param {number} midi */
+function recordManualMatch(midi) {
+ showHumanPlaying()
+ if(!progression.running || buddyController?.active)return
+ manualMatchTotal+=performanceMatch(midi,activeChord,activeKey,(performance.now()-manualBeatTime)/1000,progression.bpm,progression.swing)
+ manualMatchCount++
+}
 let displayedBar = -1
 let displayedBeat = -1
 const playingSection = ref(-1)
 const editingSection = ref(0)
-const sectionAdvance = ref(false)
-const sectionBars = ref(200)
+const sectionBars = ref(16)
 const scorePage = ref(0)
 const sectionContextRevision = ref(0)
 let refreshSectionKnobs = () => {}
@@ -265,6 +251,7 @@ const progression = new Progression(
   chordInstrument,
   (index, chord, key, beat, section) => {
     melodyExpressionBar=index
+    manualBeatTime=index>=0?performance.now():-Infinity
     if(index>=0){resumeMelodyBar=index;if(melodyPlayhead){const input=melodyPlayhead.querySelector('input');if(input && document.activeElement!==input)input.value=String(index+1)}}
     if(index>=0 && Math.floor(index/16)!==scorePage.value){scorePage.value=Math.floor(index/16);refreshLabels()}
     const previousSection = playingSection.value
@@ -314,6 +301,7 @@ progression.onStop = () => {
   barPlayback = null
   referenceTrack.stopWithAccompaniment()
   playerDisplay.stopMeter()
+  clearAccompanimentPads()
 }
 const refreshBassDetail = mountBassDetail(progression)
 const drumGrid = mountDrumGrid(hits => {
@@ -328,21 +316,29 @@ document.querySelectorAll('input[name="drum-rate"]').forEach(input => input.addE
 progression.onDrumPosition = drumGrid.showPosition
 renderDrumSteps()
 progression.melody = instrument
-melodyMode.addEventListener('change', () => {
+partSettings.bind(melodyMode, () => {
   progression.melodyPattern = ''
-  buddyController?.setMode(melodyMode.value)
+  buddyController?.setPlayMode(melodyMode.value)
   instrument.silence()
   refreshMelody()
 })
 
 const qualityOrigins = progression.slots.map((chord) => [chord, chord, chord, chord, chord])
 const qualityMenu = createChoiceMenu('quality')
-/** @param {number} bar @param {number} beat @param {string} chord */
-async function previewChord(bar, beat, chord) {
+mountSelectMenus()
+/** @param {number} bar @param {number} beat @param {string} chord @param {boolean} [replace] */
+async function previewChord(bar, beat, chord, replace = false) {
   try {
     await chordInstrument.ready()
     if (chordInstrument.context) {
-      const notes = progression.notesForBar(chord, bar, beat)
+      const notes = replace ? padChordNotes(chord, progression.keyForBar(bar)) : progression.notesForBar(chord, bar, beat)
+      if (replace) {
+        chordInstrument.silence()
+        if (progression.running && progression.accompanimentModes.chord === 'manual') {
+          const barDuration = progression.meterForBar(bar) * 60 / progression.bpmForBar(bar)
+          progression.followBackingPad(chord, progression.keyForBar(bar), chordInstrument.context.currentTime + barDuration)
+        }
+      }
       chordInstrument.playAt(notes, chordInstrument.context.currentTime, 1.2, 1, chordWeights(notes, chord, progression.keyForBar(bar)))
     }
     if (progressionStatus) progressionStatus.textContent = ''
@@ -455,6 +451,7 @@ tempo.addEventListener('pointerdown', () => { /* Drag commits whole BPM through 
 tempo.addEventListener('input', () => {
   progression.bpm = Number(tempo.value)
   if(progression.songMode)progression.songBpm=progression.bpm
+  if (progression.referenceBpm !== null) progression.referenceBpm = progression.bpm
   tempoNumber.value = tempo.value
 })
 
@@ -747,7 +744,7 @@ for (const pattern of rhythmPatterns) {
   }
 }
 rhythmSelect.value = progression.rhythm
-rhythmSelect.addEventListener('change', () => {
+partSettings.bind(rhythmSelect, () => {
   if (rhythmSelect.value === 'reference') return
   const captured = progression.sections[progression.selectedSection].performance
   if (captured) delete captured.drums
@@ -768,16 +765,16 @@ for (const timbre of timbres) {
   timbreSelect.append(option)
 }
 const melodyTimbre = /** @type {HTMLSelectElement} */ (document.querySelector('#melody-timbre'))
-for (const timbre of melodyTimbres) {
+for (const [index, timbre] of melodyTimbres.entries()) {
   const option = document.createElement('option')
   option.value = timbre.id
-  option.textContent = timbre.label
+  option.textContent = `${String(index + 1).padStart(2, '0')}: ${timbre.label}`
   melodyTimbre.append(option)
 }
 melodyTimbre.value = instrument.timbre
-melodyTimbre.addEventListener('change', () => { instrument.setTimbre(melodyTimbre.value); buddyController?.timbreChanged() })
+partSettings.bind(melodyTimbre, () => { instrument.setTimbre(melodyTimbre.value); buddyController?.timbreChanged(); document.dispatchEvent(new Event('melody-timbre-change')) })
 timbreSelect.value = chordInstrument.timbre
-timbreSelect.addEventListener('change', () =>
+partSettings.bind(timbreSelect, () =>
   chordInstrument.setTimbre(timbreSelect.value),
 )
 const backingSelect = /** @type {HTMLSelectElement} */ (
@@ -787,10 +784,11 @@ for (const pattern of chordBackingPatterns) {
   const option = document.createElement('option')
   option.value = pattern.id
   option.textContent = pattern.label
+  option.hidden = ['bass-chord','cutting','strum'].includes(pattern.id)
   backingSelect.append(option)
 }
 backingSelect.value = progression.backing
-backingSelect.addEventListener('change', () => {
+partSettings.bind(backingSelect, () => {
   progression.backing = backingSelect.value
 })
 
@@ -803,7 +801,7 @@ genreSelect.addEventListener('change', () => {
   if (!genre) return
   const presetId = genreProgressions[/** @type {keyof typeof genreProgressions} */ (genre.id)]
   const recommended = presets.find(item => item.id === presetId)
-  if (recommended && !referenceView.filename && !progression.songMode) {
+  if (recommended && !referenceView.filename) {
     setPreset(recommended.id)
     applyPreset(recommended.id)
   }
@@ -815,38 +813,29 @@ genreSelect.addEventListener('change', () => {
   sectionContextRevision.value++
   queueMicrotask(()=>refreshSectionKnobs())
   progression.genre = genre.id
-  progression.bassPattern = genre.bassPattern
-  bassPattern.value = progression.bassPattern
-  progression.drumSteps = null
-  progression.rhythm = genre.rhythm
-  renderDrumSteps()
+  partSettings.apply(bassPattern, genre.bassPattern)
+  partSettings.apply(rhythmSelect, genre.rhythm)
   setOrnamentStyle(genre.id)
   if (!referenceView.filename) {
     if (progression.songMode) progression.sections[progression.selectedSection].bpm = genre.bpm
     else progression.bpm = genre.bpm
   }
   progression.swing = genre.swing
-  bass.timbre = genre.bass
-  drums.timbre = genre.drum
-  drumTimbre.value = genre.drum
-  progression.backing = genre.backing
-  backingSelect.value = progression.backing
-  instrument.setTimbre(melodyTimbreFor(genre.melody))
-  melodyTimbre.value = instrument.timbre
-  melodyMode.dispatchEvent(new Event('change', { bubbles: true }))
-  chordInstrument.setTimbre(genre.chord)
-  timbreSelect.value = genre.chord
-  rhythmSelect.value = genre.rhythm
-  bassTimbre.value = genre.bass
-  updatePartIcons()
+  partSettings.apply(bassTimbre, genre.bass)
+  partSettings.apply(drumTimbre, genre.drum)
+  partSettings.apply(backingSelect, genre.backing === 'bass-chord' ? 'quarters' : genre.backing)
+  partSettings.apply(melodyTimbre, melodyTimbreFor(genre.melody))
+  partSettings.apply(melodyMode, melodyMode.value)
+  partSettings.apply(timbreSelect, genre.chord)
   if (!referenceView.filename && !progression.songMode) tempo.value = String(genre.bpm)
   swing.value = String(genre.swing)
   tempoNumber.value = tempo.value
   renderSwing()
   buddyController?.styleChanged()
   rememberSectionParts()
+  if (!referenceView.filename && melodyPlayhead) seekMelodyBar(0)
 })
-bassTimbre.addEventListener('change', () => {
+partSettings.bind(bassTimbre, () => {
   bass.timbre = bassTimbre.value
   updatePartIcons()
 })
@@ -873,8 +862,8 @@ const ornamentTracks = ['bell', 'pluck', 'phrase', 'fx'].map((id, index) => ({
   id, pattern: ['sparkle-even', 'pluck-gaps', 'strings-lift', 'transition'][index],
   voice: new OrnamentPlayer(id, chordInstrument),
 }))
-progression.ornaments = ornamentTracks
-const setOrnamentStyle = mountOrnaments(ornamentTracks)
+progression.ornaments = ornamentTracks.filter(track => track.id !== 'fx')
+const setOrnamentStyle = mountOrnaments(ornamentTracks, partSettings)
 
 const mixParts = [
   { part: drums, volume: 0.35 }, { part: bass, volume: 0.5 },
@@ -883,44 +872,6 @@ const mixParts = [
   {part: referenceTrack, volume: .25},
 ]
 const mixer = createPartMixer(mixParts)
-/** @param {HTMLInputElement} input @param {number} sensitivity @param {boolean} [integer] */
-function bindKnobDrag(input, sensitivity, integer = false) {
-  const knob = input.parentElement
-  if (!knob) return
-  // Drag relative to the starting value so touching the knob never jumps it.
-  input.addEventListener('pointerdown', event => {
-    if (!event.isPrimary || event.button !== 0) return
-    event.preventDefault()
-    input.focus({ preventScroll: true })
-    const startX = event.clientX
-    const startY = event.clientY
-    const startValue = Number(input.value)
-    knob.setPointerCapture(event.pointerId)
-    /** @param {PointerEvent} move */
-    const onMove = move => {
-      if (move.pointerId !== event.pointerId) return
-      const change = (move.clientX - startX) - (move.clientY - startY)
-      const previous = input.value
-      input.value = String((input === tempo || integer) ? Math.round(startValue + change * sensitivity) : startValue + change * sensitivity)
-      if (input.value !== previous) {
-        input.dispatchEvent(new Event('input', { bubbles: true }))
-      }
-    }
-    /** @param {PointerEvent} end */
-    const onEnd = end => {
-      if (end.pointerId !== event.pointerId) return
-      knob.removeEventListener('pointermove', onMove)
-      knob.removeEventListener('pointerup', onEnd)
-      knob.removeEventListener('pointercancel', onEnd)
-      knob.removeEventListener('lostpointercapture', onEnd)
-    }
-    knob.addEventListener('pointermove', onMove)
-    knob.addEventListener('pointerup', onEnd)
-    knob.addEventListener('pointercancel', onEnd)
-    knob.addEventListener('lostpointercapture', onEnd)
-  })
-}
-
 bindKnobDrag(mixerKey, .12)
 bindKnobDrag(meterInput, .025)
 
@@ -937,7 +888,7 @@ for (const input of [tempo, swing]) {
   }
   input.addEventListener('input', refresh)
   document.getElementById('genre')?.addEventListener('change', refresh)
-  bindKnobDrag(input, .5)
+  bindKnobDrag(input, .5, input === tempo)
   refresh()
 }
 
@@ -960,7 +911,7 @@ for (const [index, id] of ['drum', 'bass', 'chord', 'melody', 'bell', 'pluck', '
 const bassPattern = /** @type {HTMLSelectElement} */ (
   document.querySelector('#bass-pattern')
 )
-bassPattern.addEventListener('change', () => {
+partSettings.bind(bassPattern, () => {
   if (bassPattern.value === 'reference') return
   const captured = progression.sections[progression.selectedSection].performance
   if (captured) delete captured.bass
@@ -972,7 +923,7 @@ bassPattern.addEventListener('change', () => {
 const drumTimbre = /** @type {HTMLSelectElement} */ (
   document.querySelector('#drum-timbre')
 )
-drumTimbre.addEventListener('change', () => {
+partSettings.bind(drumTimbre, () => {
   drums.timbre = drumTimbre.value
   updatePartIcons()
 })
@@ -984,59 +935,22 @@ for (const input of Array.from(document.querySelectorAll('input[name="workspace-
   const view=/** @type {HTMLInputElement} */ (input).value
   if(view!=='score')document.querySelector('.score-pad-dock:not([hidden]) .close')?.dispatchEvent(new MouseEvent('click',{bubbles:true}))
   workspace.dataset.workspaceView = view
+  document.querySelector('.mixer-score-link')?.setAttribute('aria-pressed', String(view === 'score'))
+  if (view === 'score') {
+    document.querySelectorAll('#track-grid .track-select').forEach(button => button.setAttribute('aria-pressed', 'false'))
+  }
   document.dispatchEvent(new Event('resize'))
 })
-createApp({render:()=>{
-  sectionContextRevision.value
-  const index=playingSection.value>=0 ? playingSection.value : editingSection.value
-  const section=progression.sections[index]
-  const key=keys[section.key ?? progression.key].name
-  const meter=section.meter ?? Number(meterInput.value)
-  const bpm=section.bpm ?? Number(tempo.value)
-  return h('div',{class:'score-context'},[
-    h('span',{class:'score-context-section'},`${section.name ?? String.fromCharCode(65+index)} · ${(section.startBar ?? 0)+1}〜${section.endBar ?? progression.barCount()}小節`),
-    h('span',`キー ${key}`),h('span',`${meter}/4`),h('span',`♩ ${bpm}`),
-  ])
-}}).mount('#score-section-context')
-const backingPanel=document.createElement('section')
-backingPanel.id='detail-backing';backingPanel.hidden=false
-backingPanel.innerHTML='<h2>コードのバッキング</h2><div class="backing-pattern-options"></div>'
-document.querySelector('.track-details')?.append(backingPanel)
-const backingDetailSelect=/** @type {HTMLSelectElement} */(document.getElementById('chord-backing'))
-for(const option of Array.from(backingDetailSelect.options)){
- const button=document.createElement('button');button.type='button';button.className='reference-remove-key';button.textContent=option.text
- button.addEventListener('click',()=>{delete progression.sections[progression.selectedSection].backingSteps;backingEditorRevision.value++;backingDetailSelect.value=option.value;backingDetailSelect.dispatchEvent(new Event('change',{bubbles:true}));backingPanel.querySelectorAll('button').forEach(item=>item.setAttribute('aria-pressed',String(item===button)))})
- backingPanel.querySelector('.backing-pattern-options')?.append(button)
-}
-const backingEditorRevision=ref(0)
-const backingEditorHost=document.createElement('div');backingEditorHost.className='backing-step-editor';backingPanel.append(backingEditorHost)
-function mountBackingStepEditor(){
- createApp({render:()=>{
-  backingEditorRevision.value
-  const section=progression.sections[editingSection.value]
-  const beats=section.meter ?? Number(meterInput.value)
-  return [h('label',{class:'oto-checkbox'},[
-   h('input',{type:'checkbox',checked:!!section.backingSteps,onChange:(/** @type {Event} */ event)=>{
-    if((/** @type {HTMLInputElement} */(event.target)).checked)section.backingSteps=Array.from({length:beats*4},(_,index)=>({enabled:index%4===0,duration:.8,level:.8}))
-    else delete section.backingSteps
-    backingEditorRevision.value++
-   }}),h('span','拍ごとに編集'),
-  ]),section.backingSteps?h('div',{class:'backing-step-grid',style:`--step-columns:${beats*4}`},Array.from({length:beats*4},(_,index)=>{
-   const step=section.backingSteps?.[index]
-   if(!step)return null
-   return h('div',{class:'backing-step'},[
-    h('button',{type:'button',class:'reference-remove-key','aria-label':`${index/4+1}拍目を発音`,'aria-pressed':String(step.enabled),onClick:()=>{step.enabled=!step.enabled;backingEditorRevision.value++}},index%4===0?String(index/4+1):'・'),
-    h('label',{class:'backing-step-label'},'長さ'),
-    h('input',{type:'range',min:.1,max:2,step:.1,value:step.duration,disabled:!step.enabled,'aria-label':`${index/4+1}拍目の長さ`,onInput:(/** @type {Event} */event)=>{step.duration=Number((/** @type {HTMLInputElement} */(event.target)).value)}}),
-    h('label',{class:'backing-step-label'},'強さ'),
-    h('input',{type:'range',min:0,max:1,step:.05,value:step.level,disabled:!step.enabled,'aria-label':`${index/4+1}拍目の強さ`,onInput:(/** @type {Event} */event)=>{step.level=Number((/** @type {HTMLInputElement} */(event.target)).value)}}),
-   ])
-  })):null]
- }}).mount(backingEditorHost)
-}
-const trackButtons = Array.from(document.querySelectorAll('.track-select[data-track]:not(.ornament-select)'))
+mountScoreContext({progression, sectionContextRevision, playingSection, editingSection, meterInput, tempo})
+const backingDetail = createBackingDetail(progression, editingSection, meterInput, refreshLabels)
+const backingEditorRevision = backingDetail.revision
 document.addEventListener('reference-loaded', () => {
   progression.stop()
+  progression.loopSong = false
+  if (progression.barCount() === 16 && progression.sections.length === 1) changeBarCount(184)
+  playbackHeads.clear()
+  waveformStartBeats.clear()
+  seekMelodyBar(0)
   const view=/** @type {HTMLInputElement|null} */(document.querySelector('input[name="workspace-view"][value="mixer"]'))
   if(view){view.checked=true;view.dispatchEvent(new Event('change',{bubbles:true}))}
   // Use the existing mixer and panel actions so visible and audio state agree.
@@ -1050,123 +964,36 @@ document.addEventListener('reference-loaded', () => {
   document.querySelector('.track-select[data-track="reference"]')?.dispatchEvent(new MouseEvent('click', {bubbles:true}))
 })
 document.addEventListener('reference-removed', () => {
+  progression.loopSong = true
   const solo = document.getElementById('reference-solo')
   if (solo?.getAttribute('aria-pressed') === 'true') solo.click()
 })
-for (const button of trackButtons) {
-  button.addEventListener('click', () => {
-    const selected = /** @type {HTMLElement} */ (button).dataset.track
-    for (const item of trackButtons)
-      item.setAttribute('aria-pressed', String(item === button))
-    const details = /** @type {HTMLElement} */ (document.querySelector('.track-details'))
-    details.hidden = selected === 'melody'
-    for (const name of ['reference', 'drums', 'bass', 'chord', 'melody']) {
-      const panel = /** @type {HTMLElement} */ (
-        document.querySelector(name==='chord'?'#detail-backing':`#detail-${name}`)
-      )
-      panel.hidden = name !== selected
+const {updateQuickMixer, syncBackingPad, clearAccompanimentPads, trackGrid, showPadHit} = mountQuickMixer({
+  progression, mixer, workspace, genreSelect, keySelect, playAccompanimentPad, previewChord, animatePartChange: button => animatePartChange(button),
+})
+progression.onPadHit = showPadHit
+
+/** @param {'drums'|'bass'|'chord'} part @param {number} index */
+async function playAccompanimentPad(part, index) {
+  try {
+    await chordInstrument.ready()
+    const time = chordInstrument.context?.currentTime
+    if (time === undefined) return
+    if (part === 'drums') {
+      const [, sound, pitch, duration] = drumPadSound(index)
+      drums.hitAt(sound, time + .01, .85, duration, pitch, index === 7)
+    } else if (part === 'bass') {
+      bass.playAt(bassPadNotes[index], time + .01, .35, .85)
+    } else {
+      const bar = index % progression.barCount()
+      await previewChord(bar, 0, progression.slots[bar])
     }
-  })
-}
-
-// Select a part only for a direct user edit, not for style or file loading.
-const trackGrid = /** @type {HTMLElement} */ (document.querySelector('#track-grid'))
-/** @param {Event} event */
-function selectEditedTrack(event) {
-  if (!(event.target instanceof HTMLSelectElement)) return
-  const row = event.target.closest('[role="group"]')
-  const button = /** @type {HTMLButtonElement | null} */ (row?.querySelector('.track-select'))
-  if (button) button.click()
-}
-trackGrid.addEventListener('change', event => {
-  if (event.isTrusted) selectEditedTrack(event)
-})
-trackGrid.addEventListener('part-user-change', selectEditedTrack)
-
-// Keep the native selects as the source of truth while presenting their choices
-// in the same tactile menu as the rest of the instrument.
-const styleDialog = document.createElement('dialog')
-styleDialog.className = 'style-browser'
-styleDialog.setAttribute('aria-label', 'ジャンルとスタイルを選ぶ')
-document.body.append(styleDialog)
-const styleGroup = ref('')
-createApp({render: () => [
-  h('div', {class: 'style-browser-header'}, [
-    ...(styleGroup.value ? [h('button', {type: 'button', onClick: () => { styleGroup.value = '' }}, '← ジャンル')] : [h('strong', 'ジャンル')]),
-    h('button', {type: 'button', 'aria-label': '閉じる', onClick: () => styleDialog.close()}, '×'),
-  ]),
-  ...(styleGroup.value
-    ? genres.filter(item => item.group === styleGroup.value).map(item => h('button', {
-      type: 'button', class: 'style-browser-choice', 'aria-current': item.id === genreSelect.value ? 'true' : undefined,
-      onClick: () => { void chooseStyle(item.id); styleDialog.close() },
-    }, item.label))
-    : [...new Set(genres.map(item => item.group))].map(group => h('button', {
-      type: 'button', class: 'style-browser-choice', onClick: () => { styleGroup.value = group },
-    }, group + ' ›'))),
-]}).mount(styleDialog)
-document.getElementById('style-open')?.addEventListener('click', () => { styleGroup.value = ''; styleDialog.showModal() })
-styleDialog.addEventListener('click', event => { if (event.target === styleDialog) styleDialog.close() })
-styleDialog.addEventListener('close', () => document.getElementById('style-open')?.focus({preventScroll: true}))
-
-const selectMenu = createChoiceMenu('select')
-/** @param {HTMLSelectElement} select */
-function openSelectMenu(select) {
-  if (select.disabled || selectMenu.busy) return
-  const groups = Array.from(select.children, child => {
-    const group = child instanceof HTMLOptGroupElement ? child : null
-    const options = group ? Array.from(group.children) : [child]
-    return {
-      heading: group?.label,
-      choices: options.flatMap(option => {
-        if (!(option instanceof HTMLOptionElement) || option.disabled || option.hidden || group?.disabled) return []
-        return [{ label: option.textContent || '', value: option.value, selected: option.selected }]
-      }),
-    }
-  })
-  const label = select.getAttribute('aria-label') || select.closest('label')?.childNodes[0]?.textContent?.trim() || '選択肢'
-  const rect = select.getBoundingClientRect()
-  const width = Math.min(Math.max(rect.width, 180), window.innerWidth - 16)
-  const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
-  const height = Math.min(320, window.innerHeight - 16)
-  const top = Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - height - 8))
-  void selectMenu.open(select, label, groups, { left, top, width, height })
-}
-document.addEventListener('pointerdown', event => {
-  const select = event.target instanceof Element ? event.target.closest('select') : null
-  if (!select || select.classList.contains('quality-select') || select.disabled) return
-  event.preventDefault()
-  openSelectMenu(select)
-})
-document.addEventListener('keydown', event => {
-  const select = event.target instanceof HTMLSelectElement ? event.target : null
-  if (!select || select.classList.contains('quality-select') || select.disabled) return
-  if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
-    event.preventDefault()
-    openSelectMenu(select)
-  }
-})
-
-// Pictograms are printed in the same two inks as the existing part keys.
-const partIcons = {
-  drums: {
-    acoustic: '<path class="stamp" d="M3 9q9 5 18 0l-2 9q-7 5-14 0z"/><ellipse class="print" cx="12" cy="7" rx="9" ry="3"/><path class="cut" d="m6 12 2 5 3-4m3 0 2 4 2-5"/>',
-    electronic: '<rect class="stamp" x="2" y="3" width="20" height="18" rx="3"/><circle class="icon-cutout" cx="7" cy="8" r="2"/><circle class="icon-cutout" cx="17" cy="8" r="2"/><circle class="icon-cutout" cx="7" cy="16" r="2"/><circle class="icon-cutout" cx="17" cy="16" r="2"/>',
-  },
-  bass: {
-    electric: '<path class="stamp" d="m13 9 6-7 3 2-7 8q2 4-2 8-4 4-8 1t-2-8q2-4 6-3z"/><path class="print" d="m5 15 4 4 2-2-4-4z"/><path class="cut" d="m10 14 8-9"/>',
-    acoustic: '<path class="stamp" d="M13 2h3v8c3 1 4 3 4 6 0 4-3 6-8 6s-8-2-8-6c0-3 2-5 5-6l1-3h3z"/><circle class="print" cx="12" cy="15" r="2.5"/><path class="cut" d="M13 4v12m2-12v12"/>',
-    synth: '<path class="stamp" d="M3 3h18v18H3z"/><path class="cut" fill="none" d="M5 15h3v-5h3v5h3v-5h3v5h2"/><circle class="print" cx="7" cy="6.5" r="1"/><circle class="print" cx="12" cy="6.5" r="1"/><circle class="print" cx="17" cy="6.5" r="1"/>',
-  },
-}
-function updatePartIcons() {
-  for (const [track, value] of [['drums', drumTimbre.value], ['bass', bassTimbre.value]]) {
-    const icon = document.querySelector(`[data-track="${track}"] .part-icon`)
-    const designs = track === 'drums' ? partIcons.drums : partIcons.bass
-    const svg = Reflect.get(designs, value)
-    if (icon && typeof svg === 'string') icon.innerHTML = svg
+  } catch (error) {
+    if (progressionStatus) progressionStatus.textContent = String(error)
   }
 }
-updatePartIcons()
+
+const updatePartIcons = mountPartIcons(drumTimbre, bassTimbre)
 
 function renderDrumSteps() {
   drumGrid.hits.value = progression.drumSteps ?? progression.drumHits()
@@ -1217,178 +1044,56 @@ function syncCapturedChoices() {
 }
 syncCapturedChoices()
 
-// Short responses belong to the object that the user just touched.
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
-/** @type {WeakMap<Element, Animation>} */
-const smallResponses = new WeakMap()
-/** @param {Element | null} element @param {Keyframe[]} frames @param {number} [duration] */
-function respondToTouch(element, frames, duration = 220) {
-  if (!element || reducedMotion.matches) return
-  smallResponses.get(element)?.cancel()
-  const animation = element.animate(frames, { duration, easing: 'ease-out' })
-  smallResponses.set(element, animation)
-}
-const buddy = /** @type {HTMLButtonElement} */ (document.querySelector('#oto-buddy'))
-const cropBuddy = /** @type {HTMLElement} */ (document.querySelector('.crop-buddy'))
-const buddyIcon = buddy.querySelector('svg')
-if (buddyIcon) cropBuddy.append(buddyIcon.cloneNode(true))
-new MutationObserver(() => { cropBuddy.dataset.look = buddy.dataset.look }).observe(buddy, {attributes: true, attributeFilter: ['data-look']})
-const buddyMessage = /** @type {HTMLElement} */ (document.querySelector('#buddy-message'))
-// Musical listening cues describe the gesture rather than repeat control labels.
-const arrangementCues = new Map([
-  ['satin-comp', '低音のあとに上の音が応えるよ。和音の隙間にも耳を向けてみて。'],
-  ['trance-weave', '同じ和音を行き来する細かな音が、流れを前へ運んでいくよ。'],
-  ['whole', '音を伸ばすと、コードが替わる瞬間の色の違いがよく聴こえるよ。'],
-  ['quarters', '一拍ずつ和音を置くと、低音との重なりがはっきりするね。'],
-  ['eighths', '細かな刻みが、コードの流れに走る力を添えているよ。'],
-  ['offbeat', '拍の間に和音が入るから、リズムが少し浮き上がる感じがするね。'],
-  ['arpeggio', '和音を一音ずつほどくと、内側に隠れていた旋律が見えてくるよ。'],
-  ['bass-chord', '低音と和音の受け答えが、伴奏にゆったりした歩幅を作るよ。'],
-  ['key-run', '鍵盤の音が折り返すところで、伴奏にも小さな歌が生まれるね。'],
-  ['cutting', '短く切った和音の隙間で、ドラムとベースが顔を出すよ。'],
-  ['stabs', '和音が拍を先取りすると、次の一拍へ引っ張られる感じがするね。'],
-  ['chip-riff', '短い音の反復で、コードにもフックができるよ。'],
-  ['strum', '和音の音を少しずつずらして、弦を払うような広がりを作っているよ。'],
-])
-const buddyLooks = new Map([
-  ['洋楽ポップ', 'glasses bow'], ['洋楽ロック', 'spikes glasses'], ['ジャズ', 'beret fringe'],
-  ['J-POP', 'fringe'], ['ボカロ', 'headphones fringe lashes'],
-  ['K-POP', 'glasses'], ['VTuberポップ', 'bow lashes'],
-  ['アイドル', 'bow fringe'], ['アニソン', 'spikes'],
-  ['きらめきポップ', 'bow lashes fringe'], ['EDM・同人エレクトロ', 'headphones'],
-  ['PCゲーム音楽', 'headphones spikes'], ['ゲーム音楽', 'spikes headphones'],
-  ['音楽ゲーム', 'glasses headphones'], ['ダンス・チル', 'glasses'],
-  ['ニューミュージック', 'beret'], ['同人音楽', 'beret glasses'],
-  ['幻想エレクトロ', 'fringe glasses'], ['電波・アキバポップ', 'bow headphones lashes'],
-])
-function refreshBuddyLook() {
-  const group = genres.find(item => item.id === genreSelect.value)?.group ?? ''
-  buddy.dataset.look = buddyLooks.get(group) ?? 'fringe'
-}
-genreSelect.addEventListener('change', refreshBuddyLook)
-genreSelect.addEventListener('change', () => {
-  const style = genres.find(item => item.id === genreSelect.value)
-  playerDisplay.setStyle(style?.label ?? '', style?.group ?? '')
-})
-refreshBuddyLook()
-function refreshBuddy() {
-  const failed = Boolean(status?.textContent?.trim() || progressionStatus?.textContent?.trim())
-  const mood = failed ? 'error' : progression.running ? 'listening' : 'idle'
-  if (buddy.dataset.mood === mood) return
-  buddy.dataset.mood = mood
-  buddy.title = failed ? '音の準備で困っています。表示されたメッセージを確認してね。' : progression.running ? '聴いてるよ。' : 'やあ。'
-  buddy.setAttribute('aria-label', failed ? '再生エラー。画面のエラーメッセージを確認' : 'Otto（オットー）にあいさつ')
-  respondToTouch(buddy.querySelector('svg'), [{ transform: 'translateY(0)' }, { transform: 'translateY(-2px)' }, { transform: 'translateY(0)' }])
-}
-buddy.addEventListener('click', () => {
-  respondToTouch(buddy.querySelector('svg'), [
-    { transform: 'rotate(0)' }, { transform: 'rotate(-9deg)' },
-    { transform: 'rotate(7deg)' }, { transform: 'rotate(0)' },
-  ], 340)
-  respondToTouch(buddy.querySelector('.buddy-eyes'), [
-    { transform: 'scaleY(1)' }, { transform: 'scaleY(.15)', offset: .4 }, { transform: 'scaleY(1)' },
-  ], 260)
-})
-const buddyObserver = new MutationObserver(refreshBuddy)
-for (const message of [status, progressionStatus]) {
-  if (message) buddyObserver.observe(message, { childList: true, characterData: true, subtree: true })
-}
-buddyObserver.observe(startButton, { attributes: true, attributeFilter: ['aria-pressed'] })
-refreshBuddy()
-document.addEventListener('click', event => {
-  const target = event.target instanceof Element ? event.target : null
-  const part = target?.closest('.track-select')
-  if (part) respondToTouch(part.querySelector('.part-icon'), [
-    { transform: 'rotate(0)' }, { transform: 'rotate(-7deg)' }, { transform: 'rotate(4deg)' }, { transform: 'rotate(0)' },
-  ])
-  const step = target?.closest('.drum-step')
-  if (step) respondToTouch(document.activeElement?.closest('.drum-step') ?? null, [
-    { transform: 'scale(.88)' }, { transform: 'scale(1.07)' }, { transform: 'scale(1)' },
-  ], 160)
-})
-document.addEventListener('change', event => {
-  const target = event.target instanceof Element ? event.target : null
-  if (target === genreSelect) {
-    const genre = genres.find(item => item.id === genreSelect.value)
-    if (genre) {
-      const preset = presets.find(item => item.id === presetSelect.value)
-      const cue = arrangementCues.get(genre.backing) ?? ''
-      buddyMessage.textContent = [preset?.description, cue].filter(Boolean).join(' ')
-    }
-  } else if (target === presetSelect) {
-    const preset = presets.find(item => item.id === presetSelect.value)
-    if (preset) buddyMessage.textContent = preset.description
-  } else if (target?.matches('#chord-slots .root-select, #chord-slots .quality-select')) {
-    buddyMessage.textContent = 'コードを変えると、進行の響きも変わるよ。'
-  }
-  if (target?.matches('#genre, #preset')) {
-    respondToTouch(document.querySelector('.track-select[aria-pressed="true"] .part-icon'), [
-      { transform: 'translateY(0)' }, { transform: 'translateY(-3px)' }, { transform: 'translateY(0)' },
-    ])
-  }
+const {animatePartChange, refreshBuddyLook} = mountBuddyFeedback({
+  genreSelect, presetSelect, status, progressionStatus, startButton, trackGrid,
+  running: () => progression.running, setStyle: playerDisplay.setStyle,
 })
 
-// The unified Pad trigger handles desktop and mobile chord editing.
-const chordDetail = document.querySelector('#detail-chord')
-for (const [className, label] of [['mobile-options', 'キー・表示'], ['mobile-monitor', '鍵盤・指板']]) {
-  const button = document.createElement('button')
-  button.type = 'button'
-  button.className = className
-  button.textContent = className === 'mobile-monitor' ? '♬' : label
-  button.setAttribute('aria-label', label + 'を開閉')
-  button.setAttribute('aria-expanded', 'false')
-  button.addEventListener('click', () => button.setAttribute('aria-expanded', String(button.getAttribute('aria-expanded') !== 'true')))
-  chordDetail?.querySelector('.chord-heading')?.append(button)
-}
-const positionButton = document.createElement('button')
-positionButton.type = 'button'
-positionButton.className = 'mobile-position'
-positionButton.textContent = '演奏位置へ'
-positionButton.addEventListener('click', () => document.querySelector('.chord-slot.current')?.scrollIntoView({ block: 'center', behavior: 'smooth' }))
-chordDetail?.append(positionButton)
-
-const scoreHint = document.createElement('p')
-scoreHint.className = 'mobile-score-hint'
-scoreHint.textContent = 'コードをタップして編集。＋で音の変わり目を追加。'
-chordDetail?.querySelector('.chord-grid-scroll')?.before(scoreHint)
+mountMobileScoreTools()
 
 // Call-and-response shares the main pads, note palette and transport.
 import { mountBuddy } from './buddy.js'
-import { mountKeyboard, mountMidiInput, pianoNotes, pianoKey } from './keyboard.js'
+import { mountKeyboard, mountMidiInput, createMagicVoice, pianoNotes, pianoKey } from './keyboard.js'
+const magicVoice=createMagicVoice({
+  enabled:()=>document.querySelector('#piano-keys')?.getAttribute('data-magic')==='true',
+  bpm:()=>progression.bpm,
+  resolve:midi=>{
+    const degree=(midi-activeKey+120)%12
+    if(![1,3,5,6,8,10,11].includes(degree)||melodyRole(midi,activeChord,activeKey).category==='chord')return midi
+    const candidates=[midi-1,midi+1,midi-2,midi+2].filter(note=>note>=0&&note<=127&&melodyRole(note,activeChord,activeKey).category==='chord')
+    return candidates[0] ?? midi
+  },
+  attack:(midi,glide)=>{if(buddyController?.active)buddyController.attackMidi(midi,glide);else{recordManualMatch(midi);instrument.attack(midi,glide);lastMelodyMidi=midi;lastMelodyDegree=melodyRole(midi,activeChord,activeKey).degree;refreshMelody()}},
+  release:midi=>{if(buddyController?.active)buddyController.releaseMidi(midi);else instrument.release(midi)},
+})
+window.addEventListener('blur',()=>magicVoice.stop())
+document.addEventListener('melody-keyboard-change',()=>magicVoice.stop())
+document.addEventListener('visibilitychange',()=>{if(document.hidden)magicVoice.stop()})
 mountKeyboard({
+  bass: () => instrument.timbre.startsWith('lead-bass-'),
   key: () => activeKey,
   ready: () => instrument.ready(),
-  attack: (midi,glide) => {
-    if (buddyController?.active) buddyController.attackMidi(midi,glide)
-    else { instrument.attack(midi,glide); lastMelodyMidi=midi; lastMelodyDegree=melodyRole(midi,activeChord,activeKey).degree; refreshMelody() }
-  },
-  release: midi => { if(buddyController?.active)buddyController.releaseMidi(midi);else instrument.release(midi) },
+  attack:(midi,glide)=>magicVoice.attack(midi,glide),
+  release:midi=>magicVoice.release(midi),
   stop: () => { buddyController?.stop();instrument.silence() },
   onError: error => { if(status)status.textContent=error instanceof Error?error.message:'音を再生できませんでした。' },
 })
 refreshMelody()
-const melodyVoiceLabel=document.createElement('label')
-melodyVoiceLabel.className='section-style-choice'
-melodyVoiceLabel.textContent='音色 '
-const melodyVoiceSelect=/** @type {HTMLSelectElement} */(melodyTimbre.cloneNode(true))
-melodyVoiceSelect.removeAttribute('id');melodyVoiceSelect.setAttribute('aria-label','メロディ画面の音色')
-melodyVoiceSelect.addEventListener('change',()=>{melodyTimbre.value=melodyVoiceSelect.value;melodyTimbre.dispatchEvent(new Event('change',{bubbles:true}))})
-melodyTimbre.addEventListener('change',()=>{melodyVoiceSelect.value=melodyTimbre.value})
-melodyVoiceLabel.append(melodyVoiceSelect)
+const {element: melodyVoiceLabel} = mountMelodyVoiceChoice(melodyTimbre)
 document.querySelector('.melody-heading')?.after(melodyVoiceLabel)
 mountMidiInput({
   transpose:()=>document.querySelector('#piano-keys')?.getAttribute('data-magic')==='true'?activeKey:0,
   bend:value=>instrument.setPitchBend(value),
   modulation:value=>{instrument.setModulation(value);buddyController?.rememberModulation(value)},
   ready: () => instrument.ready(),
-  attack: midi => { if(buddyController?.active){buddyController.attackMidi(midi);return} instrument.attack(midi); lastMelodyMidi=midi; lastMelodyDegree=melodyRole(midi,activeChord,activeKey).degree; refreshMelody(); document.querySelector(`#piano-keys [data-midi="${midi}"]`)?.setAttribute('data-playing','') },
-  release: midi => { if(buddyController?.active)buddyController.releaseMidi(midi);else instrument.release(midi); document.querySelector(`#piano-keys [data-midi="${midi}"]`)?.removeAttribute('data-playing') },
+  attack:midi=>magicVoice.attack(midi),
+  release:midi=>magicVoice.release(midi),
 })
 buddyController = mountBuddy({
   progression, instrument, drums,
   getNotes: () => playableNotes,
   refreshTransport: updateTransport,
-  onModeChange: mode => { melodyMode.value = mode },
+  onModeChange: mode => { melodyMode.value = ['pc', 'you'].includes(mode) ? 'session' : mode; melodyMode.dispatchEvent(new Event('part-sync')) },
   onPlayStyleChange: style => setJazzSwing(style === 'jazz'),
   notesAt: (bar, beat, absoluteBar) => {
     const {section, bar:localBar} = progression.positionAt(absoluteBar)
@@ -1401,13 +1106,14 @@ buddyController = mountBuddy({
     const scalePitches = new Set(melodyPalette(key, chord, key, 'key').map(note => note.midi % 12))
     const palette = melodyPalette(key, chord, key, 'chord')
       .filter(note => !note.clash && (note.category === 'chord' || scalePitches.has(note.midi % 12)))
-    return palette.flatMap(note => [note.midi-12,note.midi,note.midi+12]
-      .filter(midi => midi >= 60 && midi <= 84)
+    return palette.flatMap(note => Array.from({length:8}, (_,octave) => 24 + octave * 12 + ((note.midi % 12 + 12) % 12))
+      .filter(midi => midi <= 108)
       .map(midi => ({...note,midi,...melodyRole(midi,chord,key)})))
       .filter((note,index,all) => all.findIndex(other => other.midi === note.midi) === index)
       .sort((a,b) => a.midi-b.midi)
   },
   reportNote: midi => {
+    showHumanPlaying()
     lastMelodyMidi = midi
     lastMelodyDegree = melodyRole(midi, activeChord, activeKey).degree
     refreshMelody()
@@ -1439,14 +1145,7 @@ function restoreSectionParts() {
   const performance = currentPerformance ? {...currentPerformance} : undefined
   restoringSectionParts = true
   try {
-    for (const id of sectionControlIds) {
-      const control = /** @type {HTMLSelectElement} */ (document.getElementById(id))
-      const value = settings[id]
-      if (value !== undefined && control.value !== value) {
-        control.value = value
-        control.dispatchEvent(new Event('change', {bubbles: true}))
-      }
-    }
+    partSettings.restore(sectionControlIds, settings)
   } finally {
     progression.sections[progression.selectedSection].performance = performance
     restoringSectionParts = false
@@ -1478,7 +1177,6 @@ function editSection(section) {
   sectionContextRevision.value++
   refreshSectionKnobs()
   backingEditorRevision.value++
-  sectionAdvance.value = progression.sections[section].advance
   const captured = progression.sections[section].performance
   rhythmSelect.value = captured?.drums ? 'reference' : progression.rhythm
   bassPattern.value = captured?.bass ? 'reference' : progression.bassPattern
@@ -1506,47 +1204,7 @@ function editSection(section) {
 }
 
 const sectionRangeRevision=ref(0)
-createApp({
-  render: () => (sectionRangeRevision.value, sectionContextRevision.value, [
-    ...progression.sections.map((_, index) => {const name=progression.sections[index].name ?? String.fromCharCode(65+index);return h('button', {
-      type: 'button', 'aria-label': `セクション${name}を編集`,
-      'aria-pressed': String(index === editingSection.value),
-      'data-playing': index === playingSection.value ? 'true' : undefined,
-      onClick: () => editSection(index),
-    }, name)}),
-    h('div',{class:'section-style-summary'}, `範囲 ${(progression.sections[editingSection.value].startBar ?? 0)+1}〜${progression.sections[editingSection.value].endBar ?? progression.barCount()}小節`),
-    h('label',{class:'section-style-choice'},['スタイル',h('select',{'aria-label':'セクションのスタイル',value:progression.sections[editingSection.value].style ?? genreSelect.value,onChange:(/** @type {Event} */ event)=>void chooseStyle((/** @type {HTMLSelectElement} */(event.target)).value)},genres.map(item=>h('option',{value:item.id},item.label)))]),
-    h('div',{class:'song-range-settings',key:sectionRangeRevision.value},[
-      h('span',`${(progression.sections[editingSection.value].startBar ?? 0)+1}小節〜`),
-      h('input',{type:'number',min:(progression.sections[editingSection.value].startBar ?? 0)+1,max:editingSection.value===progression.sections.length-1?1024:(progression.sections[editingSection.value+1].endBar ?? progression.barCount())-1,value:progression.sections[editingSection.value].endBar,'aria-label':'セクションの終了小節',onChange:(/** @type {Event} */ event)=>{
-        const input=/** @type {HTMLInputElement} */(event.target), index=editingSection.value
-        const next=progression.sections[index+1]
-        const value=Math.round(Number(input.value)), current=progression.sections[index]
-        if(!Number.isFinite(value)||value<1||value>1024){input.value=String(current.endBar);return}
-        if(!next&&value>=progression.barCount()){
-          changeBarCount(value-progression.barCount());sectionRangeRevision.value++
-        }
-        else if(!next&&value>(current.startBar ?? 0)&&value<progression.barCount()){
-          if(splitSongSection(progression.sections,index)){
-            current.endBar=value;progression.sections[index+1].startBar=value
-            sectionRangeRevision.value++;refreshLabels()
-          }
-        }
-        else if(next&&value>(current.startBar ?? 0)&&value<=(next.endBar ?? 0)-1){current.endBar=value;if(next)next.startBar=value;sectionRangeRevision.value++;refreshLabels()}
-        else input.value=String(current.endBar)
-      }}),
-    ]),
-  ]),
-}).mount('#song-sections')
-
-createApp({setup: () => () => h('div', {class:'section-bar-count'}, [
-  h('span', {}, '小節数'),
-  h('div', {class:'style-stepper'}, [
-    h('button', {type:'button', disabled:sectionBars.value <= 1, 'aria-label':'小節数を減らす', onClick:() => changeBarCount(-1)}, '−'),
-    h('output', {'aria-live':'polite'}, String(sectionBars.value)),
-    h('button', {type:'button', disabled:sectionBars.value >= 1024, 'aria-label':'小節数を増やす', onClick:() => changeBarCount(1)}, '＋'),
-  ]),
-])}).mount('#section-bar-count')
+mountScoreSections({progression, sectionRangeRevision, sectionContextRevision, editingSection, playingSection, sectionBars, editSection, changeBarCount, refreshLabels})
 /** @param {number} delta */
 function changeBarCount(delta) {
   const section = progression.sections[0]
@@ -1562,18 +1220,7 @@ function changeBarCount(delta) {
   refreshLabels()
 }
 
-const scorePaging=document.createElement('div')
-scorePaging.className='score-paging'
-document.getElementById('section-bar-count')?.after(scorePaging)
-const scoreHeading=document.querySelector('#detail-chord .chord-heading')
-const scoreSettings=document.querySelector('#detail-chord .chord-settings')
-if(scoreHeading && scoreSettings)scoreSettings.after(scoreHeading)
-createApp({setup:()=>()=>h('div',{class:'style-stepper',role:'group','aria-label':'コード進行のページ'},[
- h('button',{type:'button',disabled:scorePage.value===0,'aria-label':'前の16小節',onClick:()=>{scorePage.value--;refreshLabels()}},'〈'),
- h('output',{'aria-live':'polite'},`${scorePage.value*16+1}〜${Math.min((scorePage.value+1)*16,sectionBars.value)}小節`),
- h('button',{type:'button',disabled:(scorePage.value+1)*16>=sectionBars.value,'aria-label':'次の16小節',onClick:()=>{scorePage.value++;refreshLabels()}},'〉'),
- h('button',{type:'button',disabled:sectionBars.value>=1024,'aria-label':'16小節追加',onClick:()=>changeBarCount(Math.min(16,1024-sectionBars.value))},'＋16小節'),
-])}).mount(scorePaging)
+mountScorePaging({scorePage, sectionBars, refreshLabels})
 
 // Start with the same complete arrangement as the displayed style.
 genreSelect.dispatchEvent(new Event('change', {bubbles:true}))
@@ -1582,17 +1229,18 @@ while (progression.slots.length < 200) {
   progression.beatSlots = [...progression.beatSlots, ...progression.beatSlots.map(row => [...row])]
   progression.modulation = [...progression.modulation, ...progression.modulation]
 }
-progression.sections[0].barCount = 200
+progression.sections[0].barCount = 16
 for (let index = 1; index < progression.sections.length; index++) {
   const {slots, beatSlots, modulation} = progression.sections[0]
-  progression.sections[index] = {slots: [...slots], beatSlots: beatSlots.map(row => [...row]), modulation: [...modulation], advance: false, barCount:200}
+  progression.sections[index] = {slots: [...slots], beatSlots: beatSlots.map(row => [...row]), modulation: [...modulation], advance: false, barCount:16}
 }
 
 for (const section of progression.sections) section.partSettings = {...readSectionParts()}
 // Start with one arrangement for the entire song; boundaries are user-authored.
-progression.sections=[{...progression.sections[0],name:'A',style:genreSelect.value,startBar:0,endBar:200}]
+progression.sections=[{...progression.sections[0],name:'A',style:genreSelect.value,startBar:0,endBar:16}]
 progression.songMode=true
-mountBackingStepEditor()
+progression.loopSong=true
+backingDetail.mount()
 sectionRangeRevision.value++
 refreshLabels()
 
@@ -1643,6 +1291,10 @@ async function loadArrangement(file) {
       applyControl({id, value, checked}) {
         const el = savedControls.get(id)
         if (!el) return
+        if (el instanceof HTMLSelectElement && partSettings.apply(el, value)) {
+          rememberSectionParts()
+          return
+        }
         el.value = value
         if (el instanceof HTMLInputElement) el.checked = checked
         const eventType = el.type === 'range' || el.type === 'number' ? 'input' : 'change'
@@ -1711,374 +1363,10 @@ async function applyReferenceArrangement(result) {
   keySelect.dispatchEvent(new Event('change', {bubbles:true}))
 }
 
-const timingControl = document.createElement('div')
-timingControl.className = 'reference-timing-control'
-const timingLabel = document.createElement('span')
-timingLabel.textContent = '原曲の開始位置'
-const timingOutput = document.createElement('output')
-timingOutput.value = '0.00 秒'
-function refreshTimingRange() {
-  timingOutput.value = referenceTrack.getTiming(editingSection.value).toFixed(2) + ' 秒'
-}
-/** @param {number} value */
-function commitReferenceTiming(value) {
-  referenceTrack.setTiming(editingSection.value, value)
-  refreshTimingRange()
-  updateTimingPreview()
-}
-timingControl.append(timingOutput)
-
-const timingPreview = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-timingPreview.classList.add('timing-waveform')
-timingPreview.setAttribute('viewBox', '0 0 1000 100')
-timingPreview.setAttribute('preserveAspectRatio', 'none')
-timingPreview.setAttribute('role', 'img')
-// SVG backgrounds do not reliably receive pointer events in every browser.
-const waveformHitArea=document.createElementNS(timingPreview.namespaceURI,'rect')
-waveformHitArea.setAttribute('width','1000');waveformHitArea.setAttribute('height','100')
-waveformHitArea.setAttribute('fill','transparent')
-waveformHitArea.setAttribute('pointer-events','all')
-timingPreview.append(waveformHitArea)
-timingPreview.setAttribute('aria-label', '原曲の波形と2小節の8分音符グリッド')
-// Keep the actual scheduled position observable without exposing audio or filenames.
-document.addEventListener('reference-playback-start', event=>{
- const detail=/** @type {CustomEvent<{section:number,adjustment:number,sourceOffset:number,scheduledTime:number,stemOffsets:number[]}>} */(event).detail
- timingPreview.dataset.playback=JSON.stringify(detail)
- timingOutput.title=`直近の再生：${'ABCD'[detail.section]} / 調整 ${detail.adjustment.toFixed(2)} 秒 / 原曲 ${detail.sourceOffset.toFixed(3)} 秒`
-})
-let timingZoomBars = 2
-let timingPage = 0
-let manualTimingPage = false
-let waveformWasPlaying = false
-let timingAligned = false
-let zoomFrame = 0
-let zoomTarget = 2
-const timingWave = document.createElementNS(timingPreview.namespaceURI, 'path')
-timingPreview.append(timingWave)
-let timingGrid = ''
-function refreshTimingGrid() {
-  const bars = timingZoomBars
-  const grid = `${progression.beatsPerBar}:${bars}:${timingPage}`
-  if (timingGrid === grid) return
-  timingGrid = grid
-  timingPreview.querySelectorAll('.bar-grid, .beat-grid, .ruler-tick').forEach(line => line.remove())
-  waveBarNumbers.replaceChildren()
-  const beats=progression.beatsPerBar*bars
-  // Four small divisions per beat make the waveform feel like a measuring tool.
-  for(let tick=Math.ceil(-.12*beats*4);tick<=beats*4;tick++) {
-    const beat=tick/4,x=(beat/beats+.12)*1000
-    if(x<0||x>1000)continue
-    const barLine=tick%(progression.beatsPerBar*4)===0
-    const beatLine=tick%4===0
-    const line=document.createElementNS(timingPreview.namespaceURI,'line')
-    line.setAttribute('x1',String(x));line.setAttribute('x2',String(x))
-    line.setAttribute('y1','0');line.setAttribute('y2',barLine?'100':beatLine?'50':tick%2===0?'5':'3')
-    line.setAttribute('class',barLine?(tick===0?'bar-grid first-beat-grid':'bar-grid'):beatLine?'beat-grid':'ruler-tick')
-    timingPreview.append(line)
-    const bar=Math.round(timingPage+beat/progression.beatsPerBar)+1
-    if(barLine&&bar>0){
-      const label=document.createElement('span')
-      label.style.left=`${x/10}%`
-      label.textContent=`${bar}小節`
-      waveBarNumbers.append(label)
-    }
-  }
-}
-const timingCursor = document.createElementNS(timingPreview.namespaceURI, 'line')
-timingCursor.setAttribute('class', 'playhead')
-timingCursor.setAttribute('y1', '0'); timingCursor.setAttribute('y2', '100')
-timingCursor.setAttribute('visibility', 'hidden')
-const waveformArea = document.createElement('div')
-waveformArea.className = 'timing-waveform-area'
-const waveBarNumbers=document.createElement('div')
-waveBarNumbers.className='waveform-bar-numbers'
-waveBarNumbers.setAttribute('aria-hidden','true')
-const waveReticle=document.createElement('span')
-waveReticle.className='waveform-reticle'
-waveReticle.setAttribute('aria-hidden','true')
-const scopeCue=document.createElement('span');scopeCue.className='waveform-scope-cue';scopeCue.textContent='いい感じ！';scopeCue.hidden=true
-waveReticle.append(scopeCue)
-const waveformZoom = document.createElement('div')
-waveformZoom.className = 'style-stepper waveform-zoom'
-waveformZoom.setAttribute('role', 'group')
-waveformZoom.setAttribute('aria-label', '波形の拡大・縮小')
-for (const [label, direction] of /** @type {[string, number][]} */ ([['縮小', 1], ['拡大', -1]])) {
-  const button = document.createElement('button')
-  button.type = 'button'; button.textContent = direction > 0 ? '−' : '＋'
-  button.setAttribute('aria-label', `波形を${label}`)
-  button.addEventListener('click', () => {
-    zoomTarget = Math.max(1, Math.min(16, zoomTarget * (direction > 0 ? 2 : .5)))
-    manualTimingPage = false
-    cancelAnimationFrame(zoomFrame)
-    const from = timingZoomBars, started = performance.now()
-    /** @param {number} now */
-    const animate = now => {
-      const t = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : Math.min(1,(now-started)/240)
-      timingZoomBars = from + (zoomTarget-from)*(1-(1-t)**3)
-      updateTimingPreview()
-      if(t<1) zoomFrame=requestAnimationFrame(animate)
-    }
-    zoomFrame=requestAnimationFrame(animate)
-  })
-  waveformZoom.append(button)
-}
-const zoomIcon=document.createElement('span')
-zoomIcon.className='waveform-zoom-icon'
-zoomIcon.setAttribute('aria-hidden','true')
-zoomIcon.innerHTML='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg>'
-waveformZoom.prepend(zoomIcon)
-// Each gesture snapshots its scale and start value; every move commits to audio state.
-/** @type {{id:number,x:number,value:number,secondsPerPixel:number}|null} */
-let waveformDrag = null
-timingPreview.setAttribute('tabindex', '0')
-timingPreview.addEventListener('pointerdown', event => {
-  if (!event.isPrimary || event.button !== 0) return
-  event.preventDefault()
-  if (timingAligned) {
-    const beats = waveformBeatAt(event.clientX)
-    const bar = Math.floor(beats / progression.beatsPerBar)
-    playbackHeads.set(progression.selectedSection,bar)
-    waveformStartBeats.set(progression.selectedSection,beats % progression.beatsPerBar)
-    selectedWaveBeat=beats
-    timingPreview.focus({preventScroll:true})
-    renderWaveSelection()
-    if (progression.running) {
-      progression.bpm=Number(tempo.value)
-      void progression.start(bar,beats % progression.beatsPerBar)
-    }
-    return
-  }
-  progression.stop()
-  const width = timingPreview.getBoundingClientRect().width
-  waveformDrag = {id:event.pointerId, x:event.clientX, value:referenceTrack.getTiming(editingSection.value), secondsPerPixel:60 * timingZoomBars * progression.beatsPerBar / Math.max(40,Number(tempo.value)) / Math.max(1,width)}
-  timingPreview.setPointerCapture(event.pointerId)
-  timingPreview.focus({preventScroll:true})
-  timingPreview.classList.add('dragging')
-  waveformHint.hidden = true
-  challengeStatus.textContent = '② 聴いて重なりを確かめる'
-  rhythmDone.setAttribute('aria-pressed','false')
-})
-timingPreview.addEventListener('pointermove', event => {
-  if(timingAligned) { setWaveLine(hoverWaveLine,waveformBeatAt(event.clientX)); return }
-  if (!waveformDrag || event.pointerId !== waveformDrag.id) return
-  commitReferenceTiming(waveformDrag.value + (waveformDrag.x-event.clientX)*waveformDrag.secondsPerPixel)
-})
-function endWaveformDrag() { waveformDrag=null; timingPreview.classList.remove('dragging') }
-for (const name of ['pointerup','pointercancel','lostpointercapture']) timingPreview.addEventListener(name,endWaveformDrag)
-window.addEventListener('blur',endWaveformDrag)
-document.addEventListener('reference-removed',endWaveformDrag)
-timingPreview.addEventListener('keydown', event => {
-  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-  event.preventDefault()
-  commitReferenceTiming(referenceTrack.getTiming(editingSection.value)+(event.key==='ArrowRight'?.01:-.01))
-})
-/** @type {number|null} */ let selectedWaveBeat=null
-const hoverWaveLine=document.createElementNS(timingPreview.namespaceURI,'line')
-const selectedWaveLine=document.createElementNS(timingPreview.namespaceURI,'line')
-const waveSpeaker=document.createElement('span')
-waveSpeaker.className='wave-position-speaker'
-waveSpeaker.hidden=true
-waveSpeaker.setAttribute('aria-label','ここから再生')
-waveSpeaker.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 8a6 6 0 0 1 0 8M19 5a10 10 0 0 1 0 14"/></svg>'
-waveformArea.append(waveSpeaker)
-for(const [line,kind] of /** @type {[Element,string][]} */ ([[hoverWaveLine,'wave-hover-line'],[selectedWaveLine,'wave-selected-line']])) {
-  line.setAttribute('class',String(kind));line.setAttribute('y1','0');line.setAttribute('y2','100');line.setAttribute('visibility','hidden')
-  timingPreview.append(line)
-}
-/** @param {number} clientX */
-function waveformBeatAt(clientX) {
- const rect=timingPreview.getBoundingClientRect()
- return Math.max(0,Math.min(progression.barCount()*progression.beatsPerBar-1,Math.round((((clientX-rect.left)/rect.width-.12)*timingZoomBars+timingPage)*progression.beatsPerBar)))
-}
-/** @param {Element} line @param {number} beat */
-function setWaveLine(line,beat) {
- const x=((beat/progression.beatsPerBar-timingPage)/timingZoomBars+.12)*1000
- line.setAttribute('x1',String(x));line.setAttribute('x2',String(x));line.setAttribute('visibility',timingAligned&&x>=0&&x<=1000?'visible':'hidden')
- waveSpeaker.hidden=!(timingAligned&&x>=0&&x<=1000)
- waveSpeaker.style.left=String(x/10)+'%'
-}
-function renderWaveSelection(){if(selectedWaveBeat!==null)setWaveLine(selectedWaveLine,selectedWaveBeat)}
-timingPreview.addEventListener('pointerleave',()=>{hoverWaveLine.setAttribute('visibility','hidden');waveSpeaker.hidden=true;renderWaveSelection()})
-const waveformHint = document.createElement('div')
-waveformHint.className = 'waveform-drag-hint'
-waveformHint.textContent = '↔ 波形をつかんで、音の立ち上がりを左の1拍目へ'
-const beatTarget = document.createElement('span')
-beatTarget.className = 'waveform-beat-target'
-beatTarget.textContent = '1拍目'
-const waveformPreRoll=document.createElement('span')
-waveformPreRoll.className='waveform-pre-roll-mask'
-waveformPreRoll.setAttribute('aria-hidden','true')
-waveformArea.append(timingPreview, waveformPreRoll, waveBarNumbers, waveReticle, waveformHint, beatTarget, waveformZoom)
-const rhythmChallenge = document.createElement('strong')
-rhythmChallenge.textContent = 'リズムを重ねよう'
-const challengeStatus = document.createElement('span')
-challengeStatus.className = 'timing-challenge-status'
-challengeStatus.setAttribute('aria-live', 'polite')
-challengeStatus.textContent = '① 波形を左右に動かす'
-const rhythmCheck = document.createElement('button')
-rhythmCheck.type = 'button'
-rhythmCheck.className = 'reference-remove-key'
-rhythmCheck.textContent = '▶ 聴いて確認'
-rhythmCheck.addEventListener('click', () => {
-  if (progression.running) { progression.stop(); rhythmCheck.textContent = '▶ 聴いて確認'; return }
-  if(!timingAligned&&referenceTrack.timingOnsetNear(editingSection.value)&&referenceTrack.timingOnsetNear(editingSection.value,60*progression.beatsPerBar/Math.max(40,Number(tempo.value))))rhythmDone.click()
-  rootGuide.hidden=true
-  playFromBar(0)
-  rhythmCheck.textContent = '■ 停止'
-  challengeStatus.textContent = '原曲とドラムの重なりを聴こう'
-})
-const rhythmDone = document.createElement('button')
-rhythmDone.type = 'button'; rhythmDone.className = 'reference-remove-key'
-rhythmDone.textContent = '合わせ直す'
-rhythmDone.hidden=true
-rhythmDone.addEventListener('click', () => {
-  timingAligned=!timingAligned
-  timingTempo.hidden=timingAligned
-  waveSpeaker.hidden=true
-  if(!timingAligned){manualTimingPage=false;timingPage=0;waveformStartBeats.clear();selectedWaveBeat=null;selectedWaveLine.setAttribute('visibility','hidden');hoverWaveLine.setAttribute('visibility','hidden')}
-  endWaveformDrag()
-  rhythmDone.hidden=!timingAligned
-  challengeStatus.textContent=timingAligned?'ルーラーをクリックして再生':'① 波形を左右に動かす'
-  waveformHint.hidden=timingAligned
-  waveformHint.textContent=timingAligned?'▶ ルーラーをクリックして、この拍から再生':'↔ 波形をつかんで1拍目に合わせる'
-  timingPreview.classList.toggle('aligned',timingAligned)
-  if(timingAligned) manualTimingPage=false
-  if(timingAligned) {
-    selectedWaveBeat=0
-    playbackHeads.set(progression.selectedSection,0)
-    waveformStartBeats.set(progression.selectedSection,0)
-    renderWaveSelection()
-  }
-  updateTimingPreview()
-})
-const timingNudge=document.createElement('div')
-timingNudge.className='style-stepper timing-navigation'
-for(const direction of [-1,1]) {
-  const button=document.createElement('button');button.type='button';button.textContent=direction<0?'←':'→'
-  button.setAttribute('aria-label',direction<0?'開始位置を少し戻す':'開始位置を少し進める')
-  let timer=/** @type {ReturnType<typeof setTimeout>|undefined} */(undefined)
-  const stop=()=>{clearTimeout(timer);timer=undefined}
-  const step=()=>commitReferenceTiming(referenceTrack.getTiming(editingSection.value)+direction*.01)
-  button.addEventListener('pointerdown',event=>{if(event.button!==0)return;event.preventDefault();button.setPointerCapture(event.pointerId);step();timer=setTimeout(function repeat(){step();timer=setTimeout(repeat,70)},350)})
-  for(const name of ['pointerup','pointercancel','lostpointercapture','blur'])button.addEventListener(name,stop)
-  window.addEventListener('blur',stop)
-  document.addEventListener('visibilitychange',stop)
-  button.addEventListener('click',event=>{if(event.detail===0)step()})
-  timingNudge.append(button)
-}
-const timingTempo=document.createElement('div')
-timingTempo.className='timing-tempo-controls'
-timingTempo.innerHTML='<label class="timing-tempo-knob">テンポ<span class="volume-knob"><input type="range" min="40" max="200" step="0.1" aria-label="位置合わせのテンポ"><span aria-hidden="true"></span></span><output></output></label>'
-const timingTempoInput=/** @type {HTMLInputElement} */(timingTempo.querySelector('input'))
-const timingTempoOutput=/** @type {HTMLOutputElement} */(timingTempo.querySelector('output'))
-const tempoMultipliers=document.createElement('div')
-tempoMultipliers.className='timing-tempo-multipliers'
-tempoMultipliers.setAttribute('role','group');tempoMultipliers.setAttribute('aria-label','テンポの半分・2倍')
-for(const [factor,label,name] of /** @type {[number,string,string][]} */ ([[.5,'½','テンポを半分にする'],[2,'×2','テンポを2倍にする']])) {
- const button=document.createElement('button');button.type='button';button.textContent=label
- button.setAttribute('aria-label',name);button.title=name
- button.dataset.factor=String(factor)
- button.addEventListener('click',()=>{
-  const next=Math.round(Number(tempo.value)*factor*10)/10
-  if(next<40||next>200)return
-  tempo.value=String(next);tempo.dispatchEvent(new Event('input',{bubbles:true}))
- })
- tempoMultipliers.append(button)
-}
-timingTempo.append(tempoMultipliers)
-function syncTimingTempo(){
- tempoMultipliers.querySelectorAll('button').forEach(button=>{const value=Number(tempo.value)*Number(button.dataset.factor);button.disabled=value<40||value>200})
- timingTempoInput.value=tempo.value
- timingTempoOutput.value=tempo.value
- timingTempoInput.parentElement?.style.setProperty('--angle',`${-135+(Number(tempo.value)-40)/160*270}deg`)
-}
-timingTempoInput.addEventListener('input',()=>{tempo.value=String(Math.round(Number(timingTempoInput.value)));tempo.dispatchEvent(new Event('input',{bubbles:true}))})
-timingTempoInput.addEventListener('keydown',event=>{
- const direction=['ArrowRight','ArrowUp'].includes(event.key)?1:['ArrowLeft','ArrowDown'].includes(event.key)?-1:0
- if(!direction)return
- event.preventDefault()
- tempo.value=String(Math.max(40,Math.min(200,Math.round(Number(tempo.value))+direction)))
- tempo.dispatchEvent(new Event('input',{bubbles:true}))
-})
-tempo.addEventListener('input',syncTimingTempo)
-bindKnobDrag(timingTempoInput,.5,true)
-syncTimingTempo()
-timingControl.append(timingTempo)
-for(const direction of [-1,1]) {
- const button=document.createElement('button');button.type='button';button.textContent=direction<0?'〈':'〉'
- button.setAttribute('aria-label',direction<0?'波形を1小節前へ':'波形を1小節先へ')
- button.addEventListener('click',()=>{
-  const seconds=60*timingZoomBars*progression.beatsPerBar/Math.max(40,Number(tempo.value))
-  const maxPage=Math.max(0,Math.ceil((referenceView.duration-referenceTrack.getTiming(editingSection.value))/seconds*timingZoomBars)-1)
-  timingPage=Math.max(0,Math.min(maxPage,timingPage+direction));manualTimingPage=true;updateTimingPreview()
- })
- timingNudge.append(button)
-}
-document.addEventListener('reference-loaded',()=>{manualTimingPage=false;timingPage=0;updateTimingPreview()})
-const tempoGuide=document.createElement('span');tempoGuide.className='timing-guide-bubble';tempoGuide.textContent='テンポを動かしてみよう！';tempoGuide.hidden=true
-timingTempo.append(tempoGuide)
-const listenGuide=document.createElement('span');listenGuide.className='timing-guide-bubble';listenGuide.textContent='確認してみよう！';listenGuide.hidden=true
-timingControl.append(timingNudge, rhythmCheck, listenGuide, rhythmDone)
-const timingRow = document.createElement('div')
-timingRow.className = 'reference-timing-row'
-timingRow.hidden = !referenceView.filename
-document.addEventListener('reference-timing-refresh', () => {
-  queueMicrotask(() => {
-    timingRow.hidden = !referenceView.filename
-    refreshTimingRange()
-    timingOutput.value = referenceTrack.getTiming(editingSection.value).toFixed(2) + ' 秒'
-    updateTimingPreview()
-  })
-})
-timingRow.append(waveformArea, timingControl)
-referenceTimingHost.append(timingRow)
-/** @param {boolean} [redraw] */
-function updateTimingPreview(redraw = true) {
-  const bars = timingZoomBars
-  const seconds = (60 * bars * progression.beatsPerBar) / Math.max(40, Number(tempo.value))
-  timingPreview.setAttribute('aria-label', `原曲の波形（${bars}小節、拍グリッド）`)
-  const elapsed = Math.max(0, referenceTrack.getPosition() - referenceTrack.getTiming(editingSection.value))
-  if (!manualTimingPage) {
-    const focusSeconds = timingAligned && referenceView.playing ? elapsed : timingAligned && selectedWaveBeat !== null ? selectedWaveBeat * 60 / Math.max(40,Number(tempo.value)) : 0
-    // Keep bar 1 anchored during alignment; browse/follow in single-bar increments.
-    const focusBar = focusSeconds / seconds * bars
-    timingPage = timingAligned ? Math.max(0, Math.floor(focusBar - bars * .75)) : 0
-  }
-  beatTarget.textContent = timingPage === 0 ? '1拍目' : `${timingPage+1}小節`
-  refreshTimingGrid()
-  if (redraw || !timingWave.getAttribute('d')) timingWave.setAttribute('d', referenceTrack.timingWaveform(editingSection.value, seconds, (timingPage/bars-.12) * seconds))
-  timingPreview.append(hoverWaveLine,selectedWaveLine,timingCursor)
-  renderWaveSelection()
-  waveformZoom.querySelectorAll('button')[0].disabled = bars >= 16
-  waveformZoom.querySelectorAll('button')[1].disabled = bars <= 1
-  timingWave.setAttribute('transform','matrix(1 0 0 .76 0 12)')
-  const near=!timingAligned&&referenceTrack.timingOnsetNear(editingSection.value)
-  waveReticle.classList.toggle('on-target',near)
-  scopeCue.hidden=timingAligned
-  const nextBarSeconds=60*progression.beatsPerBar/Math.max(40,Number(tempo.value))
-  const both=near&&referenceTrack.timingOnsetNear(editingSection.value,nextBarSeconds)
-  scopeCue.textContent=both?'ばっちり！次にすすもう！':near?'いいかんじ！2小節目も合わせてみよう':'波形を掴んで動かしてみよう…'
-  tempoGuide.hidden=true
-  listenGuide.hidden=true
-  waveformHint.hidden=true
-  waveReticle.classList.toggle('bars-on-target',both)
-}
-document.addEventListener('reference-timing-refresh', () => updateTimingPreview())
-tempo.addEventListener('input', () => updateTimingPreview())
-updateTimingPreview()
-document.addEventListener('reference-position', event => {
-  const detail = /** @type {CustomEvent<{position:number,playing:boolean}>} */ (event).detail
-  if (detail.playing && !waveformWasPlaying) { manualTimingPage=false; updateTimingPreview() }
-  waveformWasPlaying=detail.playing
-  if (detail.playing && !timingRow.hidden) {
-    const seconds = 60 * timingZoomBars * progression.beatsPerBar / Math.max(40, Number(tempo.value))
-    const elapsed = detail.position - referenceTrack.getTiming(editingSection.value)
-    const page = timingAligned ? Math.max(0, Math.floor(Math.max(0, elapsed) / seconds * timingZoomBars - timingZoomBars * .75)) : 0
-    if (!manualTimingPage && page !== timingPage) updateTimingPreview()
-    const x = Math.max(0, Math.min(1000, ((elapsed - timingPage / timingZoomBars * seconds) / seconds + .12) * 1000))
-    timingCursor.setAttribute('x1', String(x)); timingCursor.setAttribute('x2', String(x))
-    timingCursor.setAttribute('visibility', 'visible')
-  } else timingCursor.setAttribute('visibility', 'hidden')
+const { updateTimingPreview } = mountReferenceTiming(referenceTimingHost, {
+  reference: referenceView, player: referenceTrack, progression, tempo, keySelect,
+  section: () => editingSection.value, preset: () => selectedPreset.value, choosePreset,
+  playbackHeads, waveformStartBeats, playFromBar, bindKnobDrag,
 })
 
 // Meter changes preserve quarter-note tempo and the current accompaniment transport.
@@ -2111,93 +1399,12 @@ mountScorePad({
 })
 
 
-const keyAssist = document.createElement('section')
-keyAssist.className = 'reference-key-assist'
-keyAssist.setAttribute('aria-label', '耳でキーを合わせる')
-keyAssist.innerHTML = '<button type="button" class="reference-remove-key key-listen" aria-pressed="false">▶ 最初の1拍を聴き比べる</button><label class="key-match-control">ルート音<span class="volume-knob"><input type="range" min="0" max="11" step="1" value="0" aria-label="聴き比べるルート音"><span aria-hidden="true"></span></span><output>C</output></label><label>これは何のコード？<select aria-label="コードの度数">'+[[6,'☾ 6｜哀しげ'],[4,'♡ 4｜切なさ・優しさ'],[1,'☀ 1｜元気・明るい'],[2,'2'],[3,'3'],[5,'5'],[7,'7']].map(([n,label])=>`<option value="${Number(n)-1}">${label}</option>`).join('')+'</select></label><output class="key-match-result" aria-live="polite">キー C</output>'
-referenceTimingHost.append(keyAssist)
-const rootGuide=document.createElement('span');rootGuide.className='timing-guide-bubble root-guide';rootGuide.textContent='次はルート音を聴き比べよう！';rootGuide.hidden=true
-keyAssist.append(rootGuide)
-const matchRoot = /** @type {HTMLInputElement} */ (keyAssist.querySelector('input'))
-const matchDegree = /** @type {HTMLSelectElement} */ (keyAssist.querySelector('select'))
-const keyListen = /** @type {HTMLButtonElement} */ (keyAssist.querySelector('.key-listen'))
-const keyResult = /** @type {HTMLOutputElement} */ (keyAssist.querySelector('.key-match-result'))
-const moodOrder=[5,3,0,1,2,4,6]
-const moodLabels=['6｜哀しげ','4｜切なさ・優しさ','1｜元気・明るい','2','3','5','7']
-const moodLabel=document.createElement('label');moodLabel.className='key-match-control mood-control'
-moodLabel.innerHTML='雰囲気<span class="volume-knob"><input type="range" min="0" max="6" step="1" value="0" aria-label="雰囲気"><span aria-hidden="true"></span></span><output>6｜哀しげ</output>'
-const moodInput=/** @type {HTMLInputElement} */(moodLabel.querySelector('input'))
-matchDegree.parentElement?.replaceWith(moodLabel)
-moodInput.addEventListener('input',()=>{matchDegree.value=String(moodOrder[Number(moodInput.value)]);matchDegree.dispatchEvent(new Event('change'));applyMatchedKey();stopKeyMatch()})
-bindKnobDrag(moodInput,.08)
-let matchingKey = false
-const inferredKey = () => keyFromDegree(Number(matchRoot.value), Number(matchDegree.value))
-function refreshKeyAssist() {
-  const moodIndex=Math.max(0,moodOrder.indexOf(Number(matchDegree.value)))
-  moodInput.value=String(moodIndex)
-  moodInput.parentElement?.style.setProperty('--angle',`${-135+moodIndex/6*270}deg`)
-  const moodOutput=moodLabel.querySelector('output')
-  if(moodOutput)moodOutput.textContent=moodLabels[moodIndex]
-  const pitch = Number(matchRoot.value)
-  const output = keyAssist.querySelector('output')
-  if (output) output.textContent = keys[pitch].name
-  matchRoot.parentElement?.style.setProperty('--angle', `${-135 + pitch / 11 * 270}deg`)
-  keyResult.value = `キー ${keys[inferredKey()].name}`
-  keyAssist.hidden = !referenceView.filename
-}
-function stopKeyMatch() { matchingKey = false; referenceTrack.stopKeyPreview(); keyListen.setAttribute('aria-pressed','false'); keyListen.textContent = '▶ 最初の1拍を聴き比べる' }
-keyListen.addEventListener('click', () => {
-  if (matchingKey) { stopKeyMatch(); return }
-  progression.stop(); matchingKey = true; keyListen.setAttribute('aria-pressed','true'); keyListen.textContent = '■ 聴き比べを停止'
-  void referenceTrack.previewKey(Number(matchRoot.value)).catch(() => { stopKeyMatch(); keyListen.textContent = '再試行：最初の1拍を聴く' })
+mountMelodyLayout(melodyVoiceLabel)
+const melodyNavigation = mountPlayhead({
+  current: () => resumeMelodyBar, count: () => progression.barCount(), seek: seekMelodyBar,
 })
-matchRoot.addEventListener('input', () => { rootGuide.hidden=true; refreshKeyAssist(); applyMatchedKey(); if (matchingKey) referenceTrack.setKeyPreviewRoot(Number(matchRoot.value)) })
-matchDegree.addEventListener('change', () => {
-  const group = String(Number(matchDegree.value) + 1)
-  // Keep a matching progression; otherwise use the catalog's first starting point.
-  if (presets.find(item => item.id === selectedPreset.value)?.group !== group) {
-    const preset = presets.find(item => item.group === group)
-    if (preset) choosePreset(preset.id)
-  }
-  refreshKeyAssist()
-})
-bindKnobDrag(matchRoot, .1)
-function applyMatchedKey() {
-  const key=inferredKey()
-  const section=progression.sections[progression.selectedSection]
-  if(section.key!==undefined)section.key=key
-  keySelect.value=String(key)
-  keySelect.dispatchEvent(new Event('change',{bubbles:true}))
-  for (const id of ['reference','drum','melody','bass','chord','bell','pluck','phrase','fx']) {
-    const button = document.getElementById(id+'-solo')
-    const wanted=['reference','drum','melody'].includes(id)
-    if(button&&(button.getAttribute('aria-pressed')==='true')!==wanted)button.click()
-  }
-}
-document.addEventListener('reference-loaded', () => { stopKeyMatch(); matchRoot.value = String((Number(keySelect.value) + 9) % 12); matchDegree.value = '5'; matchDegree.dispatchEvent(new Event('change')); refreshKeyAssist() })
-document.addEventListener('reference-analysis-ready',()=>{matchRoot.value=String((Number(keySelect.value)+9)%12);refreshKeyAssist()})
-document.addEventListener('key-preview-stopped', stopKeyMatch)
-document.addEventListener('reference-timing-refresh', stopKeyMatch)
-tempo.addEventListener('input', stopKeyMatch)
-document.addEventListener('reference-removed', () => { stopKeyMatch(); refreshKeyAssist() })
-document.addEventListener('visibilitychange', () => { if(document.hidden) stopKeyMatch() })
-refreshKeyAssist()
-
-
-const melodyTopRow=document.createElement('div')
-melodyTopRow.className='melody-top-row'
-const melodyLabHost=document.querySelector('.otto-lab-host')
-melodyLabHost?.before(melodyTopRow)
-melodyTopRow.append(melodyVoiceLabel)
-const melodyModeField=melodyLabHost?.querySelector('.otto-play-mode')
-if(melodyModeField)melodyTopRow.append(melodyModeField)
-const melodyKnobs=document.createElement('div');melodyKnobs.className='melody-context-knobs'
-const melodySecondaryRow=document.createElement('div');melodySecondaryRow.className='melody-secondary-row'
-melodyTopRow.after(melodySecondaryRow)
-const melodyStyleField=melodyLabHost?.querySelector('.otto-style-choice')
-if(melodyStyleField)melodySecondaryRow.append(melodyStyleField)
-melodyPlayhead=document.createElement('div');melodyPlayhead.className='melody-playhead';melodyPlayhead.innerHTML='<label class="melody-bar-input"><input type="number" min="1" step="1" value="1" aria-label="移動する小節"><span>小節</span></label>';melodyPlayhead.setAttribute('aria-label','現在の再生位置')
-const melodyBarInput=/** @type {HTMLInputElement} */ (melodyPlayhead.querySelector('input'))
+melodyPlayhead = melodyNavigation.element
+const melodyBarInput = melodyNavigation.input
 /** @param {number} target */
 function seekMelodyBar(target){
  const running=progression.running
@@ -2207,116 +1414,40 @@ function seekMelodyBar(target){
  melodyBarInput.value=String(bar+1)
  if(running){if(buddyController?.autoPlay)void buddyController.start(false,bar);else void progression.start(bar,0)}
 }
-melodyBarInput.addEventListener('focus',()=>{melodyBarInput.max=String(progression.barCount())})
-melodyBarInput.addEventListener('change',()=>{const value=Number(melodyBarInput.value);if(melodyBarInput.value.trim() && Number.isFinite(value))seekMelodyBar(value-1);else melodyBarInput.value=String(resumeMelodyBar+1)})
-melodyBarInput.addEventListener('keydown',event=>{if(event.key==='Enter')melodyBarInput.blur();if(event.key==='Escape'){melodyBarInput.value=String(resumeMelodyBar+1);melodyBarInput.blur()}})
-const melodyNavigation=document.createElement('div');melodyNavigation.className='style-stepper melody-navigation'
-for(const direction of [-1,1]){
- const button=document.createElement('button');button.type='button';button.textContent=direction<0?'←':'→';button.setAttribute('aria-label',direction<0?'前の小節へ':'次の小節へ')
- button.addEventListener('click',()=>{
-  seekMelodyBar(resumeMelodyBar+direction)
- })
- melodyNavigation.append(button)
-}
-const miniWave=document.createElementNS('http://www.w3.org/2000/svg','svg')
-miniWave.classList.add('melody-live-wave');miniWave.setAttribute('viewBox','0 0 120 50');miniWave.setAttribute('preserveAspectRatio','none');miniWave.setAttribute('aria-hidden','true')
-const miniPath=document.createElementNS(miniWave.namespaceURI,'path');miniWave.append(miniPath)
-const miniCursor=document.createElementNS(miniWave.namespaceURI,'path');miniCursor.setAttribute('d','M30 0V50');miniCursor.classList.add('mini-cursor');miniWave.append(miniCursor)
-melodyPlayhead.append(miniWave,melodyNavigation)
 let lastMiniFrame=0,averageEnergy=.08,expressionBar=-1,barEnergy=0,barSamples=0
  document.addEventListener('reference-position',event=>{
  const {playing}=/** @type {CustomEvent<{playing:boolean}>} */(event).detail
  const now=performance.now();if(playing&&now-lastMiniFrame<100)return;lastMiniFrame=now
- const preview=referenceTrack.livePreview();miniPath.setAttribute('d',preview.path)
+ const {energy: previewEnergy}=referenceTrack.livePreview()
  const faces=document.querySelectorAll('#buddy-inline .talk-avatar')
  if(!playing){
-  expressionBar=-1;barEnergy=0;barSamples=0
+  expressionBar=-1;barEnergy=0;barSamples=0;manualMatchTotal=0;manualMatchCount=0;manualMatchRate=0
+  document.querySelector('#detail-melody')?.removeAttribute('data-manual-match')
   faces.forEach(face=>face.removeAttribute('data-energy-mood'))
   return
  }
  if(melodyExpressionBar>=0 && melodyExpressionBar!==expressionBar){
   if(barSamples){
    const energy=barEnergy/barSamples
-   const mood=energy>.09 && energy>averageEnergy*1.2 ? (energy>averageEnergy*1.6?'excited':'happy') : ''
+   const manual=!!document.querySelector('#detail-melody .otto-play-mode input[value="manual"]:checked')
+   if(manual){
+    manualMatchRate=manualMatchCount?manualMatchTotal/manualMatchCount:manualMatchRate*.45
+    const panel=document.querySelector('#detail-melody')
+    panel?.setAttribute('data-manual-match',String(Math.round(manualMatchRate*100)))
+    if(panel instanceof HTMLElement)panel.style.setProperty('--otto-match-bounce',`${2+manualMatchRate*9}px`)
+   }
+   manualMatchTotal=0;manualMatchCount=0
+   const mood=manual ? (manualMatchRate>.8?'excited':manualMatchRate>.55?'happy':'') : energy>.09 && energy>averageEnergy*1.2 ? (energy>averageEnergy*1.6?'excited':'happy') : ''
    faces.forEach(face=>{if(mood)face.setAttribute('data-energy-mood',mood);else face.removeAttribute('data-energy-mood')})
    averageEnergy=averageEnergy*.8+energy*.2
   }
   expressionBar=melodyExpressionBar;barEnergy=0;barSamples=0
  }
- barEnergy+=preview.energy;barSamples++
+ barEnergy+=previewEnergy;barSamples++
  })
-melodySecondaryRow.append(melodyPlayhead,melodyKnobs)
-for(const [caption,id] of [['キー','section-mixer-key'],['テンポ','section-tempo']]){
- const label=document.createElement('label');label.className='melody-context-knob';label.textContent=caption
- const knob=document.createElement('span');knob.className='volume-knob'
- const input=document.createElement('input');input.type='range';input.min=caption==='キー'?'-12':'40';input.max=caption==='キー'?'12':'200';input.step='1';input.setAttribute('aria-label',`メロディの${caption}`)
- const face=document.createElement('span');face.setAttribute('aria-hidden','true');knob.append(input,face)
- const output=document.createElement('output');label.append(knob,output);melodyKnobs.append(label)
- input.addEventListener('input',()=>{const target=/** @type {HTMLInputElement|null} */(document.getElementById(id));if(target){target.value=input.value;target.dispatchEvent(new Event('input',{bubbles:true}))}sync()})
- function sync(){const section=progression.sections[editingSection.value],value=caption==='キー'?(section.key??progression.key):(section.bpm??progression.bpm);input.value=String(caption==='キー'&&value>6?value-12:value);output.textContent=caption==='キー'?keys[(value+12)%12].name:String(value);knob.style.setProperty('--angle',`${caption==='キー'?Number(input.value)*11.25:(value-120)*1.6875}deg`)}
- bindKnobDrag(input,caption==='キー'?.12:.6,true)
- document.addEventListener('pointerup',sync);input.addEventListener('focus',sync);queueMicrotask(sync)
-}
 
-// Mirror the mixer melody level so solo and manual playing share one volume.
-const soloVolumeSource=/** @type {HTMLInputElement} */ (document.getElementById('melody-volume'))
-const soloVolumeLabel=document.createElement('label');soloVolumeLabel.className='melody-context-knob';soloVolumeLabel.textContent='ソロ音量'
-const soloVolumeKnob=document.createElement('span');soloVolumeKnob.className='volume-knob'
-const soloVolumeInput=document.createElement('input');soloVolumeInput.type='range';soloVolumeInput.min='0';soloVolumeInput.max='100';soloVolumeInput.step='1';soloVolumeInput.setAttribute('aria-label','ソロの音量')
-const soloVolumeFace=document.createElement('span');soloVolumeFace.setAttribute('aria-hidden','true');soloVolumeKnob.append(soloVolumeInput,soloVolumeFace)
-const soloVolumeOutput=document.createElement('output');soloVolumeLabel.append(soloVolumeKnob,soloVolumeOutput);melodyKnobs.append(soloVolumeLabel)
-function syncSoloVolume(){soloVolumeInput.value=soloVolumeSource.value;soloVolumeOutput.textContent=`${soloVolumeSource.value}%`;soloVolumeKnob.style.setProperty('--angle',`${-135+Number(soloVolumeSource.value)*2.7}deg`)}
-soloVolumeInput.addEventListener('input',()=>{soloVolumeSource.value=soloVolumeInput.value;soloVolumeSource.dispatchEvent(new Event('input',{bubbles:true}))})
-soloVolumeSource.addEventListener('input',syncSoloVolume)
-soloVolumeInput.addEventListener('focus',syncSoloVolume)
-bindKnobDrag(soloVolumeInput,.5,true)
-syncSoloVolume()
-
-// Section knobs edit range metadata without changing the song's fallback settings.
-const baselineControls=document.createElement('div')
-baselineControls.hidden=true
-workspace.append(baselineControls)
-const sectionKnobs = /** @type {(()=>void)[]} */ ([])
-for (const [source, field, caption] of /** @type {[HTMLInputElement, 'key'|'meter'|'bpm', string][]} */ ([[mixerKey,'key','キー'],[meterInput,'meter','拍子'],[tempo,'bpm','テンポ']])) {
-  const original=/** @type {HTMLElement} */(source.closest(field==='bpm'?'.timing-control':'.mixer-key, .mixer-meter'))
-  const clone=/** @type {HTMLElement} */(original.cloneNode(true))
-  clone.querySelectorAll('[id]').forEach(element=>element.id='section-'+element.id)
-  clone.querySelectorAll('[for]').forEach(element=>element.setAttribute('for','section-'+element.getAttribute('for')))
-  original.before(clone)
-  baselineControls.append(original)
-  const input=/** @type {HTMLInputElement} */(clone.querySelector('input[type=range]'))
-  input.setAttribute('aria-label',`セクションの${caption}`)
-  const numeric=/** @type {HTMLInputElement|null} */(clone.querySelector('input[type=number]'))
-  if(numeric)numeric.setAttribute('aria-label','セクションのテンポを数値で入力')
-  const output=clone.querySelector('output')
-  const knob=/** @type {HTMLElement} */(input.parentElement)
-  function refresh() {
-    const section=progression.sections[editingSection.value]
-    const value=section[field] ?? (field==='key'?progression.key:Number(source.value))
-    input.value=String(field==='key'&&value>6?value-12:value)
-    const text=field==='key'?keys[value].name:field==='meter'?`${value}/4`:String(value)
-    if(output)output.textContent=text
-    if(numeric)numeric.value=String(value)
-    input.setAttribute('aria-valuetext',text)
-    knob.style.setProperty('--angle',`${field==='key'?Number(input.value)*11.25:field==='meter'?(value-4)*90:(value-120)*1.6875}deg`)
-  }
-  input.addEventListener('input',()=>{
-    const value=Number(input.value)
-    progression.sections[editingSection.value][field]=field==='key'?(value%12+12)%12:value
-    sectionContextRevision.value++
-    refresh()
-    if(field!=='bpm'){backingEditorRevision.value++;refreshLabels()}
-  })
-  if(numeric)numeric.addEventListener('keydown',event=>{if(event.key==='Enter')numeric.blur();if(event.key==='Escape'){refresh();numeric.blur()}})
-  if(numeric)numeric.addEventListener('blur',()=>{
-    const value=Number(numeric.value)
-    if(Number.isFinite(value)&&value>=40&&value<=200){input.value=String(Math.round(value*10)/10);input.dispatchEvent(new Event('input',{bubbles:true}))}
-    else refresh()
-  })
-  bindKnobDrag(input,field==='bpm'?.6:field==='meter'?.035:.12,true)
-  sectionKnobs.push(refresh)
-}
-refreshSectionKnobs=()=>sectionKnobs.forEach(refresh=>refresh())
-refreshSectionKnobs()
-
-for (const control of [tempo,meterInput,keySelect]) control.addEventListener(control===keySelect?'change':'input',()=>{sectionContextRevision.value++;refreshSectionKnobs()})
+refreshSectionKnobs = mountSectionKnobs({
+  workspace, progression, editingSection, mixerKey, meterInput, tempo, keySelect,
+  contextChanged: () => { sectionContextRevision.value++ },
+  harmonyChanged: () => { backingEditorRevision.value++; refreshLabels() },
+})

@@ -204,22 +204,22 @@ export function mountMidiInput(source) {
 }
 
 /** Shared note lifecycle for screen and MIDI keyboards.
- * @param {{enabled:()=>boolean,bpm:()=>number,resolve:(note:number)=>number,attack:(note:number,glide:boolean)=>void,release:(note:number)=>void}} source */
+ * @param {{enabled:()=>boolean,bpm:()=>number,resolve:(note:number)=>number,attack:(note:number,glide:boolean,screen:boolean)=>void,release:(note:number)=>void}} source */
 export function createMagicVoice(source) {
  /** @type {Map<number,{pitch:number,timer:ReturnType<typeof setTimeout>|undefined}>} */
  const held=new Map()
  let generation=0
  return {
-  attack(/** @type {number} */ note,glide=false){
+  attack(/** @type {number} */ note,glide=false,screen=false){
    const previous=held.get(note);if(previous){clearTimeout(previous.timer);source.release(previous.pitch)}
    const ticket=++generation
    const state={pitch:note,timer:/** @type {ReturnType<typeof setTimeout>|undefined} */(undefined)}
-   held.set(note,state);source.attack(note,glide)
+   held.set(note,state);source.attack(note,glide,screen)
    const target=source.enabled()?source.resolve(note):note
    if(target!==note)state.timer=setTimeout(()=>{
     state.timer=undefined
     if(ticket!==generation||held.get(note)!==state||!source.enabled())return
-    source.attack(target,false);source.release(state.pitch);state.pitch=target
+    source.attack(target,false,screen);source.release(state.pitch);state.pitch=target
    },60000/Math.max(40,source.bpm())/8)
   },
   release(/** @type {number} */ note){const state=held.get(note);if(!state)return;clearTimeout(state.timer);held.delete(note);source.release(state.pitch)},

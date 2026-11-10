@@ -219,6 +219,7 @@ function refreshMelody() {
 }
 document.addEventListener('melody-keyboard-change', refreshMelody)
 let resumeMelodyBar = 0
+let referenceBarInput = /** @type {HTMLInputElement | undefined} */ (undefined)
 let melodyPlayhead = /** @type {HTMLElement | undefined} */ (undefined)
 let melodyExpressionBar = -1
 let manualBeatTime = -Infinity
@@ -252,7 +253,12 @@ const progression = new Progression(
   (index, chord, key, beat, section) => {
     melodyExpressionBar=index
     manualBeatTime=index>=0?performance.now():-Infinity
-    if(index>=0){resumeMelodyBar=index;if(melodyPlayhead){const input=melodyPlayhead.querySelector('input');if(input && document.activeElement!==input)input.value=String(index+1)}}
+    if (index >= 0) {
+      resumeMelodyBar = index
+      for (const input of [melodyPlayhead?.querySelector('input'), referenceBarInput]) {
+        if (input && document.activeElement !== input) input.value = String(index + 1)
+      }
+    }
     if(index>=0 && Math.floor(index/16)!==scorePage.value){scorePage.value=Math.floor(index/16);refreshLabels()}
     const previousSection = playingSection.value
     playingSection.value = index < 0 ? -1 : section
@@ -274,12 +280,18 @@ const progression = new Progression(
       displayedBar = visibleBar
       displayedBeat = beat
     }
+    if (index < 0) {
+      const bar = Math.max(0, Math.min(resumeMelodyBar, progression.barCount() - 1))
+      const selected = progression.songMode ? progression.songSectionAt(bar) : progression.selectedSection
+      chord = progression.sections[selected].slots[bar] ?? progression.slots[0]
+      key = progression.keyForBar(bar, selected)
+    }
     if (activeChord !== chord || activeKey !== key) {
       activeChord = chord
       activeKey = key
       refreshMelody()
     }
-    if (index >= 0) updateChordMonitor(index, chord, beat, section)
+    if (index >= 0) { updateChordMonitor(index, chord, beat, section); refreshSectionKnobs() }
     updateTransport()
   },
   (message) => {
@@ -391,6 +403,7 @@ const slotElements = mountChordGrid(1024, {
   modulate(section, amount) {
     shiftModulationFrom(progression.modulation, section, amount)
     refreshLabels()
+    refreshSectionKnobs()
   },
   root(bar, beat, value) {
     const chord = value === '' ? null : defaultChord(Number(value))
@@ -621,8 +634,10 @@ function updateChordCell(beatElement, bar, beat, keepOptions = null) {
 
 function refreshHarmonyViews(refreshBass = true) {
   if (!progression.running) {
-    activeChord = progression.slots[0]
-    activeKey = progression.keyForBar(0)
+    const bar = Math.max(0, Math.min(resumeMelodyBar, progression.barCount() - 1))
+    const section = progression.songMode ? progression.songSectionAt(bar) : progression.selectedSection
+    activeChord = progression.sections[section].slots[bar] ?? progression.slots[0]
+    activeKey = progression.keyForBar(bar, section)
   }
   refreshMelody()
   if (refreshBass) refreshBassDetail()
@@ -969,7 +984,7 @@ document.addEventListener('reference-removed', () => {
   if (solo?.getAttribute('aria-pressed') === 'true') solo.click()
 })
 const {updateQuickMixer, syncBackingPad, clearAccompanimentPads, trackGrid, showPadHit} = mountQuickMixer({
-  progression, mixer, workspace, genreSelect, keySelect, playAccompanimentPad, previewChord, animatePartChange: button => animatePartChange(button),
+  progression, mixer, workspace, genreSelect, keySelect, bass, playAccompanimentPad, previewChord, togglePlayback: () => startButton.click(), animatePartChange: button => animatePartChange(button),
 })
 progression.onPadHit = showPadHit
 
@@ -1063,7 +1078,7 @@ const magicVoice=createMagicVoice({
     const candidates=[midi-1,midi+1,midi-2,midi+2].filter(note=>note>=0&&note<=127&&melodyRole(note,activeChord,activeKey).category==='chord')
     return candidates[0] ?? midi
   },
-  attack:(midi,glide)=>{if(buddyController?.active)buddyController.attackMidi(midi,glide);else{recordManualMatch(midi);instrument.attack(midi,glide);lastMelodyMidi=midi;lastMelodyDegree=melodyRole(midi,activeChord,activeKey).degree;refreshMelody()}},
+  attack:(midi,glide,screen)=>{if(buddyController?.active)buddyController.attackMidi(midi,glide,screen);else{recordManualMatch(midi);instrument.attack(midi,glide);lastMelodyMidi=midi;lastMelodyDegree=melodyRole(midi,activeChord,activeKey).degree;refreshMelody()}},
   release:midi=>{if(buddyController?.active)buddyController.releaseMidi(midi);else instrument.release(midi)},
 })
 window.addEventListener('blur',()=>magicVoice.stop())
@@ -1073,7 +1088,7 @@ mountKeyboard({
   bass: () => instrument.timbre.startsWith('lead-bass-'),
   key: () => activeKey,
   ready: () => instrument.ready(),
-  attack:(midi,glide)=>magicVoice.attack(midi,glide),
+  attack:(midi,glide)=>magicVoice.attack(midi,glide,true),
   release:midi=>magicVoice.release(midi),
   stop: () => { buddyController?.stop();instrument.silence() },
   onError: error => { if(status)status.textContent=error instanceof Error?error.message:'音を再生できませんでした。' },
@@ -1081,13 +1096,35 @@ mountKeyboard({
 refreshMelody()
 const {element: melodyVoiceLabel} = mountMelodyVoiceChoice(melodyTimbre)
 document.querySelector('.melody-heading')?.after(melodyVoiceLabel)
+/** MIDI notes retain their original destination until note-off, even if the selected part changes. */
+let midiPart = 'melody'
+/** @type {Map<number,string>} */
+const midiDestinations = new Map()
+document.querySelector('#track-grid')?.addEventListener('click', event => {
+  const button = event.target instanceof Element ? event.target.closest('.track-select[data-track]') : null
+  const part = button instanceof HTMLElement ? button.dataset.track : undefined
+  if (part && ['melody','bass','drums','chord'].includes(part)) midiPart = part
+})
 mountMidiInput({
-  transpose:()=>document.querySelector('#piano-keys')?.getAttribute('data-magic')==='true'?activeKey:0,
-  bend:value=>instrument.setPitchBend(value),
-  modulation:value=>{instrument.setModulation(value);buddyController?.rememberModulation(value)},
-  ready: () => instrument.ready(),
-  attack:midi=>magicVoice.attack(midi),
-  release:midi=>magicVoice.release(midi),
+  transpose:()=>midiPart==='melody' && document.querySelector('#piano-keys')?.getAttribute('data-magic')==='true'?activeKey:0,
+  bend:value=>{ if(midiPart==='melody')instrument.setPitchBend(value); else if(midiPart==='chord')chordInstrument.setPitchBend(value); else if(midiPart==='bass')bass.setPitchBend(value); else if(midiPart==='drums')drums.setPitchBend(value) },
+  modulation:value=>{if(midiPart==='melody'){instrument.setModulation(value);buddyController?.rememberModulation(value)}else if(midiPart==='bass')bass.setModulation(value)},
+  ready: async () => { await Promise.all([instrument.ready(), chordInstrument.ready()]) },
+  attack:midi=>{
+    const part=midiPart
+    midiDestinations.set(midi,part)
+    if(part==='melody') magicVoice.attack(midi)
+    else if(part==='chord') chordInstrument.attack(midi)
+    else if(part==='bass') {const time=chordInstrument.context?.currentTime;if(time!==undefined)bass.playAt(midi,time+.01,.5,.8)}
+    else {
+      const gm = /** @type {Record<number,number>} */ ({36:4,38:5,42:6,46:7,35:0,40:1,45:2,44:3})
+      const index=gm[midi] ?? ((midi%8)+8)%8
+      const [, sound, pitch, duration]=drumPadSound(index)
+      const time=chordInstrument.context?.currentTime
+      if(time!==undefined)drums.hitAt(sound,time+.01,.85,duration,pitch,index===7)
+    }
+  },
+  release:midi=>{const part=midiDestinations.get(midi);midiDestinations.delete(midi);if(part==='melody')magicVoice.release(midi);else if(part==='chord')chordInstrument.release(midi)},
 })
 buddyController = mountBuddy({
   progression, instrument, drums,
@@ -1363,11 +1400,15 @@ async function applyReferenceArrangement(result) {
   keySelect.dispatchEvent(new Event('change', {bubbles:true}))
 }
 
-const { updateTimingPreview } = mountReferenceTiming(referenceTimingHost, {
+const playheadActions = {
+  current: () => resumeMelodyBar, count: () => progression.barCount(), seek: seekMelodyBar,
+}
+const { updateTimingPreview, playhead: referencePlayhead } = mountReferenceTiming(referenceTimingHost, {
   reference: referenceView, player: referenceTrack, progression, tempo, keySelect,
   section: () => editingSection.value, preset: () => selectedPreset.value, choosePreset,
-  playbackHeads, waveformStartBeats, playFromBar, bindKnobDrag,
+  playbackHeads, waveformStartBeats, playFromBar, bindKnobDrag, playhead: playheadActions,
 })
+referenceBarInput = referencePlayhead?.input
 
 // Meter changes preserve quarter-note tempo and the current accompaniment transport.
 meterInput.addEventListener('input', () => {
@@ -1400,9 +1441,7 @@ mountScorePad({
 
 
 mountMelodyLayout(melodyVoiceLabel)
-const melodyNavigation = mountPlayhead({
-  current: () => resumeMelodyBar, count: () => progression.barCount(), seek: seekMelodyBar,
-})
+const melodyNavigation = mountPlayhead(playheadActions)
 melodyPlayhead = melodyNavigation.element
 const melodyBarInput = melodyNavigation.input
 /** @param {number} target */
@@ -1411,7 +1450,10 @@ function seekMelodyBar(target){
  const bar=Math.max(0,Math.min(progression.barCount()-1,Math.round(target)))
  if(buddyController?.active)buddyController.stop();else if(running)progression.stop()
  resumeMelodyBar=bar;playbackHeads.set(progression.selectedSection,bar);waveformStartBeats.set(progression.selectedSection,0)
+ refreshSectionKnobs()
+ refreshHarmonyViews()
  melodyBarInput.value=String(bar+1)
+ if (referenceBarInput) referenceBarInput.value = String(bar+1)
  if(running){if(buddyController?.autoPlay)void buddyController.start(false,bar);else void progression.start(bar,0)}
 }
 let lastMiniFrame=0,averageEnergy=.08,expressionBar=-1,barEnergy=0,barSamples=0
@@ -1447,7 +1489,7 @@ let lastMiniFrame=0,averageEnergy=.08,expressionBar=-1,barEnergy=0,barSamples=0
  })
 
 refreshSectionKnobs = mountSectionKnobs({
-  workspace, progression, editingSection, mixerKey, meterInput, tempo, keySelect,
+  workspace, progression, editingSection, mixerKey, meterInput, tempo, keySelect, currentBar: () => resumeMelodyBar,
   contextChanged: () => { sectionContextRevision.value++ },
   harmonyChanged: () => { backingEditorRevision.value++; refreshLabels() },
 })

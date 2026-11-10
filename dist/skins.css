@@ -1856,9 +1856,8 @@ header { min-height: 60px; }
 }
 .reference-timing-control input[type="range"] { width: 180px; min-width: 80px; max-width: 100%; margin: 0; }
 .reference-timing-control output { min-width: 58px; font-variant-numeric: tabular-nums; }
-.reference-timing-control .style-stepper button { width:auto; min-width:44px; min-height:36px; padding:0 10px; font-size:12px; white-space:nowrap; }
+.reference-timing-control .style-stepper:not(.melody-navigation) button { width:auto; min-width:44px; min-height:36px; padding:0 10px; font-size:12px; white-space:nowrap; }
 .reference-timing-control .timing-precision button[aria-pressed="true"] { background:var(--oto-key-low); color:var(--oto-display-ink); box-shadow:var(--oto-recess); }
-.reference-timing-control .timing-nudge button { touch-action:none; user-select:none; }
 .reference-timing-control { display:grid; grid-template-columns:minmax(80px,1fr) auto auto; width:430px; max-width:100%; }
 .reference-timing-control > span { grid-column:1; }
 .reference-timing-control .timing-precision { grid-column:2 / 4; justify-self:end; }
@@ -1973,7 +1972,7 @@ header { min-height: 60px; }
 .score-pad-tools{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;font-size:12px}
 .score-pad-tools button,.score-pad-tools select{font:inherit;background:var(--oto-key);color:var(--oto-ink);border:0;border-radius:6px;padding:8px;box-shadow:var(--oto-raised)}
 .score-pad-tools button:disabled{opacity:.45}
-.score-pad-dock iframe{display:block;width:100%;height:310px;border:0;margin-top:6px}
+.score-pad-dock iframe{display:block;width:100%;height:222px;border:0;margin-top:6px}
 .score-pad-open{padding-bottom:390px}
 .score-pad-open .beat-chord{scroll-margin-bottom:390px}
 .pad-input-target{background:var(--oto-selection)!important;outline:2px solid var(--oto-secondary);outline-offset:-2px}
@@ -2118,8 +2117,6 @@ header { min-height: 60px; }
 .reference-key-assist select { min-width:220px; white-space:nowrap; }
 .waveform-zoom-icon { display:grid; place-items:center; padding:0 6px; color:var(--oto-secondary); }
 
-.reference-timing-control .timing-navigation { display:flex; width:100%; }
-.reference-timing-control .timing-navigation button { flex:1; width:0; min-width:0; min-height:36px; }
 .reference-key-assist .mood-control { min-width:130px; }
 .reference-key-assist .mood-control output { white-space:nowrap; }
 
@@ -2507,8 +2504,8 @@ main[data-workspace-view='melody'] > #detail-melody { display:block !important; 
 .mixer-layout-tools .workspace-switch label span {
   display:grid; place-items:center; box-sizing:border-box; min-width:56px; height:26px; padding:0 8px;
 }
-.mixer-layout-tools .melody-playhead { padding-block:3px; font-size:12px; }
-.mixer-layout-tools .melody-navigation button { height:26px; min-height:0; padding:0 8px; font-size:12px; }
+:is(.mixer-layout-tools, .reference-playhead-host) .melody-playhead { padding-block:3px; font-size:12px; }
+:is(.mixer-layout-tools, .reference-playhead-host) .melody-navigation button { height:26px; min-height:0; padding:0 8px; font-size:12px; }
 .mixer-layout-tools .mixer-score-link {
   display:inline-flex; align-items:center; justify-content:center; gap:6px;
   padding:0 10px; border:0; background:var(--oto-key);
@@ -2548,10 +2545,9 @@ main #track-grid .reference-upload { grid-area:1 / 1; min-height:54px; justify-c
 main #track-grid button.reference-upload { height:52px; gap:2px; padding:4px 2px; }
 main #track-grid button.reference-upload > span { font-size:11px; font-weight:700; line-height:normal; }
 main #track-grid .reference-upload.reference-import-status { grid-row:1 / -1; }
-main[data-mixer-layout='simple'] .groove .mixer-banks #track-grid .part-mix { grid-area:2 / 1; display:flex; justify-content:center; padding:0; }
+main[data-mixer-layout='simple'] .groove .mixer-banks #track-grid > [role='group']:not([hidden]) { grid-template-rows:54px; }
+main[data-mixer-layout='simple'] .groove .mixer-banks #track-grid .part-mix { display:none; }
 main[data-mixer-layout] .groove .mixer-banks #track-grid .awaiting-file .part-mix { display:none; }
-main[data-mixer-layout='simple'] #track-grid .part-mix > :not([id$='-mute']) { display:none; }
-main[data-mixer-layout='simple'] #track-grid .part-mix > [id$='-mute'] { width:auto; min-width:44px; min-height:30px; }
 main:not([data-workspace-view='mixer']) > .mixer-quick-edit,
 main[data-mixer-layout='detail'] > .mixer-quick-edit { display:none !important; }
 main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody { display:block !important; width:100%; box-sizing:border-box; }
@@ -2724,12 +2720,12 @@ main[data-workspace-view='mixer'][data-mixer-layout='simple']:has(> .mixer-quick
 :root .segmented-control label { position:relative; cursor:pointer; }
 :root .segmented-control label > span {
   display:grid; place-items:center; box-sizing:border-box;
-  min-height:26px; padding:0 10px; font-size:12px; border-radius:5px;
+  min-height:26px; padding:0 10px; font-size:12px; line-height:normal; text-align:center; border-radius:5px;
 }
 :root #notation.segmented-control {
   min-height:0; height:auto; background:var(--oto-case-low); border:0;
 }
-:root #notation.segmented-control label > span { min-height:26px; padding:0 10px; }
+:root #notation.segmented-control label > span { display:grid; place-items:center; min-height:26px; padding:0 10px; line-height:normal; }
 .part-choice-picker > select { min-height:0; }
 .part-choice-steps > button { height:32px; }
 #detail-chord .chord-settings { margin-top:0; }
@@ -2743,7 +2739,7 @@ main[data-workspace-view='mixer'][data-mixer-layout='simple']:has(> .mixer-quick
 .score-paging .part-choice-picker { align-items:center; gap:8px; }
 .score-paging output { padding:0; }
 .score-paging .part-choice-steps > button,
-.mixer-layout-tools .melody-navigation > button {
+:is(.mixer-layout-tools, .reference-playhead-host) .melody-navigation > button {
   width:32px; min-width:32px; height:26px; min-height:26px; padding:0; font-size:12px;
 }
 
@@ -2765,6 +2761,8 @@ main[data-mixer-layout] .groove .mixer-banks #track-grid .part-mix > .mix-button
 .tone-editor { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr)); gap:12px; }
 .tone-editor fieldset { min-width:0; display:flex; flex-wrap:wrap; align-content:start; gap:10px; padding:10px; border:1px solid var(--oto-seam); border-radius:7px; }
 .tone-editor legend,.tone-envelope-control { font-size:12px; }
+.tone-editor .otto-lab-knob { flex:0 0 90px; width:90px; min-width:0; }
+.tone-editor .otto-lab-knob output { white-space:nowrap; font-variant-numeric:tabular-nums; }
 .tone-envelope-control { display:grid; grid-template-columns:minmax(0,1fr) 6ch; align-items:center; gap:4px; width:100%; }
 .tone-envelope-control > span { grid-column:1 / -1; }
 .tone-envelope-control input { width:100%; min-width:0; }
@@ -2810,13 +2808,13 @@ main[data-mixer-layout] .groove .mixer-banks #track-grid .part-mix > .mix-button
 .keyboard-octave .style-stepper > button:focus-visible { outline-offset:-2px; }
 
 /* Keep the measure field and its navigation in one control. */
-.mixer-layout-tools .melody-playhead { gap:0; padding:0; overflow:hidden; background:var(--oto-surface); box-shadow:var(--oto-raised); }
-.mixer-layout-tools .melody-bar-input { align-items:center; align-self:stretch; padding:0 10px; background:var(--oto-surface); }
-.mixer-layout-tools .melody-bar-input input { width:4.5ch; min-width:4.5ch; border:0; text-align:right; appearance:textfield; -moz-appearance:textfield; }
-.mixer-layout-tools .melody-bar-input input::-webkit-inner-spin-button,
-.mixer-layout-tools .melody-bar-input input::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
-.mixer-layout-tools .melody-navigation { border-left:0; border-radius:0; box-shadow:none; }
-.mixer-layout-tools .melody-navigation button { border-radius:0; box-shadow:none; }
+:is(.mixer-layout-tools, .reference-playhead-host) .melody-playhead { gap:0; padding:0; overflow:hidden; background:var(--oto-surface); box-shadow:var(--oto-raised); }
+:is(.mixer-layout-tools, .reference-playhead-host) .melody-bar-input { align-items:center; align-self:stretch; padding:0 10px; background:var(--oto-surface); }
+:is(.mixer-layout-tools, .reference-playhead-host) .melody-bar-input input { width:4.5ch; min-width:4.5ch; border:0; text-align:right; appearance:textfield; -moz-appearance:textfield; }
+:is(.mixer-layout-tools, .reference-playhead-host) .melody-bar-input input::-webkit-inner-spin-button,
+:is(.mixer-layout-tools, .reference-playhead-host) .melody-bar-input input::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+:is(.mixer-layout-tools, .reference-playhead-host) .melody-navigation { border-left:0; border-radius:0; box-shadow:none; }
+:is(.mixer-layout-tools, .reference-playhead-host) .melody-navigation button { border-radius:0; box-shadow:none; }
 
 /* Keep the notation switch fitted to its options. */
 #detail-chord .chord-notation #notation.segmented-control { align-self:flex-start; }
@@ -2856,7 +2854,7 @@ main[data-workspace-view='mixer'][data-mixer-layout]:has(> .has-accompaniment-pl
 /* The header logo contains Otto; keep the source artwork available to the play panels. */
 .player-brand .buddy-guide { display:none; }
 
-.backing-chord-pads { display:block; width:min(100%,460px); height:310px; border:0; }
+.backing-chord-pads { display:block; width:min(100%,800px); height:222px; border:0; }
 .accompaniment-pads .pad:nth-child(n) { background:linear-gradient(var(--oto-key),var(--oto-key-low)) !important; color:var(--oto-display-ink); }
 
 .accompaniment-pads .pad[data-sequencer-note] {
@@ -2892,13 +2890,13 @@ main[data-workspace-view='mixer'][data-mixer-layout]:has(> .has-accompaniment-pl
 #detail-chord .chord-settings .preset-picker .part-choice-steps button + button {
   border-top:0; border-left:1px solid var(--oto-seam);
 }
-.mixer-layout-tools .melody-playhead, .mixer-layout-tools .melody-bar-input { background:var(--oto-key); }
-.mixer-layout-tools .melody-navigation { border-inline-start:1px solid var(--oto-seam); }
-.mixer-layout-tools .melody-navigation-start {
+:is(.mixer-layout-tools, .reference-playhead-host) .melody-playhead, :is(.mixer-layout-tools, .reference-playhead-host) .melody-bar-input { background:var(--oto-key); }
+:is(.mixer-layout-tools, .reference-playhead-host) .melody-navigation { border-inline-start:1px solid var(--oto-seam); }
+:is(.mixer-layout-tools, .reference-playhead-host) .melody-navigation-start {
   border-inline-start:0;
   border-inline-end:1px solid var(--oto-seam);
 }
-.mixer-layout-tools .melody-navigation-start button:focus-visible { outline-offset:-2px; }
+:is(.mixer-layout-tools, .reference-playhead-host) .melody-navigation-start button:focus-visible { outline-offset:-2px; }
 
 /* Session order and phrase offset share the circular control. */
 .session-ring-row { display:flex; align-items:center; gap:6px; }
@@ -2931,3 +2929,103 @@ main[data-workspace-view='mixer'][data-mixer-layout]:has(> .has-accompaniment-pl
   #detail-melody .session-turn-display { grid-area:1 / 2; align-self:end; }
   #detail-melody .otto-mode-field { grid-area:1 / 3; align-self:end; }
 }
+
+.reference-playhead-host { display:flex; justify-content:center; }
+
+.reference-key-assist .key-listen { display:grid; place-items:center; max-width:100%; }
+.reference-key-assist .key-listen > span { grid-area:1 / 1; }
+.reference-key-assist .key-listen-measure { visibility:hidden; }
+
+/* Synth controls: a quiet 270° indicator and a value while adjusting. */
+.tone-editor .otto-lab-knob { position:relative; gap:9px; }
+.tone-editor .otto-lab-knob .volume-knob { isolation:isolate; }
+.synth-cutoff-marker { position:absolute; left:-5px; top:-5px; width:40px; height:40px; overflow:visible; pointer-events:none; z-index:2; }
+.tone-editor .otto-lab-knob .volume-knob::before {
+  content:''; position:absolute; inset:-5px; border-radius:50%; pointer-events:none; z-index:-1;
+  background:conic-gradient(from 225deg, var(--oto-accent) 0deg, var(--oto-accent) clamp(0deg, calc(var(--angle, -135deg) + 135deg), 270deg), color-mix(in srgb, var(--oto-ink) 25%, transparent) clamp(0deg, calc(var(--angle, -135deg) + 135deg), 270deg) 270deg, transparent 270deg);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 2px));
+  mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 2px));
+}
+.tone-editor .otto-lab-knob .synth-bipolar-knob::before {
+  background:conic-gradient(from 225deg, color-mix(in srgb,var(--oto-ink) 25%,transparent) 0deg, color-mix(in srgb,var(--oto-ink) 25%,transparent) min(135deg,calc(var(--angle) + 135deg)), var(--oto-accent) min(135deg,calc(var(--angle) + 135deg)), var(--oto-accent) max(135deg,calc(var(--angle) + 135deg)), color-mix(in srgb,var(--oto-ink) 25%,transparent) max(135deg,calc(var(--angle) + 135deg)) 270deg, transparent 270deg);
+}
+.tone-editor .otto-lab-knob output {
+  position:absolute; z-index:2; top:100%; left:50%; transform:translate(-50%,4px);
+  padding:3px 6px; border-radius:5px; background:var(--oto-ink); color:var(--oto-key);
+  opacity:0; pointer-events:none; white-space:nowrap;
+}
+.tone-editor .otto-lab-knob:has(input:active) output,
+.tone-editor .otto-lab-knob:has(input:focus-visible) output { opacity:1; }
+
+/* Compact synth modules share the application's molded controls. */
+.synth-editor { grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),min(100%,280px))); align-items:stretch; }
+.has-accompaniment-play .mixer-quick-fields:has(#bass-tone-settings:not([hidden])) { max-width:890px; }
+.synth-editor fieldset { display:flex; flex-direction:column; gap:14px; }
+.synth-editor > fieldset { flex-wrap:nowrap; }
+.synth-editor .synth-knob-row { display:grid; grid-template-columns:repeat(3,minmax(70px,1fr)); gap:8px; width:100%; justify-items:center; }
+.synth-editor .otto-lab-knob { flex:0 0 70px; width:70px; }
+.synth-cutoff-control { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.synth-editor .synth-cutoff-control > .otto-lab-knob { flex:none; }
+.synth-editor .synth-lfo-toggle { min-height:24px; padding:3px 9px; background:transparent; box-shadow:none; color:var(--oto-muted); font-size:11px; }
+.synth-editor .synth-lfo-toggle[aria-pressed='false'] { color:color-mix(in srgb,var(--oto-muted) 65%,var(--oto-case-low)); }
+.synth-editor .synth-lfo-toggle[aria-pressed='true'] { background:var(--oto-selection); color:var(--oto-selection-ink); box-shadow:var(--oto-recess); }
+.synth-editor .synth-lfo-toggle:hover { color:var(--oto-secondary); }
+.synth-wave-label { font-size:12px; color:var(--oto-muted); }
+.synth-faders { display:flex; gap:12px; align-items:end; justify-content:center; padding:4px 0; }
+.synth-fader { display:flex; flex-direction:column; align-items:center; gap:6px; min-width:40px; font-size:12px; }
+.synth-fader input[type=range] { writing-mode:vertical-lr; direction:rtl; width:28px; height:96px; margin:0; }
+.synth-fader input[type=range]::-webkit-slider-runnable-track {
+  width:8px; height:100%; border-radius:5px;
+  background:color-mix(in srgb,var(--oto-secondary) 26%,var(--oto-case-low));
+  box-shadow:inset 1px 2px 4px var(--oto-shadow),inset 0 0 0 1px color-mix(in srgb,var(--oto-seam) 55%,transparent),0 1px 0 var(--oto-key);
+}
+.synth-fader input[type=range]::-webkit-slider-thumb {
+  width:26px; height:16px; margin:0 0 0 -9px; border:0; border-radius:5px;
+  background:linear-gradient(var(--oto-key),var(--oto-key-low)); box-shadow:var(--oto-raised);
+}
+.synth-fader input[type=range]::-moz-range-track {
+  width:8px; height:100%; border-radius:5px;
+  background:color-mix(in srgb,var(--oto-secondary) 26%,var(--oto-case-low));
+  box-shadow:inset 1px 2px 4px var(--oto-shadow),inset 0 0 0 1px color-mix(in srgb,var(--oto-seam) 55%,transparent),0 1px 0 var(--oto-key);
+}
+.synth-fader input[type=range]::-moz-range-thumb {
+  width:26px; height:16px; border:0; border-radius:5px;
+  background:linear-gradient(var(--oto-key),var(--oto-key-low)); box-shadow:var(--oto-raised);
+}
+.synth-fader output { font-size:10px; font-variant-numeric:tabular-nums; }
+.synth-osc { justify-content:flex-start; align-items:flex-start; gap:36px; }
+.synth-osc-control { display:flex; flex-direction:column; align-items:center; gap:5px; width:70px; }
+.synth-editor .synth-osc-control > .otto-lab-knob { flex:none; }
+.synth-octave-control { display:flex; flex-direction:column; align-items:flex-start; gap:6px; width:70px; font-size:12px; }
+:root .synth-editor .synth-octave-switch { display:inline-flex; flex-direction:row; flex-wrap:nowrap; gap:0; width:max-content; }
+:root .synth-editor :is(.synth-octave-switch,.synth-filter-type) { border:0; background:var(--oto-case-low); box-shadow:var(--oto-recess); border-radius:8px; }
+:root .synth-octave-switch label > span { min-width:27px; min-height:24px; padding:0 4px; }
+.synth-octave-switch input { position:absolute; opacity:0; width:1px; height:1px; }
+.synth-octave-switch input:focus-visible + span { outline:2px solid var(--oto-secondary); outline-offset:-2px; }
+.synth-filter-type-control { display:flex; flex-direction:column; align-items:flex-start; gap:6px; font-size:12px; margin-left:max(0px,calc((100% - 16px) / 6 - 35px)); }
+:root .synth-editor .synth-filter-type { display:inline-flex; flex-direction:row; flex-wrap:nowrap; gap:0; width:max-content; }
+.synth-filter-type input { position:absolute; opacity:0; width:1px; height:1px; }
+.synth-filter-type input:focus-visible + span { outline:2px solid var(--oto-secondary); outline-offset:-2px; }
+.synth-osc-value { font-size:12px; line-height:1.2; font-variant-numeric:tabular-nums; }
+.synth-wave-icon { display:block; width:30px; height:16px; color:var(--oto-ink); }
+.synth-osc .otto-lab-knob { flex: none; }
+
+.synth-osc-wave { order:0; }
+.synth-osc-octave { order:1; }
+.synth-filter-curve { display:block; box-sizing:border-box; width:100%; height:90px; overflow:hidden; border:1px solid color-mix(in srgb,var(--oto-display-ink) 38%,var(--oto-display)); border-radius:8px; background:linear-gradient(180deg,var(--oto-display),color-mix(in srgb,var(--oto-display) 72%,var(--oto-key))); box-shadow:inset 0 2px 5px var(--oto-shadow),0 1px 0 var(--oto-key); }
+:root[data-skin='toy'] .synth-filter-curve,
+:root[data-skin='toy'] #player-display .lcd-screen { background: #fff; }
+.synth-filter-line { fill:none; stroke:var(--oto-accent); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.synth-amp-playhead { stroke:var(--oto-secondary); stroke-width:2; stroke-linecap:round; }
+.synth-osc .synth-amp { order:2; align-self:stretch; }
+.synth-filter-envelope { margin-top:auto; align-self:stretch; }
+.synth-amp h3, .synth-filter-envelope h3, .synth-lfo-display h3 { margin:0 0 8px; font-size:12px; font-weight:500; }
+.synth-lfo-display { margin-top:auto; margin-bottom:auto; align-self:stretch; }
+.synth-osc-bank { display:grid; grid-template-columns:repeat(3,minmax(70px,1fr)); gap:8px; width:100%; }
+.synth-osc-column { display:flex; flex-direction:column; align-items:center; gap:20px; min-width:0; }
+
+/* The pattern editor continues directly beneath the part controls. */
+main[data-workspace-view='mixer'][data-mixer-layout]:has(> .has-accompaniment-play:not([hidden])):not(.hide-accompaniment-detail) > .mixer-quick-edit.has-accompaniment-play { padding-bottom:0; border-radius:18px 18px 0 0; box-shadow:none; }
+main[data-workspace-view='mixer'][data-mixer-layout]:has(> .has-accompaniment-play:not([hidden])):not(.hide-accompaniment-detail) > .track-details:not([hidden]) { margin-top:0; padding-top:12px; border-radius:0 0 18px 18px; background:linear-gradient(90deg,var(--oto-case),var(--oto-case-low)); }
+
+.synth-type-tag { align-self:flex-start; padding:2px 8px; border-radius:7px; background:var(--oto-case-low); color:var(--oto-muted); font-size:11px; font-weight:600; }

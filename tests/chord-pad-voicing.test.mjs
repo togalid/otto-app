@@ -10,7 +10,7 @@ for (const [root,quality,extension,expected] of [
   [1,'min','7',[38,65,69,72]],
   [4,'maj','7',[43,53,55,59,62]],
   [0,'min','7',[48,58,60,63,67]],
-  [1,'min','9',[50,60,65,69,72,76]],
+  [1,'min','9',[38,50,60,65,69,72,76]],
   [2,'sus4','7',[52,55,60,62,67]],
   [2,'min','7',[40,55,59,62]],
 ]) test(`pad voicing ${root}:${quality}:${extension} keeps ordered voices and transposes`,()=>{
@@ -21,4 +21,12 @@ for (const [root,quality,extension,expected] of [
 })
 test('unconfigured pad chords retain the existing voicing',()=>{
  assert.deepEqual(padChordNotes(customChord({root:2,quality:'maj',extension:'7',alter:0}),0),chordNotes(customChord({root:2,quality:'maj',extension:'7',alter:0}),0))
+})
+
+test('II minor 7, dominant 7 and minor 9 include the low root in every key',()=>{
+ for (const [quality,extension] of [['min','7'],['maj','7'],['min','9']]) {
+  const id=customChord({root:1,quality,extension,alter:0})
+  assert.ok(padChordNotes(id,0).includes(38))
+  assert.ok(padChordNotes(id,2).includes(40))
+ }
 })

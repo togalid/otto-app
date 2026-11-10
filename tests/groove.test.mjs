@@ -1,10 +1,24 @@
 import test from 'node:test'
 import { timbres } from '../dist/timbres.js'
 import assert from 'node:assert/strict'
-import { genres, genreProgressions, swungBeat, swungBassBeat, bassEvents, bassFeelEvents, bassToneOffset, bassArticulation } from '../dist/groove.js'
+import { genres, genreProgressions, swungBeat, swungBassBeat, bassEvents, bassFeelEvents, bassToneOffset, bassArticulation, BassSynth } from '../dist/groove.js'
 import { backingPatterns } from '../dist/backing.js'
 import { presets, presetSlots, presetBeatSlots } from '../dist/presets.js'
 import { rhythmPatterns } from '../dist/rhythm.js'
+
+test('bass unison spreads voices around the selected pitch', () => {
+  const tone = { setVolume() {}, setPitchBend() {}, setModulation() {}, setLfo() {}, playAt() {} }
+  const bass = new BassSynth({ engine: { bass: tone } })
+  bass.oscillators[0].octave = -1
+  bass.unisonCount = 3
+  bass.unisonDetune = 20
+  bass.playAt(36, 0, 1)
+  assert.deepEqual(tone.oscillators, [-20, 0, 20].map(cent => ({ waveform: 'sawtooth', octave: -1, cent })))
+  bass.unisonCount = 1
+  bass.oscillators[0].cent = 12
+  bass.playAt(36, 0, 1)
+  assert.equal(tone.oscillators[0].cent, 12)
+})
 
 test('swing moves only offbeats from straight eighths to triplets', () => {
   assert.equal(swungBeat(1, 0), 0.5)

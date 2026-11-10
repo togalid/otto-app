@@ -9,7 +9,7 @@
 .chord-pad{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(44px,1fr) minmax(44px,1.15fr) minmax(44px,1fr);gap:4px;min-width:0;aspect-ratio:auto;min-height:180px;padding:7px;cursor:default}
 .chord-pad .corner{min-width:0;max-width:100%;min-height:44px;padding:6px 3px;border:1px solid color-mix(in srgb,var(--oto-secondary) 15%,transparent);background:color-mix(in srgb,var(--oto-secondary) 5%,var(--oto-key));border-radius:5px;font-size:clamp(10px,1.05vw,13px);line-height:1.25;white-space:normal;overflow-wrap:anywhere;box-shadow:inset 0 1px 0 #ffffff80}
 .chord-pad .pad-center{min-width:0;max-width:100%;overflow-wrap:anywhere;font-size:clamp(17px,2vw,27px);line-height:1.15}
-body:not(.backing-pad) .chord-pad .corner:hover{background:color-mix(in srgb,var(--oto-secondary) 9%,var(--oto-key))}
+body:not(.keyboard-pad) .chord-pad .corner:hover{background:color-mix(in srgb,var(--oto-secondary) 9%,var(--oto-key))}
 .chord-pad .corner:active{background:var(--oto-selection);box-shadow:var(--oto-recess)}
 .chord-pad .corner:focus-visible{outline-offset:0}
 @media(max-width:850px){.chord-pad .corner{font-size:12px}}
@@ -56,7 +56,7 @@ body:not(.backing-pad) .chord-pad .corner:hover{background:color-mix(in srgb,var
 /* Twelve-pad audition bank, in visual and keyboard focus order. */
 .pads{grid-template-columns:repeat(4,minmax(0,1fr))}
 .pads .chord-pad:nth-child(n){grid-column:auto;grid-row:auto}
-body:not(.backing-pad) .chromatic-pad{--oto-key:color-mix(in srgb,var(--oto-secondary) 12%,var(--oto-key-low))}
+body:not(.keyboard-pad) .chromatic-pad{--oto-key:color-mix(in srgb,var(--oto-secondary) 12%,var(--oto-key-low))}
 @media(max-width:420px){.pads{gap:6px}.chord-pad{aspect-ratio:auto;grid-template-rows:28px 54px 28px}.chord-pad .corner{font-size:8px}.chord-pad .pad-center{font-size:13px}}
 
 .embedded-pad .pad-shell{max-width:460px;padding:6px}
@@ -80,26 +80,60 @@ html.embedded-pad-root,html.embedded-pad-root body{background:transparent}
 .embedded-pad .pads{overflow:visible}
 
 /* One molded key face, using the same finish as the bass pads. */
-.backing-pad .chord-pad {
+.keyboard-pad .chord-pad {
   background: linear-gradient(var(--oto-key), var(--oto-key-low));
   box-shadow: var(--oto-raised);
   transition: filter 120ms;
 }
-.backing-pad .chord-pad :is(.pad-center, .corner) {
+.keyboard-pad .chord-pad :is(.pad-center, .corner) {
   background: transparent;
 }
 @media (hover: hover) {
-  .backing-pad .chord-pad:hover { filter: brightness(1.04); }
+  .keyboard-pad .chord-pad:hover { filter: brightness(1.04); }
 }
-.backing-pad .chord-pad button:active {
+.keyboard-pad .chord-pad button:active {
   background: var(--oto-selection);
   color: var(--oto-selection-ink);
   box-shadow: var(--oto-recess);
 }
-.backing-pad .chord-pad:has(button:active) {
+.keyboard-pad .chord-pad:has(button:active) {
   box-shadow: var(--oto-recess);
 }
 
-.backing-pad .chord-pad button.sequencer-hit:not(:active) {
+.keyboard-pad .chord-pad button.sequencer-hit:not(:active) {
   background: color-mix(in srgb, var(--oto-secondary) 12%, transparent);
+}
+
+/* The accompaniment bank follows a piano octave: two black keys, then three. */
+.embedded-pad.keyboard-pad .pad-shell { max-width: none; }
+.embedded-pad.keyboard-pad .pad-case { overflow-x: auto; padding-bottom: 10px; }
+.keyboard-pad .pads {
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  min-width: 490px;
+  gap: 6px 0;
+}
+.keyboard-pad .pads .chord-pad:nth-child(n) {
+  grid-column: var(--pad-column) / span 2;
+  grid-row: 2;
+  margin-inline: 3px;
+}
+.keyboard-pad .pads .chromatic-pad:nth-child(n) { grid-row: 1; }
+.keyboard-pad [data-degree="0"] { --pad-column: 1; }
+.keyboard-pad [data-degree="1"] { --pad-column: 3; }
+.keyboard-pad [data-degree="2"] { --pad-column: 5; }
+.keyboard-pad [data-degree="3"] { --pad-column: 7; }
+.keyboard-pad [data-degree="4"] { --pad-column: 9; }
+.keyboard-pad [data-degree="5"] { --pad-column: 11; }
+.keyboard-pad [data-degree="6"] { --pad-column: 13; }
+.keyboard-pad [data-degree="7"] { --pad-column: 2; }
+.keyboard-pad [data-degree="8"] { --pad-column: 4; }
+.keyboard-pad [data-degree="9"] { --pad-column: 8; }
+.keyboard-pad [data-degree="10"] { --pad-column: 10; }
+.keyboard-pad [data-degree="11"] { --pad-column: 12; }
+.keyboard-pad .chromatic-pad {
+  background: linear-gradient(color-mix(in srgb, var(--oto-ink) 48%, var(--oto-key)), var(--oto-ink));
+}
+.keyboard-pad .chromatic-pad :is(.pad-center, .corner):not(:active) { color: var(--oto-key); }
+.keyboard-pad .chromatic-pad button.sequencer-hit:not(:active) {
+  background: color-mix(in srgb, var(--oto-key) 30%, transparent);
 }

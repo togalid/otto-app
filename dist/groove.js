@@ -358,17 +358,46 @@ export class BassSynth {
     this.instrument = instrument
   }
   timbre = 'electric'
+  toneEdited = false
+  oscillators = [{waveform:'sawtooth',octave:0,cent:0},{waveform:'off',octave:0,cent:0},{waveform:'off',octave:0,cent:0}]
+  unisonCount = 1
+  unisonDetune = 0
+  pitchBend = 0
+  modulation = 0
+  lfo = { rate: 2.4, depth: 50, cutoff: false, pitch: false, waveform: 'sine' }
+  toneSettings = { cutoff: 100, resonance: 1, filterType: /** @type {'lowpass'|'highpass'} */ ('lowpass'), amp: { attack: .005, decay: .7, sustain: .12, release: .12 }, filter: { attack: .005, decay: .18, sustain: .24, release: .12, amount: 1 } }
   volume = 0.5
   /** @param {number} value */
   setVolume(value) {
     this.volume = Math.max(0, Math.min(1, value))
     this.instrument.engine?.bass.setVolume(this.volume)
   }
+  applyToneSettings() {
+    this.toneEdited = true
+    const tone = this.instrument.engine?.bass
+    if (!tone) return
+    tone.setLfo(this.lfo.rate, this.lfo.depth, this.lfo.cutoff, this.lfo.pitch, this.lfo.waveform)
+    tone.toneSettings = this.toneSettings
+    tone.applyToneSettings()
+  }
+  /** @param {number} value */
+  setPitchBend(value) { this.pitchBend = value; this.instrument.engine?.bass.setPitchBend(value) }
+  /** @param {number} value */
+  setModulation(value) { this.modulation = value; this.instrument.engine?.bass.setModulation(value) }
   /** @param {number} midi @param {number} time @param {number} duration @param {number} [velocity] @param {number} [slideFrom] */
   playAt(midi, time, duration, velocity, slideFrom) {
     const tone = this.instrument.engine?.bass
     if (!tone) return
     tone.timbre = this.timbre
+    tone.setPitchBend(this.pitchBend)
+    tone.setModulation(this.modulation)
+    tone.setLfo(this.lfo.rate, this.lfo.depth, this.lfo.cutoff, this.lfo.pitch, this.lfo.waveform)
+    const { waveform, octave, cent: pitchCent } = this.oscillators[0]
+    tone.oscillators = Array.from({ length: this.unisonCount }, (_, index) => ({
+      waveform, octave,
+      cent: pitchCent + (this.unisonCount === 1 ? 0 : this.unisonDetune * (2 * index / (this.unisonCount - 1) - 1)),
+    }))
+    tone.toneSettings = this.toneEdited ? this.toneSettings : undefined
     tone.setVolume(this.volume)
     tone.playAt(midi, time, duration, velocity, slideFrom)
   }
@@ -492,4 +521,16 @@ export function planBassPattern(bassPattern, bar, beatsPerBar, feel, changeBeats
     bassPatternEvents.sort((a, b) => a.pulse - b.pulse)
   }
   return bassPatternEvents
+}
+
+export const lfoWaveforms = /** @type {const} */ (['sine', 'triangle', 'sawtooth', 'square'])
+export const lfoWaveformNames = ['サイン波', '三角波', 'ノコギリ波', '矩形波']
+
+/** @param {string} waveform @param {number} phase */
+export function lfoWaveValue(waveform, phase) {
+  const p = ((phase % 1) + 1) % 1
+  if (waveform === 'triangle') return 2 * Math.asin(Math.sin(2 * Math.PI * p)) / Math.PI
+  if (waveform === 'sawtooth') return 2 * ((p + .5) % 1) - 1
+  if (waveform === 'square') return p < .5 ? 1 : -1
+  return Math.sin(p * 2 * Math.PI)
 }

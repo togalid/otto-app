@@ -301,6 +301,15 @@ export function mountReferenceDetail(reference, remove){
  return timingHost
 }
 
+/** Bind a synth knob once, using the same drag distance as the tempo knob. */
+const synthKnobs = new WeakSet()
+/** @param {unknown} element */
+export function bindSynthKnob(element) {
+  if (!(element instanceof HTMLInputElement) || synthKnobs.has(element)) return
+  synthKnobs.add(element)
+  bindKnobDrag(element, (Number(element.max) - Number(element.min)) / 270)
+}
+
 /** @param {HTMLInputElement} input @param {number} sensitivity @param {boolean} [integer] */
 export function bindKnobDrag(input, sensitivity, integer = false) {
   const knob = input.parentElement
@@ -370,8 +379,8 @@ return updatePartIcons
 /** Range controls keep the version-1 baseline inputs mounted for persistence.
  * @param {{workspace:HTMLElement, progression:import('./progression.js').Progression,
  * editingSection:{value:number}, mixerKey:HTMLInputElement, meterInput:HTMLInputElement,
- * tempo:HTMLInputElement, keySelect:HTMLSelectElement, contextChanged:()=>void, harmonyChanged:()=>void}} controls */
-export function mountSectionKnobs({workspace, progression, editingSection, mixerKey, meterInput, tempo, keySelect, contextChanged, harmonyChanged}) {
+ * tempo:HTMLInputElement, keySelect:HTMLSelectElement, currentBar:()=>number, contextChanged:()=>void, harmonyChanged:()=>void}} controls */
+export function mountSectionKnobs({workspace, progression, editingSection, mixerKey, meterInput, tempo, keySelect, currentBar, contextChanged, harmonyChanged}) {
 // Section knobs edit range metadata without changing the song's fallback settings.
 const baselineControls=document.createElement('div')
 baselineControls.hidden=true
@@ -392,13 +401,18 @@ for (const [source, field, caption] of /** @type {[HTMLInputElement, 'key'|'mete
   const knob=/** @type {HTMLElement} */(input.parentElement)
   function refresh() {
     const section=progression.sections[editingSection.value]
-    const value=(field==='bpm' ? progression.referenceBpm : null) ?? section[field] ?? (field==='key'?progression.key:Number(source.value))
+    const value=field==='key' ? progression.keyForBar(currentBar(), editingSection.value) : (field==='bpm' ? progression.referenceBpm : null) ?? section[field] ?? Number(source.value)
     input.value=String(field==='key'&&value>6?value-12:value)
     const text=field==='key'?keys[value].name:field==='meter'?`${value}/4`:String(value)
     if(output)output.textContent=text
     if(numeric)numeric.value=String(value)
     input.setAttribute('aria-valuetext',text)
     knob.style.setProperty('--angle',`${field==='key'?Number(input.value)*11.25:field==='meter'?(value-4)*90:(value-120)*1.6875}deg`)
+  }
+  function sectionOffset() {
+    const bar=currentBar()
+    const section=progression.songMode ? progression.sections[progression.songSectionAt(bar)] : progression.sections[editingSection.value]
+    return section.modulation[Math.floor(bar / 2)] ?? 0
   }
   input.addEventListener('input',()=>{
     const value=Number(input.value)
@@ -407,7 +421,9 @@ for (const [source, field, caption] of /** @type {[HTMLInputElement, 'key'|'mete
       tempo.dispatchEvent(new Event('input', {bubbles:true}))
       return
     }
-    progression.sections[editingSection.value][field]=field==='key'?(value%12+12)%12:value
+    const offset = field === 'key' ? (sectionOffset() % 12) : 0
+    const target = field === 'key' && progression.songMode ? progression.songSectionAt(currentBar()) : editingSection.value
+    progression.sections[target][field]=field==='key'?((value-offset)%12+12)%12:value
     contextChanged()
     refresh()
     if(field!=='bpm'){harmonyChanged()}

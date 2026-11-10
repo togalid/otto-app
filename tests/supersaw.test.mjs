@@ -53,3 +53,14 @@ test('supersaw recipes retain bright sustained tone and trim the thicker oscilla
     }
   }
 })
+
+test('lead supersaw applies adjusted unison settings to the active oscillator', () => {
+  const instrument = new Instrument('melody')
+  const updates = []
+  instrument.timbre = 'lead-supersaw'
+  instrument.synth = {set: value => updates.push(value)}
+  instrument.supersawCount = 5
+  instrument.supersawSpread = 32
+  instrument.applyOscSettings()
+  assert.deepEqual(updates[0].oscillator, {type:'fatsawtooth', count:5, spread:32})
+})

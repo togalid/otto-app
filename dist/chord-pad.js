@@ -5,7 +5,6 @@ const numericDegrees=['1','2','3','4','5','6','7','♯1','♭3','♯4','♭6','�
 /** @type {'number'|'chord'|'roman'} */
 let notation='roman'
 const degreeRoots=[0,1,2,3,4,5,6,0,2,3,5,6]
-const layout=[7,8,9,10,3,4,5,11,0,1,2,6]
 const names=['C','D♭','D','E♭','E','F','F♯','G','A♭','A','B♭','B']
 const key=/** @type {HTMLSelectElement} */(document.querySelector('#pad-key'))
 names.forEach((name,i)=>key.add(new Option(name,String(i))))
@@ -45,6 +44,7 @@ slashDefaults.forEach((choices,index)=>choices.forEach(([upper,quality],choice)=
 const params=new URLSearchParams(location.search)
 const backing=params.has('backing')
 const embedded=params.has('embedded')&&window.parent!==window
+document.body.classList.add('keyboard-pad')
 if(backing) document.body.classList.add('backing-pad')
 if(embedded){
  document.documentElement.classList.add('embedded-pad-root')
@@ -167,7 +167,8 @@ function finish(commit){
  }
  active=null
 }
-layout.forEach(index=>{
+const padOrder = [...degrees.keys()]
+padOrder.forEach(index=>{
  const degree=degrees[index]
  const pad=document.createElement('div'); pad.className='chord-pad'+(index>=7?' chromatic-pad':'')
  pad.dataset.degree=String(index)

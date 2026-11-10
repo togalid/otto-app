@@ -43,20 +43,23 @@ export function mountTransport(togglePlayback) {
   return { running, beat }
 }
 
+/** @typedef {{current:()=>number, count:()=>number, seek:(bar:number)=>void}} PlayheadActions */
+
 /** Presentation only: seeking and restarting audio remain with the application.
- * @param {{current:()=>number, count:()=>number, seek:(bar:number)=>void}} actions */
-export function mountPlayhead(actions) {
+ * @param {PlayheadActions} actions @param {Element} [host] */
+export function mountPlayhead(actions, host) {
   const element = document.createElement('div')
   element.className = 'melody-playhead'
   element.setAttribute('aria-label', '現在の再生位置')
-  document.querySelector('.mixer-score-link')?.before(element)
+  if (host) host.append(element)
+  else document.querySelector('.mixer-score-link')?.before(element)
   const reset = () => { input.value = String(actions.current() + 1) }
-  createApp({render: () => [
+  const app = createApp({render: () => [
     h('div', {class:'style-stepper melody-navigation melody-navigation-start'}, [
       h('button', {type:'button', 'aria-label':'1小節目に戻る', onClick:()=>actions.seek(0)}, '|<'),
     ]),
     h('label', {class:'melody-bar-input'}, [
-      h('input', {type:'number', min:1, step:1, value:1, 'aria-label':'移動する小節',
+      h('input', {type:'number', min:1, step:1, value:actions.current() + 1, 'aria-label':'移動する小節',
         onFocus:()=>{ input.max = String(actions.count()) },
         onChange:()=>{
           const value = Number(input.value)
@@ -72,7 +75,8 @@ export function mountPlayhead(actions) {
     h('div', {class:'style-stepper melody-navigation'}, [-1,1].map(direction =>
       h('button', {type:'button', 'aria-label':direction<0?'前の小節へ':'次の小節へ', onClick:()=>actions.seek(actions.current()+direction)}, direction<0?'←':'→'),
     )),
-  ]}).mount(element)
+  ]})
+  app.mount(element)
   const input = /** @type {HTMLInputElement} */ (element.querySelector('input'))
-  return {element, input}
+  return {element, input, unmount: () => { app.unmount(); element.remove() }}
 }

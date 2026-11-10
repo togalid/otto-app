@@ -2,6 +2,35 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { ToneBass, ToneDrums } from '../dist/tone-engine.js'
 
+test('bass LFO adjusts cutoff independently while retaining pitch modulation', () => {
+  const bass = new ToneBass({}, {})
+  const pitch = [], filter = []
+  const fake = (values) => ({frequency:{rampTo:v=>values.push(['rate',v])},amplitude:{rampTo:v=>values.push(['depth',v])},dispose(){values.push(['dispose'])}})
+  bass.toneLfos = [fake(pitch)]
+  bass.filterLfos = [fake(filter)]
+  bass.setLfo(3, 40, true, true, 'triangle')
+  assert.equal(bass.toneLfos[0].type, 'triangle')
+  assert.equal(bass.filterLfos[0].type, 'triangle')
+  assert.deepEqual(pitch, [['rate',3],['depth',.4]])
+  assert.deepEqual(filter, [['rate',3],['depth',.4]])
+  bass.setLfo(0, 40, false)
+  assert.deepEqual(filter.slice(-2), [['rate',0],['depth',0]])
+  assert.deepEqual(pitch.slice(-2), [['rate',0],['depth',0]])
+  bass.silence()
+  assert.deepEqual(filter.at(-1), ['dispose'])
+})
+
+test('bass expression updates all active voices and vibratos', () => {
+  const bass = new ToneBass({}, {})
+  const bends = [], depths = []
+  bass.voices = [{ detune: { rampTo: value => bends.push(value) } }, { detune: { rampTo: value => bends.push(value) } }]
+  bass.vibratos = [{ amplitude: { rampTo: value => depths.push(value) } }, { amplitude: { rampTo: value => depths.push(value) } }]
+  bass.setPitchBend(.5)
+  bass.setModulation(.75)
+  assert.deepEqual(bends, [100, 100])
+  assert.deepEqual(depths, [.75, .75])
+})
+
 test('Tone instruments schedule on the supplied clock and dispose on stop', () => {
   const events = []
   class FakeSynth {
@@ -131,4 +160,28 @@ test('chord voices vary colour with touch and decay with register without sharin
       assert.ok(second.filterEnvelope.baseFrequency > first.filterEnvelope.baseFrequency)
     }
   }
+})
+
+test('bass filter settings update an existing voice without waiting for another note', () => {
+  const applied = []
+  class FakeSynth {
+    filter = {Q:{value:1}}
+    envelope = {set:value=>applied.push(['amp',value])}
+    filterEnvelope = {set:value=>applied.push(['filter',value])}
+    connect(){return this}
+    triggerAttackRelease(){}
+    dispose(){}
+  }
+  const context = {currentTime:0,destination:{},createAnalyser:()=>({connect(){}}),createGain:()=>({gain:{value:0},connect(){},disconnect(){}})}
+  const bass = new ToneBass({MonoSynth:FakeSynth},context)
+  bass.playAt(36,0,.5)
+  bass.toneSettings = {cutoff:420,resonance:7,amp:{attack:.01,decay:.2,sustain:.5,release:.1},filter:{attack:.01,decay:.2,sustain:.4,release:.1,amount:1}}
+  bass.applyToneSettings()
+  assert.equal(bass.synth.filter.Q.value,7)
+  assert.equal(applied.at(-1)[1].baseFrequency,420)
+  bass.toneSettings.filterType = 'highpass'
+  bass.toneSettings.filter.amount = -2
+  bass.applyToneSettings()
+  assert.equal(bass.synth.filter.type,'highpass')
+  assert.equal(applied.at(-1)[1].octaves,-2)
 })

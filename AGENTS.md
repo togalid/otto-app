@@ -34,6 +34,12 @@ Keep its established Milk UI and musical behavior unless the user requests a cha
 - Avoid unlimited caches and caches keyed by mutable object identity. Never move audio scheduling to requestAnimationFrame.
 - Do not call remote AI services or upload reference audio. Stem separation is explicit local Demucs work, not a startup task.
 
+## 変更を重ねるときのルール
+
+- 音色・奏法・演奏モードの適用は `part-settings.js` の既存経路を使う。手動操作・スタイル変更・セクション切り替え・設定復元で適用処理を複製しない。新しい保存項目を追加する場合は、旧設定に項目がない場合の既定値と、保存・読み込みの往復を確認する。
+- イベント購読・タイマー・試聴などは、それを開始したモジュールが解除する。画面の破棄やファイルの差し替え後に、古い処理結果が現在の状態を書き換えないようにする。
+- 担当モジュールや確認方法を変えたら、`docs/ARCHITECTURE.md` の該当行も更新する。今回必要な範囲を越える整理は別の変更に分け、残す負債は具体的な影響と着手条件を記録する。
+
 ## Validation proportional to the change
 
 1. Run the affected `node --test tests/<name>.test.mjs` files while editing.
@@ -42,5 +48,7 @@ Keep its established Milk UI and musical behavior unless the user requests a cha
 4. Pure style/content changes do not need new tests mirroring their implementation.
 5. The parent Tauri build, Rust checks, vault tests, dependency reinstall, and Demucs model download do not validate this standalone app. Do not run them unless that scope actually changes.
 6. Do not run expensive real stem inference for every edit; use injected server fakes for protocol tests. Run real inference when the Demucs integration changes.
+
+スタイル・セクション・設定復元の連携を変えたときは、`tests/app-settings.test.mjs` を実行する。再生中の挙動を変えた場合は、対象条件で音色・コード・再生位置の組み合わせをブラウザーでも確認する。
 
 No watch-mode checks or automated full suites run in the browser or on each request.

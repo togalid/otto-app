@@ -114,7 +114,7 @@ export function mountAccompanimentPlay(part, initialMode, face, setMode, play, o
   const mode = ref(initialMode)
   const labels = part === 'drums' ? drums.map(([label]) => String(label)) : notes.map((note, index) => note + (index === 7 ? '3' : '2'))
   const padOrder = part === 'drums' ? [4, 5, 6, 7, 0, 1, 2, 3] : labels.map((_, index) => index)
-  const modes = /** @type {const} */ ([['auto', '自動演奏'], ['manual', '自分が弾く'], ['otto', 'Ottoが弾く']])
+  const modes = /** @type {const} */ ([['auto', 'パターン'], ['manual', '自分が弾く'], ['otto', 'Ottoが弾く']])
   const app = createApp({ render: () => [
     h('div', { class: 'accompaniment-play-heading' }, [
       h('div', { class: 'talk-companion' }, [

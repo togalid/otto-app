@@ -53,7 +53,7 @@ test('Otto sustained notes do not rewrite pad/key highlights on every audio tick
   t.mock.method(globalThis, 'clearInterval', () => {})
   const context = { currentTime: 0, state: 'running' }
   t.mock.method(Instrument.prototype, 'ready', async function () { this.context = context })
-  for (const method of ['silence', 'playAt', 'release']) t.mock.method(Instrument.prototype, method, () => {})
+  for (const method of ['silence', 'playAt', 'release', 'attack']) t.mock.method(Instrument.prototype, method, () => {})
   const player = new Instrument()
   const transport = {
     instrument: new Instrument(), ornaments: [], bpm: 128, bpmForBar() { return 150 }, swing: 0, genre: 'pop',
@@ -92,5 +92,13 @@ test('Otto sustained notes do not rewrite pad/key highlights on every audio tick
   tick()
   assert.ok(pads.every(pad => !pad.disabled && !pad.hasAttribute('data-pc-playing')))
   assert.ok(keys.every(key => !key.hasAttribute('data-pc-playing')))
+  buddy.attackMidi(66, false, true)
+  tick()
+  assert.equal(keys[66 - 48].hasAttribute('data-playing'), false, 'screen input uses the pressed physical key')
+  buddy.releaseMidi(66)
+  buddy.attackMidi(67)
+  tick()
+  assert.equal(keys[67 - 48].hasAttribute('data-playing'), true, 'MIDI input still highlights the sounding key')
   buddy.stop()
+  assert.equal(keys[67 - 48].hasAttribute('data-playing'), false)
 })

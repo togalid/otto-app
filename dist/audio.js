@@ -50,7 +50,7 @@ export function createTimbreVoice(Tone, id, ampOverrides) {
       const expression = voiceExpression(id, midi, velocity)
       this.envelope.set({...expression.envelope, ...ampOverrides?.()})
       if (profile.fm) {
-        this.modulationIndex.value = expression.modulationIndex
+        this.modulationIndex.value = (/** @type {any} */ (this)).fmAmountOverride ?? expression.modulationIndex
         this.modulationEnvelope.decay = expression.transientDecay
       } else {
         this.filterEnvelope.baseFrequency = expression.baseFrequency
@@ -132,6 +132,16 @@ export class Instrument {
   vibrato
   liveId = 0
   liveMidi = -1
+  pitchBend = 0
+  oscWaveform = 'original'
+  oscOctave = 0
+  oscPitch = 0
+  supersawCount = 3
+  supersawSpread = 15
+  /** @type {number | undefined} */
+  fmRatio = undefined
+  /** @type {number | undefined} */
+  fmAmount = undefined
 
   /** @param {string} id */
   setTimbre(id) {
@@ -286,13 +296,31 @@ export class Instrument {
       } else {
         this.synth = new Tone.PolySynth({voice:Voice,maxPolyphony:96,options}).connect(this.filter)
       }
+      if (this.oscWaveform !== 'original' || this.fmRatio !== undefined || this.fmAmount !== undefined || this.supersawCount !== 3 || this.supersawSpread !== 15) this.applyOscSettings()
+      else this.applyPitchBend()
       this.activeTimbre = this.timbre
     }
   }
   /** @param {number} bend normalized -1..1, two semitones */
   setPitchBend(bend) {
-    this.ensureVoice()
-    if(this.synth?.detune)this.synth.detune.rampTo(Math.max(-1,Math.min(1,bend))*200,.02)
+    this.pitchBend = Math.max(-1,Math.min(1,bend))
+    this.applyPitchBend()
+  }
+  applyPitchBend() {
+    const detune = this.pitchBend * 200 + this.oscOctave * 1200 + this.oscPitch
+    if (this.synth?.detune?.rampTo) this.synth.detune.rampTo(detune,.02)
+    else if (this.synth?.set) this.synth.set({detune})
+  }
+  applyOscSettings() {
+    if (!this.synth) return
+    const profile = timbreProfile(this.timbre)
+    const oscillator = this.oscWaveform === 'original'
+      ? (this.timbre === 'supersaw' || this.timbre === 'lead-supersaw' ? {type:'fatsawtooth',count:this.supersawCount,spread:this.supersawSpread} : profile.fm ? {type:'sine'} : {type:'custom',partials:getTimbre(this.timbre).harmonics})
+      : {type:this.oscWaveform}
+    this.synth.set({oscillator})
+    if (profile.fm && this.synth.modulationIndex && this.fmAmount !== undefined) this.synth.fmAmountOverride = this.fmAmount
+    if (profile.fm && this.fmRatio !== undefined) this.synth.set({harmonicity:this.fmRatio})
+    this.applyPitchBend()
   }
   adjustedCutoff() {
     return this.toneSettings.cutoff ?? this.filterCutoff

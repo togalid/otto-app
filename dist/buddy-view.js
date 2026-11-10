@@ -1,5 +1,6 @@
+import { bindSynthKnob } from './main-controls.js'
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
-import { getTimbre } from './timbres.js'
+import { getTimbre, timbreProfile } from './timbres.js'
 import { phraseNotation } from './music.js'
 import { Instrument } from './audio.js'
 import { defaultOttoLab } from './otto-phrases.js'
@@ -147,7 +148,7 @@ export function mountBuddyLab(panel, {view,player,partner,lab,labMode,sessionMod
   const eachVoice = apply => { apply(player); apply(partner); toneRevision.value++ }
   /** @param {string} label @param {number} value @param {number} min @param {number} max @param {number} step @param {string} unit @param {(value:number)=>void} change @param {boolean} [knob] */
   function toneControl(label,value,min,max,step,unit,change,knob=false) {
-    const input = h('input',{type:'range',min,max,step,value,'aria-label':label,
+    const input = h('input',{type:'range',min,max,step,value,'aria-label':label, ref:knob?bindSynthKnob:undefined,
       onInput:(/** @type {Event} */ event)=>change((/** @type {HTMLInputElement} */ (event.target)).valueAsNumber)})
     return h('label',{class:knob?'otto-lab-knob':'tone-envelope-control'},[
       h('span',label),
@@ -155,19 +156,29 @@ export function mountBuddyLab(panel, {view,player,partner,lab,labMode,sessionMod
       h('output',`${Number(value.toFixed(3))}${unit}`),
     ])
   }
-  /** @param {string} title @param {'amp'|'filter'} kind */
-  function envelopeControls(title,kind) {
+  /** @param {'amp'|'filter'} kind */
+  function envelopeView(kind) {
     const settings = player.toneSettings[kind]
     const preset = getTimbre(player.timbre)
     const stages = /** @type {const} */ (['attack','decay','sustain','release'])
-    return h('fieldset',[h('legend',title),
-      ...(kind==='filter'?[toneControl('深さ',player.toneSettings.filter.amount,0,3,.1,' oct',value=>eachVoice(voice=>{voice.toneSettings.filter.amount=value}))]:[]),
-      ...stages.map(stage=>toneControl(
-        `${kind==='amp'?'音量':'フィルター'} ${stage[0].toUpperCase()+stage.slice(1)}`,
-        settings[stage] ?? preset[stage],stage==='sustain'?0:.001,stage==='sustain'?1:2,.001,stage==='sustain'?'':' 秒',
-        value=>eachVoice(voice=>{voice.toneSettings[kind][stage]=value}),
-      )),
+    const values = stages.map(stage => settings[stage] ?? preset[stage])
+    const [attack, decay, sustain, release] = values
+    const total = attack + decay + .5 + release
+    const x = (/** @type {number} */ t) => 8 + 224 * t / total
+    const sy = 124 - 109 * sustain
+    const line = `M8 124 L${x(attack)} 15 L${x(attack+decay)} ${sy} L${x(attack+decay+.5)} ${sy} L232 124`
+    const id = `melody-${kind}-gradient`
+    const cutoff = player.toneSettings.cutoff ?? preset.cutoff
+    const q = Math.max(.1,player.toneSettings.resonance ?? 1)
+    const points = Array.from({length:81},(_,i)=>{const ratio=(20*1000**(i/80))/cutoff;const magnitude=1/Math.sqrt((1-ratio*ratio)**2+(ratio/q)**2);const db=Math.max(-48,40*Math.log10(Math.max(.0001,magnitude)));return `${i*3},${8+(44-db)*1.2}`}).join(' ')
+    const graphLine = kind==='amp' ? line : `M${points.replaceAll(' ',' L')}`
+    const graph = h('svg',{class:'synth-filter-curve',viewBox:'0 0 240 125',role:'img','aria-label':kind==='amp'?'音量エンベロープ':'フィルターの周波数特性'},[
+      h('defs',[h('linearGradient',{id,x1:0,y1:0,x2:0,y2:125,gradientUnits:'userSpaceOnUse'},[h('stop',{offset:'0%','stop-color':'var(--oto-accent)','stop-opacity':.22}),h('stop',{offset:'100%','stop-color':'var(--oto-accent)','stop-opacity':0})])]),
+      h('path',{d:kind==='amp'?`${graphLine} L232 125 L8 125 Z`:`${graphLine} L240 125 L0 125 Z`,fill:`url(#${id})`}),h('path',{d:graphLine,class:'synth-filter-line'})
     ])
+    return h('section',{class:'synth-amp'},[h('h3',kind==='amp'?'Amp Env':'Filter Env'),graph,h('div',{class:'synth-faders'},stages.map((stage,index)=>h('label',{class:'synth-fader'},[
+      h('input',{type:'range',min:stage==='sustain'?0:.001,max:stage==='sustain'?1:2,step:.001,value:values[index],'aria-label':`${kind==='amp'?'音量':'フィルター'} ${stage}`,onInput:(/** @type {Event} */ e)=>eachVoice(voice=>{voice.toneSettings[kind][stage]=(/** @type {HTMLInputElement} */(e.target)).valueAsNumber})}),h('span',stage[0].toUpperCase())
+    ])))])
   }
   const settingsOpen = ref('')
   const detailToggle = (/** @type {string} */ kind, /** @type {string} */ label) => h('button', {
@@ -188,14 +199,24 @@ export function mountBuddyLab(panel, {view,player,partner,lab,labMode,sessionMod
     detailToggle('tone', '音色'),
     detailToggle('advanced', 'プレイスタイル'),
     h('section',{id:'otto-tone-settings',hidden:settingsOpen.value!=='tone'},[
-      h('h3','音色の調整'),
-      h('div',{class:'tone-editor'},[
-        h('fieldset',[h('legend','フィルター'),
-          toneControl('Cutoff', player.toneSettings.cutoff ?? getTimbre(player.timbre).cutoff, 100, 18000, 1, ' Hz', value=>eachVoice(voice=>voice.setFilterControl('cutoff',value)), true),
-          toneControl('Resonance', player.toneSettings.resonance ?? 1, .1, 12, .1, '', value=>eachVoice(voice=>voice.setFilterControl('resonance',value)), true),
-        ]),
-        envelopeControls('音量 ADSR', 'amp'),
-        envelopeControls('フィルターエンベロープ', 'filter'),
+      h('div',{class:'tone-editor synth-editor melody-synth-editor'},[
+        h('fieldset',[h('legend','OSC'),h('div',{class:'synth-knob-row'},[
+          h('div',{class:'synth-osc-control'},[toneControl('波形',Math.max(0,['original','sine','triangle','sawtooth','square'].indexOf(player.oscWaveform)),0,4,1,'',value=>eachVoice(voice=>{voice.oscWaveform=['original','sine','triangle','sawtooth','square'][value];voice.applyOscSettings()}),true),h('span',{class:'synth-osc-value'},({'original':'オリジナル','sine':'サイン波','triangle':'三角波','sawtooth':'ノコギリ波','square':'矩形波'})[/** @type {'original'|'sine'|'triangle'|'sawtooth'|'square'} */ (player.oscWaveform)])]),
+          toneControl('音程',player.oscPitch,-100,100,1,' cent',value=>eachVoice(voice=>{voice.oscPitch=value;voice.applyPitchBend()}),true),
+        ]),h('div',{class:'synth-octave-control'},[h('span','Oct'),h('fieldset',{class:'segmented-control synth-octave-switch','aria-label':'オクターブ'},[h('legend',{class:'sr-only'},'オクターブ'),...[-1,0,1].map(value=>h('label',[h('input',{type:'radio',name:'melody-osc-octave',value,checked:player.oscOctave===value,onChange:()=>eachVoice(voice=>{voice.oscOctave=value;voice.applyPitchBend()})}),h('span',value>0?`+${value}`:String(value))]))])]),
+        ...(timbreProfile(player.timbre).fm ? [h('span',{class:'synth-type-tag'},'FM'),h('div',{class:'synth-knob-row'},[
+          toneControl('倍音の高さ',player.fmRatio ?? timbreProfile(player.timbre).ratio,.5,8,.1,'',value=>eachVoice(voice=>{voice.fmRatio=value;voice.applyOscSettings()}),true),
+          toneControl('響きの硬さ',player.fmAmount ?? timbreProfile(player.timbre).index,0,10,.1,'',value=>eachVoice(voice=>{voice.fmAmount=value;voice.applyOscSettings()}),true),
+        ])] : []),
+        ...(['supersaw','lead-supersaw'].includes(player.timbre) && player.oscWaveform === 'original' ? [h('div',{class:'synth-knob-row'},[
+          h('div',{class:'synth-osc-control'},[toneControl('重ねる音数',player.supersawCount,1,5,1,'',value=>eachVoice(voice=>{voice.supersawCount=value;voice.applyOscSettings()}),true),h('span',{class:'synth-osc-value'},String(player.supersawCount))]),
+          h('div',{class:'synth-osc-control'},[toneControl('ズラす量',player.supersawSpread,0,50,1,' cent',value=>eachVoice(voice=>{voice.supersawSpread=value;voice.applyOscSettings()}),true),h('span',{class:'synth-osc-value'},`${player.supersawSpread} cent`)]),
+        ])] : []),envelopeView('amp')]),
+        h('fieldset',[h('legend','Filter'),h('div',{class:'synth-knob-row'},[
+          toneControl('明るさ',player.toneSettings.cutoff ?? getTimbre(player.timbre).cutoff,100,18000,1,' Hz',value=>eachVoice(voice=>voice.setFilterControl('cutoff',value)),true),
+          toneControl('音のクセ',player.toneSettings.resonance ?? 1,.1,12,.1,'',value=>eachVoice(voice=>voice.setFilterControl('resonance',value)),true),
+          toneControl('Envの効き',player.toneSettings.filter.amount,0,3,.1,' oct',value=>eachVoice(voice=>{voice.toneSettings.filter.amount=value}),true),
+        ]),envelopeView('filter')]),
       ]),
     ]),
     h('div',{id:'otto-advanced-settings',hidden:settingsOpen.value!=='advanced'},[h('div',{class:'otto-lab'},[

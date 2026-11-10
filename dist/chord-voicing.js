@@ -240,5 +240,11 @@ export function padChordNotes(id, key) {
        (config.quality === 'slash' && ['pad_10_maj', 'pad_8_maj7'].includes(config.extension)))) {
     result.unshift(33 + offset)
   }
+  if (config.root === 1 && config.alter === 0 &&
+      ((config.quality === 'min' && ['7', '9'].includes(config.extension)) ||
+       (config.quality === 'maj' && config.extension === '7'))) {
+    const lowRoot = 38 + offset
+    if (!result.includes(lowRoot)) result.unshift(lowRoot)
+  }
   return result
 }

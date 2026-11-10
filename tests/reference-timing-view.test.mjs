@@ -30,9 +30,11 @@ test('reference alignment keeps source timing, seeking and key controls connecte
       stopKeyPreview() {}, previewKey: async root => { rootPreviews.push(root) }, setKeyPreviewRoot: root => rootPreviews.push(root),
     }
     const playbackHeads = new Map(), waveformStartBeats = new Map()
+    const seeks = []
     const view = mountReferenceTiming(host, {
       reference, player, progression, tempo, keySelect, section: () => 0, preset: () => selectedPreset,
       choosePreset: id => { selectedPreset = id }, playbackHeads, waveformStartBeats,
+      playhead: {current: () => 4, count: () => 16, seek: bar => seeks.push(bar)},
       playFromBar: bar => { void progression.start(bar, 0) },
       bindKnobDrag: input => { boundKnobs.push(input) },
     })
@@ -93,6 +95,13 @@ test('reference alignment keeps source timing, seeking and key controls connecte
     await nextTick()
     assert.equal(host.querySelector('.reference-timing-control output').textContent, '1.25 秒')
     assert.equal(host.querySelectorAll('.reference-timing-row').length, 1)
+    const navigation = host.querySelector('.reference-playhead-host')
+    assert.equal(navigation.querySelector('input').value, '5')
+    for (const label of ['1小節目に戻る', '前の小節へ', '次の小節へ']) {
+      navigation.querySelector(`button[aria-label="${label}"]`).click()
+    }
+    assert.deepEqual(seeks, [0, 3, 5])
+    assert.equal(timing, 1.25)
     view.unmount()
     assert.equal(host.children.length, 0)
     tempo.value = '99'

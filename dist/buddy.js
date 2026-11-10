@@ -62,7 +62,7 @@ export function mountBuddy(source, mountView = mountBuddyView) {
   view.sessionVisible=sessionMode.value
   /** @type {PhraseNote[]} */
   let recorded = []
-  /** @type {Map<number, PhraseNote>} */
+  /** @type {Map<number, PhraseNote & {screen:boolean}>} */
   const held = new Map()
   const scheduled = new Set()
   let userFirst=false
@@ -98,7 +98,7 @@ export function mountBuddy(source, mountView = mountBuddyView) {
       pad.removeAttribute('data-playing'); pad.removeAttribute('data-pc-playing');
       /** @type {HTMLButtonElement} */ (pad).disabled = false
     })
-    pianoKeys.forEach(key => key.removeAttribute('data-pc-playing'))
+    pianoKeys.forEach(key => { key.removeAttribute('data-pc-playing'); key.removeAttribute('data-playing') })
     view.speaking = false; view.line = selectedLine(); view.hideContinue = true; view.hideJoin = true; view.hideImitate = true
     source.refreshTransport()
     view.sessionRunning=false;view.turnProgress=0;view.turnRemaining=0
@@ -339,7 +339,7 @@ export function mountBuddy(source, mountView = mountBuddyView) {
     })
     pianoKeys.forEach(key => {
       const midi=Number(/** @type {HTMLElement} */ (key).dataset.midi)
-      const userPlaying=[...held.values()].some(note=>note.midi===midi)
+      const userPlaying=[...held.values()].some(note=>note.midi===midi && !note.screen)
       if(key.hasAttribute('data-playing')!==userPlaying)key.toggleAttribute('data-playing',userPlaying)
       const playing = sounding.has(midi)
       if (key.hasAttribute('data-pc-playing') !== playing) key.toggleAttribute('data-pc-playing', playing)
@@ -413,8 +413,8 @@ export function mountBuddy(source, mountView = mountBuddyView) {
       if (ticket === generation && !active) preparing = false
     }
   }
-  /** @param {number} step */
-  function attack(step, midiOverride = -1, glide = false) {
+  /** @param {number} step @param {number} midiOverride @param {boolean} glide @param {boolean} screen */
+  function attack(step, midiOverride = -1, glide = false, screen = false) {
     if (!active || held.has(step)) return
     const beat = position()
     if (beat < 0) return
@@ -435,7 +435,7 @@ export function mountBuddy(source, mountView = mountBuddyView) {
       lastRelease = 0
       view.line = '聴いてるよ'
     }
-    const note = {step, midi: pitch.midi, category: pitch.category, at: listening ? Math.min(phraseBeats() - .25, beat - listenStart) : beat % phraseBeats(), duration: 0.25, modulation:[{at:0,value:midiModulation}]}
+    const note = {step, screen, midi: pitch.midi, category: pitch.category, at: listening ? Math.min(phraseBeats() - .25, beat - listenStart) : beat % phraseBeats(), duration: 0.25, modulation:[{at:0,value:midiModulation}]}
     recorded.push(note); held.set(step, note)
     player.attack(pitch.midi,glide); source.reportNote(pitch.midi)
     pads[step]?.setAttribute('data-playing','')
@@ -546,5 +546,5 @@ export function mountBuddy(source, mountView = mountBuddyView) {
     const local=listening ? beat-listenStart : beat%phraseBeats()
     held.forEach(note=>{if(note.modulation && local>=note.at)note.modulation.push({at:Math.max(0,local-note.at),value:midiModulation})})
   }
-  return {harmonyChanged, styleChanged, timbreChanged, rememberModulation, setPlayMode, get autoPlay() { return labMode.value || sessionMode.value }, get active() { return active || preparing }, start, setMode, attack, attackMidi: (/** @type {number} */ midi, glide = false) => attack(100+midi,midi,glide), releaseMidi: (/** @type {number} */ midi) => release(100+midi), release, stop}
+  return {harmonyChanged, styleChanged, timbreChanged, rememberModulation, setPlayMode, get autoPlay() { return labMode.value || sessionMode.value }, get active() { return active || preparing }, start, setMode, attack, attackMidi: (/** @type {number} */ midi, glide = false, screen = false) => attack(100+midi,midi,glide,screen), releaseMidi: (/** @type {number} */ midi) => release(100+midi), release, stop}
 }

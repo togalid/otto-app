@@ -159,6 +159,9 @@ export class DrumSynth {
     this.instrument = instrument
   }
   timbre = 'acoustic'
+  pitchBend = 0
+  /** @param {number} value */
+  setPitchBend(value) { this.pitchBend = Math.max(-1, Math.min(1, value)) }
   volume = 0.35
   /** @param {number} value */
   setVolume(value) {
@@ -171,7 +174,7 @@ export class DrumSynth {
     if (!tone || !['kick', 'snare', 'hat'].includes(sound)) return
     tone.timbre = this.timbre
     tone.setVolume(this.volume)
-    tone.hitAt(sound, time, velocity, duration, pitch, accent)
+    tone.hitAt(sound, time, velocity, duration, (pitch ?? 0) + this.pitchBend * 2, accent)
   }
   silence() {
     this.instrument.engine?.drums.silence()

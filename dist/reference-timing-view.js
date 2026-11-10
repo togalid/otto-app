@@ -1,3 +1,4 @@
+import { mountPlayhead } from './transport-view.js'
 import { createKeyPreview } from './reference-key-preview.js'
 import { timingGrid } from './reference-timing-grid.js'
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
@@ -14,6 +15,7 @@ import { keyFromDegree, keys, presets } from './music.js'
  * section: ()=>number, preset: ()=>string, choosePreset: (id:string)=>void,
  * playbackHeads: Map<number,number>, waveformStartBeats: Map<number,number>,
  * playFromBar: (bar:number)=>void,
+ * playhead?: import('./transport-view.js').PlayheadActions,
  * bindKnobDrag: (input:HTMLInputElement,sensitivity:number,integer?:boolean)=>void
  * }} options
  */
@@ -68,8 +70,7 @@ export function mountReferenceTiming(host, options) {
     '5',
     '7',
   ]
-  let manualPage = false,
-    wasPlaying = false,
+  let wasPlaying = false,
     zoomFrame = 0,
     zoomTarget = 2,
     gridSignature = ''
@@ -174,7 +175,6 @@ export function mountReferenceTiming(host, options) {
     view.aligned = !view.aligned
     view.speakerX = null
     if (!view.aligned) {
-      manualPage = false
       view.page = 0
       waveformStartBeats.clear()
       selectedBeat = null
@@ -183,7 +183,6 @@ export function mountReferenceTiming(host, options) {
     }
     endDrag()
     if (view.aligned) {
-      manualPage = false
       selectedBeat = 0
       playbackHeads.set(progression.selectedSection, 0)
       waveformStartBeats.set(progression.selectedSection, 0)
@@ -215,7 +214,6 @@ export function mountReferenceTiming(host, options) {
       1,
       Math.min(16, zoomTarget * (direction > 0 ? 2 : 0.5)),
     )
-    manualPage = false
     cancelAnimationFrame(zoomFrame)
     const from = view.bars,
       started = performance.now()
@@ -229,19 +227,6 @@ export function mountReferenceTiming(host, options) {
       if (t < 1) zoomFrame = requestAnimationFrame(animate)
     }
     zoomFrame = requestAnimationFrame(animate)
-  }
-  /** @param {number} direction */
-  function page(direction) {
-    const maxPage = Math.max(
-      0,
-      Math.ceil(
-        ((reference.duration - player.getTiming(section())) / seconds()) *
-          view.bars,
-      ) - 1,
-    )
-    view.page = Math.max(0, Math.min(maxPage, view.page + direction))
-    manualPage = true
-    updateTimingPreview()
   }
   /** @param {number} value */
   function setTempo(value) {
@@ -268,20 +253,18 @@ export function mountReferenceTiming(host, options) {
       0,
       player.getPosition() - player.getTiming(section()),
     )
-    if (!manualPage) {
-      const focus =
-        view.aligned && reference.playing
-          ? elapsed
-          : view.aligned && selectedBeat !== null
-            ? (selectedBeat * 60) / Math.max(40, Number(tempo.value))
-            : 0
-      view.page = view.aligned
-        ? Math.max(
-            0,
-            Math.floor((focus / duration) * view.bars - view.bars * 0.75),
-          )
-        : 0
-    }
+    const focus =
+      view.aligned && reference.playing
+        ? elapsed
+        : view.aligned && selectedBeat !== null
+          ? (selectedBeat * 60) / Math.max(40, Number(tempo.value))
+          : 0
+    view.page = view.aligned
+      ? Math.max(
+          0,
+          Math.floor((focus / duration) * view.bars - view.bars * 0.75),
+        )
+      : 0
     refreshGrid()
     if (redraw || !view.path)
       view.path = player.timingWaveform(
@@ -616,34 +599,7 @@ export function mountReferenceTiming(host, options) {
               ),
             ),
           ]),
-          h('div', { class: 'style-stepper timing-navigation' }, [
-            ...[-1, 1].map((direction) =>
-              h(
-                'button',
-                {
-                  type: 'button',
-                  'data-nudge': direction,
-                  'aria-label':
-                    direction < 0
-                      ? '開始位置を少し戻す'
-                      : '開始位置を少し進める',
-                },
-                direction < 0 ? '←' : '→',
-              ),
-            ),
-            ...[-1, 1].map((direction) =>
-              h(
-                'button',
-                {
-                  type: 'button',
-                  'aria-label':
-                    direction < 0 ? '波形を1小節前へ' : '波形を1小節先へ',
-                  onClick: () => page(direction),
-                },
-                direction < 0 ? '〈' : '〉',
-              ),
-            ),
-          ]),
+          h('div', { class: 'reference-playhead-host' }),
           h(
             'button',
             {
@@ -681,11 +637,15 @@ export function mountReferenceTiming(host, options) {
               'aria-pressed': view.matching,
               onClick: listenKey,
             },
-            view.keyRetry
-              ? '再試行：最初の1拍を聴く'
-              : view.matching
-                ? '■ 聴き比べを停止'
-                : '▶ 最初の1拍を聴き比べる',
+            [
+              h('span', view.keyRetry
+                ? '再試行：最初の1拍を聴く'
+                : view.matching
+                  ? '■ 聴き比べを停止'
+                  : '▶ 最初の1拍を聴き比べる'),
+              ...['再試行：最初の1拍を聴く', '■ 聴き比べを停止', '▶ 最初の1拍を聴き比べる']
+                .map(label => h('span', {class: 'key-listen-measure', 'aria-hidden': 'true'}, label)),
+            ],
           ),
           h('label', { class: 'key-match-control' }, [
             'ルート音',
@@ -771,43 +731,10 @@ export function mountReferenceTiming(host, options) {
       integer,
     )
   const listeners = new window.AbortController()
-  /** @type {(() => void)[]} */
-  const stopRepeats = []
-  host.querySelectorAll('button[data-nudge]').forEach((element) => {
-    const button = /** @type {HTMLButtonElement} */ (element),
-      direction = Number(button.dataset.nudge)
-    /** @type {ReturnType<typeof setTimeout>|undefined} */
-    let timer
-    const stop = () => {
-      clearTimeout(timer)
-      timer = undefined
-    }
-    stopRepeats.push(stop)
-    const step = () =>
-      commitTiming(player.getTiming(section()) + direction * 0.01)
-    button.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0) return
-      event.preventDefault()
-      button.setPointerCapture(event.pointerId)
-      step()
-      timer = setTimeout(function repeat() {
-        step()
-        timer = setTimeout(repeat, 70)
-      }, 350)
-    }, {signal: listeners.signal})
-    for (const name of [
-      'pointerup',
-      'pointercancel',
-      'lostpointercapture',
-      'blur',
-    ])
-      button.addEventListener(name, stop, {signal: listeners.signal})
-    window.addEventListener('blur', stop, {signal: listeners.signal})
-    document.addEventListener('visibilitychange', stop, {signal: listeners.signal})
-    button.addEventListener('click', (event) => {
-      if (event.detail === 0) step()
-    }, {signal: listeners.signal})
-  })
+  const playheadHost = host.querySelector('.reference-playhead-host')
+  const playhead = options.playhead && playheadHost
+    ? mountPlayhead(options.playhead, playheadHost)
+    : undefined
   window.addEventListener('blur', endDrag, {signal: listeners.signal})
   document.addEventListener('reference-removed', endDrag, {signal: listeners.signal})
   document.addEventListener('reference-playback-start', (event) => {
@@ -834,7 +761,6 @@ export function mountReferenceTiming(host, options) {
   }, {signal: listeners.signal})
   document.addEventListener('reference-loaded', () => {
     progression.referenceBpm = Number(tempo.value)
-    manualPage = false
     view.page = 0
     tempo.dispatchEvent(new Event('input', { bubbles: true }))
     stopKeyMatch()
@@ -859,7 +785,6 @@ export function mountReferenceTiming(host, options) {
       /** @type {CustomEvent<{position:number,playing:boolean}>} */ (event)
         .detail
     if (detail.playing && !wasPlaying) {
-      manualPage = false
       updateTimingPreview()
     }
     wasPlaying = detail.playing
@@ -874,7 +799,7 @@ export function mountReferenceTiming(host, options) {
             ),
           )
         : 0
-      if (!manualPage && nextPage !== view.page) updateTimingPreview()
+      if (nextPage !== view.page) updateTimingPreview()
       const x = Math.max(
         0,
         Math.min(
@@ -893,11 +818,11 @@ export function mountReferenceTiming(host, options) {
   function unmount() {
     if (listeners.signal.aborted) return
     listeners.abort()
-    stopRepeats.forEach(stop => stop())
+    playhead?.unmount()
     if (zoomFrame) cancelAnimationFrame(zoomFrame)
     endDrag()
     stopKeyMatch()
     app.unmount()
   }
-  return { updateTimingPreview, unmount }
+  return { updateTimingPreview, unmount, playhead }
 }

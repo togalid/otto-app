@@ -1114,12 +1114,13 @@ document.querySelector('#track-grid')?.addEventListener('click', event => {
   const part = button instanceof HTMLElement ? button.dataset.track : undefined
   if (part && ['melody','bass','drums','chord'].includes(part)) midiPart = part
 })
-mountMidiInput({
-  transpose:()=>midiPart==='melody' && document.querySelector('#piano-keys')?.getAttribute('data-magic')==='true'?activeKey:0,
+const midiInput = mountMidiInput({
+  transpose:()=>document.body.dataset.appMode === 'free' && midiPart==='melody' && document.querySelector('#piano-keys')?.getAttribute('data-magic')==='true'?activeKey:0,
   bend:value=>{ if(document.body.dataset.appMode !== 'free')return; if(midiPart==='melody')instrument.setPitchBend(value); else if(midiPart==='chord')chordInstrument.setPitchBend(value); else if(midiPart==='bass')bass.setPitchBend(value); else if(midiPart==='drums')drums.setPitchBend(value) },
   modulation:value=>{if(document.body.dataset.appMode !== 'free')return;if(midiPart==='melody'){instrument.setModulation(value);buddyController?.rememberModulation(value)}else if(midiPart==='bass')bass.setModulation(value)},
   ready: async () => { await Promise.all([instrument.ready(), chordInstrument.ready()]) },
   attack:midi=>{
+    if(document.body.dataset.appMode === 'tutorial') { midiDestinations.set(midi,'tutorial'); tutorialView?.midiAttack(midi); return }
     if(document.body.dataset.appMode !== 'free')return
     const part=midiPart
     midiDestinations.set(midi,part)
@@ -1134,7 +1135,7 @@ mountMidiInput({
       if(time!==undefined)drums.hitAt(sound,time+.01,.85,duration,pitch,index===7)
     }
   },
-  release:midi=>{const part=midiDestinations.get(midi);midiDestinations.delete(midi);if(part==='melody')magicVoice.release(midi);else if(part==='chord')chordInstrument.release(midi)},
+  release:midi=>{const part=midiDestinations.get(midi);midiDestinations.delete(midi);if(part==='tutorial')tutorialView?.midiRelease(midi);else if(part==='melody')magicVoice.release(midi);else if(part==='chord')chordInstrument.release(midi)},
 })
 buddyController = mountBuddy({
   progression, instrument, drums,
@@ -1507,7 +1508,7 @@ refreshSectionKnobs = mountSectionKnobs({
 mountMobileLayout()
 
 
-mountModeMenu(() => {
+const tutorialView = mountModeMenu(() => {
   for (const index of heldPads.keys()) releasePad(index)
   chordInstrument.silence()
   bass.silence()
@@ -1516,4 +1517,4 @@ mountModeMenu(() => {
   progression.stop()
   magicVoice.stop()
   instrument.silence()
-})
+}, () => midiInput.connect())

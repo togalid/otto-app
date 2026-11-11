@@ -415,8 +415,8 @@ export function mountMobileLayout() {
   resize()
 }
 
-/** @param {() => void} stopPlayback */
-export function mountModeMenu(stopPlayback) {
+/** @param {() => void} stopPlayback @param {() => Promise<string>} connectMidi */
+export function mountModeMenu(stopPlayback, connectMidi) {
   const free = /** @type {HTMLElement} */ (document.querySelector('.shell'))
   const menu = /** @type {HTMLElement} */ (document.querySelector('#mode-menu'))
   const tutorial = /** @type {HTMLElement} */ (document.querySelector('#tutorial-menu'))
@@ -434,7 +434,7 @@ export function mountModeMenu(stopPlayback) {
     if (target instanceof HTMLElement) target.focus()
     else if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
   }
-  const tutorialView = mountTutorial(tutorial, open)
+  const tutorialView = mountTutorial(tutorial, open, connectMidi)
   document.querySelectorAll('[data-open-mode]').forEach(button => {
     button.addEventListener('click', () => open(button.getAttribute('data-open-mode') ?? 'menu'))
   })
@@ -458,4 +458,5 @@ export function mountModeMenu(stopPlayback) {
   }
   free.hidden = true
   if (developmentTutorial) open('tutorial')
+  return tutorialView
 }

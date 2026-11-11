@@ -3121,7 +3121,7 @@ body[data-app-mode='tutorial'] > .shell,
 .tutorial-screen h1 { font-size:16px; margin:0; font-weight:600; color:var(--oto-muted); }
 .tutorial-companion { display:flex; gap:14px; align-items:center; height:128px; }
 .tutorial-companion .talk-avatar { flex:0 0 76px; width:76px; height:76px; }
-.tutorial-screen .tutorial-message { flex:1; min-width:0; box-sizing:border-box; height:100%; overflow-y:auto; text-align:left; line-height:1.6; margin:0; padding:12px 16px; border-radius:7px; background:var(--oto-key); }
+.tutorial-screen .tutorial-message { display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; flex:1; min-width:0; box-sizing:border-box; height:100%; overflow-y:auto; text-align:left; line-height:1.6; margin:0; padding:12px 16px; border-radius:7px; background:var(--oto-key); }
 .tutorial-message span, .tutorial-message small { display:block; }
 .tutorial-message small { margin-top:6px; font-size:11px; color:var(--oto-muted); }
 .tutorial-caption { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:14px; margin-bottom:10px; }
@@ -3136,10 +3136,13 @@ body[data-app-mode='tutorial'] > .shell,
   .tutorial-slide-finger { display:none; }
 }
 .tutorial-demo-keys .active { background:var(--oto-selection); color:var(--oto-selection-ink); box-shadow:var(--oto-recess); }
-.tutorial-navigation { background:var(--oto-display); color:var(--oto-display-ink); border-radius:7px; padding:16px; }
+.tutorial-navigation { --tutorial-background:var(--oto-display); background:var(--tutorial-background); color:var(--oto-display-ink); border-radius:7px; padding:16px; }
+:root[data-skin='milk'] .tutorial-navigation { --tutorial-background:var(--oto-case-low); color:var(--oto-ink); }
 .tutorial-note-lane { position:relative; height:100px; overflow:hidden; }
+.tutorial-subdivision { position:absolute; top:0; bottom:0; border-left:1px dotted var(--oto-seam); opacity:.35; pointer-events:none; }
+.tutorial-subdivision-eighth { opacity:.65; }
 .tutorial-beat-grid { position:absolute; top:0; bottom:0; width:25%; border-left:1px solid var(--oto-seam); padding-left:6px; font-size:11px; opacity:.6; }
-.tutorial-note { position:absolute; box-sizing:border-box; min-height:26px; padding:3px 8px; border-radius:7px; background:var(--oto-key); color:var(--oto-ink); border-right:3px solid var(--oto-display); font-size:12px; }
+.tutorial-note { position:absolute; box-sizing:border-box; min-height:26px; padding:3px 8px; border-radius:7px; background:var(--oto-key); color:var(--oto-ink); border-right:3px solid var(--tutorial-background); font-size:12px; }
 .tutorial-playhead { position:absolute; top:22px; bottom:0; width:3px; background:var(--oto-accent); }
 .tutorial-feedback { min-height:20px; margin:0; font-size:13px; line-height:1.5; }
 .tutorial-navigation-copy { min-width:0; flex:1; }
@@ -3165,8 +3168,9 @@ body[data-app-mode='tutorial'] > .shell,
 .tutorial-screen .tutorial-white { font-size:13px; white-space:nowrap; }
 
 .tutorial-note { overflow:hidden; display:grid; place-items:center; padding-inline:0; }
-.tutorial-played { position:absolute; top:0; bottom:0; background:#f4d75d; }
+.tutorial-played { position:absolute; top:0; bottom:0; border-radius:inherit; background:#f4d75d; box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--oto-ink) 25%, transparent); }
 .tutorial-note-label { position:relative; white-space:nowrap; }
+.tutorial-note-symbol { display:block; width:12px; height:18px; color:inherit; }
 
 .tutorial-score { position:relative; width:68px; height:68px; color:var(--oto-ink); flex:none; pointer-events:none; }
 .tutorial-score svg { width:100%; height:100%; }
@@ -3214,35 +3218,53 @@ body[data-app-mode='tutorial'] > .shell,
 }
 
 .tutorial-slide-track {
-  position:absolute; top:34px; left:0; height:54px;
+  position:absolute; top:22px; left:0; height:78px;
   background:var(--oto-key);
-  clip-path:polygon(0 4px,4px 0,calc(100% - 4px) 52%,100% calc(52% + 4px),100% calc(100% - 4px),calc(100% - 4px) 100%,4px 48%,0 calc(48% - 4px));
+  clip-path:polygon(0 4px,4px 0,calc(100% - 4px) 36%,100% calc(36% + 4px),100% calc(100% - 4px),calc(100% - 4px) 100%,4px 64%,0 calc(64% - 4px));
 }
 .tutorial-slide-track[data-up='true'] {
-  clip-path:polygon(0 calc(52% + 4px),4px 52%,calc(100% - 4px) 0,100% 4px,100% calc(48% - 4px),calc(100% - 4px) 48%,4px 100%,0 calc(100% - 4px));
+  clip-path:polygon(0 calc(36% + 4px),4px 36%,calc(100% - 4px) 0,100% 4px,100% calc(64% - 4px),calc(100% - 4px) 64%,4px 100%,0 calc(100% - 4px));
 }
-.tutorial-slide-fill { height:100%; background:#f4d75d; }
+.tutorial-slide-fill { height:100%; background:#f4d75d; box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--oto-ink) 25%, transparent); }
 .tutorial-note.tutorial-slide-note {
   background:transparent; border:0; min-height:0;
-  padding:0 3px; overflow:visible; transform:translateY(-50%);
+  padding:0 3px; overflow:visible; transform:translateY(-50%); display:flex; flex-direction:column; align-items:center; line-height:1.1;
 }
 
 .tutorial-screen .tutorial-white.tutorial-avoid:not(.active) { background:color-mix(in srgb, var(--oto-ink) 24%, var(--oto-key)); color:var(--oto-ink); }
 
-@media (prefers-reduced-motion: no-preference) {
-  .tutorial-screen .tutorial-white.tutorial-avoid-flash:not(.active) {
-    animation:tutorial-avoid-flash 1s ease-in-out infinite alternate;
-  }
-  @keyframes tutorial-avoid-flash {
-    from { background:var(--oto-key); }
-    to { background:color-mix(in srgb, var(--oto-ink) 40%, var(--oto-key)); }
-  }
-}
+
 
 .tutorial-note.tutorial-connected-note {
-  border-right:0; border-radius:0;
+  border-right:0; border-radius:0; justify-items:start; padding-inline:6px;
 }
 .tutorial-note.tutorial-connected-first { border-radius:7px 0 0 7px; }
 .tutorial-note.tutorial-connected-last { border-radius:0 7px 7px 0; }
 
 .tutorial-note.tutorial-connected-first.tutorial-connected-last { border-radius:7px; }
+
+@media (max-height:540px) {
+  .tutorial-companion:has(.tutorial-complete) { height:auto; min-height:64px; }
+  .tutorial-companion:has(.tutorial-complete) .tutorial-message { height:auto; }
+}
+
+/* Duration rows in the tutorial rhythm guide. */
+.tutorial-rhythm-lane { height:174px; }
+.tutorial-rhythm-lane .tutorial-note {
+  height:28px; min-height:28px; display:flex; align-items:center;
+  justify-content:flex-start; padding:0 6px; border-right:0; border-radius:7px;
+}
+.tutorial-rhythm-lane .tutorial-note-label { line-height:1; font-size:16px; }
+.tutorial-rhythm-lane .tutorial-subdivision { border-left-style:dashed; opacity:.45; }
+.tutorial-rhythm-lane .tutorial-subdivision-eighth { opacity:.8; }
+@media (max-width:600px) {
+  .tutorial-rhythm-lane .tutorial-note { padding:0 2px; }
+  .tutorial-rhythm-lane .tutorial-note-label { font-size:14px; }
+}
+
+@media (max-width:600px) {
+  .tutorial-note.tutorial-connected-note { padding-inline:2px; }
+}
+
+.tutorial-slide-symbol { display:flex; align-items:center; height:17px; font-size:15px; }
+.tutorial-slide-symbol .tutorial-note-symbol { width:10px; height:16px; }

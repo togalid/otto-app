@@ -9,12 +9,22 @@
 const slide = (pitches,spacing) => pitches.map((midi,i)=>({beat:i*spacing,midi,duration:.25}))
 const fifthUp = slide([60,62,64,65,67],.5)
 const fifthDown = slide([67,65,64,62,60],.5)
-const octaveRhythm = [0,.5,1,1.5,2,2.25,2.5,2.75]
-const octaveUp = [60,62,64,65,67,69,71,72].map((midi,i)=>({beat:octaveRhythm[i],midi,duration:.25}))
-const octaveDown = [72,71,69,67,65,64,62,60].map((midi,i)=>({beat:octaveRhythm[i],midi,duration:.25}))
+const octaveRhythm = [0,.25,.5,.75,1,1.5,2,2.5]
+const octaveUpRhythm = [0,.5,1,1.5,2,2.25,2.5,2.75]
+const octaveUp = [60,62,64,65,67,69,71,72].map((midi,i)=>({beat:octaveUpRhythm[i],midi,duration:i < 4 ? .5 : .25}))
+const octaveDown = [72,71,69,67,65,64,62,60].map((midi,i)=>({beat:octaveUpRhythm[i],midi,duration:i < 4 ? .5 : .25}))
+const octaveUpFast = [60,62,64,65,67,69,71,72].map((midi,i)=>({beat:octaveRhythm[i],midi,duration:i < 4 ? .25 : .5}))
+const octaveDownFast = [72,71,69,67,65,64,62,60].map((midi,i)=>({beat:octaveRhythm[i],midi,duration:i < 4 ? .25 : .5}))
 /** @param {readonly number[]} beats */
 const rhythm = beats => beats.map((beat,i)=>({beat,midi:[60,64,67,69,62,72][i%6],duration:.25}))
 export const tutorialPentatonic = [60,62,64,67,69,72]
+
+/** @param {number} lessonIndex @param {number} midi */
+export function isTutorialFreePitch(lessonIndex, midi) {
+  return lessonIndex === 7
+    ? [60,62,64,65,67,69,71,72].includes(midi)
+    : tutorialPentatonic.includes(midi)
+}
 
 /** @type {readonly TutorialLesson[]} */
 export const lessons = [
@@ -24,17 +34,20 @@ export const lessons = [
   { title: '短く、長く', messages: ['短い音と、長い音をつなげよう。', '「ド・レ・ミー」。最後のミを長めにね。'], notes: [{beat:0,midi:60,duration:.35},{beat:.5,midi:62,duration:.35},{beat:1,midi:64,duration:2}] },
   { title: '小さなメロディ', messages: ['最後は、ここまでの音をつないだメロディ！', '「ド・ミ・レ・ド」。4回やりとりできたらゴールだよ。'], notes: [{beat:0,midi:60,duration:.7},{beat:1,midi:64,duration:.7},{beat:2,midi:62,duration:.7},{beat:3,midi:60,duration:.8}] },
   { title: 'ドからソへスライド', messages: ['指やマウスを押したまま、ドからソまで滑らせてみよう。', '途中のレ・ミ・ファも通るよ。上ったら、次はソからドへ下ろそう。', 'ぼくと交代で、上り・下りを2回ずつやってみよう！'], notes:fifthUp, patterns:[fifthUp,fifthDown] },
-  { title: '高いドまでスライド', messages: ['今度はドから高いドまで、ひと息でスライド！', '次は高いドから低いドへ。白い鍵盤をなぞって、下りも楽しもう。', 'ぼくの速さを聴いて、上り・下りを交代でやってみよう！'], notes:octaveUp, patterns:[octaveUp,octaveDown] },
-  { title: '好きな音でリズム', freePitch:true, messages: ['ここからは、リズムに合わせて好きな鍵盤を押してみよう。', 'ファとシは不協和音になりやすいから、白い鍵盤だけつかおう。', '白い鍵盤なら、どこを押してもいいよ。リズムに合わせて弾いてみよう。'], notes:rhythm([0,2]), earlyPhrases:[
+  { title: '高いドまでスライド', messages: ['今度はドから高いドまで、ひと息でスライド！', '次は高いドから低いドへ。白い鍵盤をなぞって、下りも楽しもう。', 'ぼくの速さを聴いて、上り・下りを交代でやってみよう！'], notes:octaveUp, patterns:[octaveUp,octaveDown,octaveUpFast,octaveDownFast] },
+  { title: '好きな音でリズム', freePitch:true, messages: ['スライドを使って弾いてみよう！'], notes:rhythm([0,2]), earlyPhrases:[
     [{beat:0,midi:60,duration:1},{beat:2,midi:67,duration:1}],
-    [{beat:0,midi:69,duration:1},{beat:2,midi:62,duration:1}],
+    [{beat:0,midi:69,duration:1},{beat:2,midi:64,duration:1}],
   ], laterPhrases:[
     [60,62,64,60,67].map((midi,i)=>({beat:i*.5,midi,duration:.5})),
-    [67,64,62,60,62].map((midi,i)=>({beat:i*.5,midi,duration:.5})),
+    [67,64,62,60,60].map((midi,i)=>({beat:i*.5,midi,duration:i === 4 ? 1 : .5})),
   ] },
-  { title: '自分だけのメロディ', freePitch:true, messages: ['最後は短い音も混ぜて、自分だけのメロディ！', 'ぼくのリズムに合わせて、好きな白い鍵盤を弾こう。', '5小節目からは、スライドも使ってみよう！'], notes:rhythm([0,.5,1.5,2,3,3.5]), laterPhrases:[
+  { title: '自分だけのメロディ', freePitch:true, messages: ['最後は短い音も混ぜて、自分だけのメロディ！', 'ぼくのリズムに合わせて、好きな白い鍵盤を弾こう。', '5小節目からは、スライドも使ってみよう！'], notes:rhythm([0,.5,1.5,2,3,3.5]), earlyPhrases:[
+    [{beat:0,midi:60,duration:.25},{beat:.5,midi:64,duration:.25},{beat:1.5,midi:64,duration:.25},{beat:2,midi:62,duration:.25},{beat:3,midi:60,duration:.25},{beat:3.5,midi:64,duration:.25}],
+    [{beat:0,midi:67,duration:.25},{beat:.5,midi:69,duration:.25},{beat:1.5,midi:67,duration:.25},{beat:2,midi:69,duration:.25},{beat:3,midi:67,duration:.25},{beat:3.5,midi:60,duration:.25}],
+  ], laterPhrases:[
     [{beat:0,midi:64,duration:.5},{beat:.5,midi:67,duration:.5},{beat:1,midi:69,duration:1},{beat:2.5,midi:67,duration:.5},{beat:3,midi:64,duration:1}],
-    [{beat:0,midi:67,duration:.5},{beat:.5,midi:69,duration:.5},{beat:1.5,midi:72,duration:1},{beat:2.5,midi:69,duration:.5},{beat:3,midi:67,duration:1}],
+    [{beat:0,midi:60,duration:.5},{beat:.5,midi:62,duration:.5},{beat:1,midi:64,duration:1},{beat:2,midi:62,duration:.5},{beat:2.5,midi:60,duration:1.5}],
   ] },
 ]
 
@@ -77,6 +90,20 @@ export function shortNoteTarget(notes, midi, absoluteBeat, anyPitch = false) {
     if (note) return {bar,note}
   }
   return undefined
+}
+
+/** Merge touching recorded intervals while preserving real gaps.
+ * @param {readonly {start:number,end:number}[]} segments
+ */
+export function mergePlayedSegments(segments) {
+  /** @type {Array<{start:number,end:number}>} */
+  const merged = []
+  for (const segment of [...segments].sort((a,b) => a.start-b.start)) {
+    const last = merged[merged.length-1]
+    if (last && segment.start <= last.end + .001) last.end = Math.max(last.end,segment.end)
+    else merged.push({...segment})
+  }
+  return merged
 }
 
 /** Whether the displayed yellow segments cover every note in the response bar.
@@ -160,8 +187,9 @@ export function createTutorialPlayer({voice,onUpdate,accompaniment,setTimer = (c
         return phrase.map((note, noteIndex) => {
           const next = phrase[noteIndex + 1]
           // Keep the mono voice held until the next key takes over.
-          const duration = (lesson.patterns || ((index === 7 || index === 8) && round >= 2 && next && note.beat + note.duration >= next.beat - .001)) && next
-            ? (next.beat - note.beat) * tutorialBeatSeconds + .01
+          const connected = (lesson.patterns || ((index === 7 || index === 8) && round >= 2 && next && note.beat + note.duration >= next.beat - .001)) && next
+          const duration = connected
+            ? (next.beat - note.beat) * tutorialBeatSeconds + (next.midi === note.midi ? -.025 : .01)
             : note.duration * tutorialBeatSeconds
           return {midi:note.midi, time:startTime + (round * 8 + note.beat) * tutorialBeatSeconds, duration}
         })

@@ -201,6 +201,7 @@ export function mountMidiInput(source) {
  window.addEventListener('blur',silence)
  window.addEventListener('pagehide',silence)
  document.addEventListener('visibilitychange',()=>{if(document.hidden)silence()})
+ return {connect:async()=>{if(button.disabled)return 'MIDI非対応';await connect();return button.textContent ?? 'MIDI接続'}}
 }
 
 /** Shared note lifecycle for screen and MIDI keyboards.

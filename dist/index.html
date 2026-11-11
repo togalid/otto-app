@@ -14,8 +14,18 @@
     <script type="module" src="./app.js"></script>
     <script type="module" src="./skins.js"></script>
   </head>
-  <body>
+  <body data-app-mode="menu">
+    <section id="mode-menu" class="mode-screen" aria-labelledby="mode-menu-title">
+      <h1 id="mode-menu-title" tabindex="-1">Ottoと音であそぼう</h1>
+      <div class="mode-choices">
+        <button type="button" data-open-mode="tutorial"><strong>チュートリアルモード</strong><span>Ottoのお手本を聴いて、真似してみよう</span></button>
+        <button type="button" data-open-mode="free"><strong>フリー演奏モード</strong><span>好きなスタイルで、一緒に演奏しよう</span></button>
+      </div>
+    </section>
+    <section id="tutorial-menu" class="tutorial-screen" aria-label="チュートリアル" hidden>
+    </section>
     <div class="shell">
+      <button type="button" class="mode-back" data-open-mode="menu">← メニュー</button>
       <header class="player-header">
         <div class="player-left"><div class="player-brand">
         <a class="logo" href="./" aria-label="Otto ホーム">

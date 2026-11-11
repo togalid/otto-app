@@ -1,3 +1,4 @@
+import { mountTutorial, developmentTutorial } from './tutorial-view.js'
 import { createApp, h } from './vendor/vue.runtime.esm-browser.prod.js'
 import { genres } from './groove.js'
 import { presets, notes, melodyPalette, melodyRole, displayChordParts } from './music.js'
@@ -258,4 +259,203 @@ document.addEventListener('change', event => {
 
 
 return {animatePartChange, refreshBuddyLook}
+}
+
+/** Mobile practice guide. The audio clock supplies timing; animation never schedules sound.
+ * @param {() => number | undefined} clock */
+export function mountMobileGuide(clock) {
+  const board = /** @type {HTMLElement} */ (document.querySelector('#piano-keys'))
+  const scroll = /** @type {HTMLElement} */ (document.querySelector('#piano-scroll'))
+  const host = document.createElement('section')
+  host.className = 'mobile-guide'
+  host.setAttribute('aria-label', '演奏ナビゲーション')
+  host.innerHTML = '<div class="mobile-guide-heading"><strong>Otto</strong><span>鍵盤を見てみよう</span></div><div class="mobile-otto-keys" aria-label="Ottoの演奏" role="img"></div><div class="mobile-guide-label">線に重なったら、同じ音を弾こう</div><div class="mobile-guide-lane" aria-hidden="true"><div class="mobile-guide-line"></div><div class="mobile-guide-notes"></div></div><div class="mobile-guide-feedback" role="status" aria-live="polite">再生して、一緒に弾こう</div><strong class="mobile-user-label">あなた</strong>'
+  scroll.before(host)
+  const keys = /** @type {HTMLElement} */ (host.querySelector('.mobile-otto-keys'))
+  for (const label of ['ド','レ','ミ','ファ','ソ','ラ','シ','ド']) {
+    const key = document.createElement('span'); key.textContent = label; keys.append(key)
+  }
+  const lane = /** @type {HTMLElement} */ (host.querySelector('.mobile-guide-notes'))
+  const feedback = /** @type {HTMLElement} */ (host.querySelector('.mobile-guide-feedback'))
+  /** @type {{time:number,midi:number,node:HTMLElement,hit:boolean}[]} */
+  let targets = []
+  let frame = 0
+  const pitches = [48,52,55,52]
+  const labels = ['ド','ミ','ソ','ミ']
+  const mobile = typeof matchMedia === 'function' ? matchMedia('(max-width: 600px)') : null
+  function render() {
+    frame = 0
+    const now = clock()
+    if (now === undefined || !mobile?.matches) return
+    targets = targets.filter(target => {
+      const distance = target.time - now
+      if (distance < -0.5) { target.node.remove(); return false }
+      target.node.style.left = `${12 + distance * 42}%`
+      return true
+    })
+    const active = new Set(Array.from(board.querySelectorAll('[data-pc-playing]'), key => Number(/** @type {HTMLElement} */ (key).dataset.midi) % 12))
+    ;[0,2,4,5,7,9,11,0].forEach((pitch,index) => keys.children[index]?.toggleAttribute('data-playing', active.has(pitch)))
+    if (targets.length) frame = requestAnimationFrame(render)
+  }
+  /** @param {number} startBeat @param {number} time @param {number} beatSeconds @param {number} beats */
+  function schedule(startBeat, time, beatSeconds, beats) {
+    if (!mobile?.matches || !Number.isFinite(beatSeconds) || beatSeconds <= 0) return
+    for (let beat = Math.ceil(startBeat); beat < beats; beat++) {
+      const node = document.createElement('span'); node.className = 'mobile-guide-note'; node.textContent = labels[beat % 4]
+      lane.append(node)
+      targets.push({time:time + (beat - startBeat) * beatSeconds,midi:pitches[beat % 4],node,hit:false})
+    }
+    if (!frame) frame = requestAnimationFrame(render)
+  }
+  /** @param {number} midi */
+  function hit(midi) {
+    if (!mobile?.matches) return
+    const now = clock()
+    if (now === undefined || !targets.length) { feedback.textContent = 'いい音！ 再生するとリズムが流れるよ'; return }
+    const target = targets.filter(note => !note.hit).sort((a,b) => Math.abs(a.time-now)-Math.abs(b.time-now))[0]
+    if (!target || Math.abs(target.time-now) > .25) { feedback.textContent = '線に重なったら押してみよう'; return }
+    if (midi % 12 !== target.midi % 12) { feedback.textContent = `${target.node.textContent}を押してみよう`; return }
+    target.hit = true
+    feedback.textContent = Math.abs(target.time-now) <= .10 ? 'Great!' : 'Good!'
+    target.node.dataset.hit = 'true'
+  }
+  function clear() {
+    cancelAnimationFrame(frame); frame = 0
+    targets.forEach(target => target.node.remove()); targets = []
+    Array.from(keys.children).forEach(key => key.removeAttribute('data-playing'))
+    feedback.textContent = '再生して、一緒に弾こう'
+  }
+  mobile?.addEventListener('change', clear)
+  return {schedule, hit, clear}
+}
+
+/** Arrange the existing controls for narrow screens without remounting them. */
+export function mountMobileLayout() {
+  if (typeof matchMedia !== 'function') return
+  const narrow = matchMedia('(max-width: 600px)')
+  const mixer = document.querySelector('main > .groove')
+  const transport = document.querySelector('#transport')
+  const grid = document.querySelector('#track-grid')
+  if (!mixer || !transport || !grid) return
+  const panel = document.createElement('section')
+  panel.className = 'mobile-performance-controls'
+  panel.setAttribute('aria-label', '演奏の設定')
+  panel.innerHTML = `
+    <div class="mobile-control-row">
+      <span>パート <strong class="mobile-part-name"></strong></span>
+      <div class="style-stepper">
+        <button type="button" aria-label="前のパート">←</button>
+        <button type="button" aria-label="次のパート">→</button>
+      </div>
+    </div>
+    <button type="button" class="mobile-control-row mobile-mixer-toggle" aria-expanded="false" aria-controls="mobile-performance-mixer">
+      <span>キー / テンポ</span><strong class="mobile-key-tempo"></strong><span>ミキサー</span>
+    </button>
+    <div class="mobile-control-row mobile-play-row"></div>`
+  mixer.id ||= 'mobile-performance-mixer'
+  mixer.before(panel)
+  const original = document.createComment('transport home')
+  transport.before(original)
+  const playRow = panel.querySelector('.mobile-play-row')
+  const toggle = /** @type {HTMLButtonElement} */ (panel.querySelector('.mobile-mixer-toggle'))
+  const partName = /** @type {HTMLElement} */ (panel.querySelector('.mobile-part-name'))
+  const keyTempo = /** @type {HTMLElement} */ (panel.querySelector('.mobile-key-tempo'))
+  const parts = ['メロディ', 'ドラム', 'ベース', 'バッキング']
+  const ids = ['melody', 'drums', 'bass', 'chord']
+  const partButtons = ids.map(id => /** @type {HTMLButtonElement|null} */ (grid.querySelector(`[data-track="${id}"]`)))
+  function selected() {
+    return partButtons.findIndex(button => button?.getAttribute('aria-pressed') === 'true')
+  }
+  function refresh() {
+    const index = selected()
+    partName.textContent = index < 0 ? '選択なし' : parts[index]
+    const key = document.querySelector('output[for="section-mixer-key"]')?.textContent
+    const tempo = /** @type {HTMLInputElement|null} */ (document.querySelector('#section-tempo-value'))
+    keyTempo.textContent = [key, tempo?.value].filter(Boolean).join(' / ')
+  }
+  panel.querySelectorAll('.style-stepper button').forEach((button, index) => {
+    button.addEventListener('click', () => {
+      const current = selected()
+      const next = current < 0 ? (index === 0 ? parts.length - 1 : 0) : (current + (index === 0 ? -1 : 1) + parts.length) % parts.length
+      partButtons[next]?.click()
+      refresh()
+    })
+  })
+  toggle.addEventListener('click', () => {
+    const open = toggle.getAttribute('aria-expanded') !== 'true'
+    toggle.setAttribute('aria-expanded', String(open))
+    mixer.toggleAttribute('data-mobile-mixer-open', open)
+  })
+  new MutationObserver(refresh).observe(mixer, {subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:['aria-pressed','value']})
+  mixer.addEventListener('input', refresh)
+  const melodyPanel = document.querySelector('#detail-melody')
+  const melodyTop = melodyPanel?.querySelector('.melody-top-row')
+  function placeTransport() {
+    if (!transport || !narrow.matches) return
+    const destination = melodyPanel?.matches(':not([hidden])') ? melodyTop : playRow
+    if (destination && transport.parentElement !== destination) destination.append(transport)
+  }
+  if (melodyPanel) new MutationObserver(placeTransport).observe(melodyPanel, {attributes:true, attributeFilter:['hidden']})
+  const guide = document.querySelector('#detail-melody .mobile-guide')
+  const keyboard = document.querySelector('#piano-scroll')
+  const keyboardHome = document.createComment('keyboard home')
+  guide?.before(keyboardHome)
+  function resize() {
+    if (!transport) return
+    if (narrow.matches) {
+      placeTransport()
+      if (guide && keyboard) melodyPanel?.append(guide, keyboard)
+    } else {
+      original.after(transport)
+      if (guide && keyboard) keyboardHome.after(guide, keyboard)
+    }
+    refresh()
+  }
+  narrow.addEventListener('change', resize)
+  resize()
+}
+
+/** @param {() => void} stopPlayback */
+export function mountModeMenu(stopPlayback) {
+  const free = /** @type {HTMLElement} */ (document.querySelector('.shell'))
+  const menu = /** @type {HTMLElement} */ (document.querySelector('#mode-menu'))
+  const tutorial = /** @type {HTMLElement} */ (document.querySelector('#tutorial-menu'))
+  /** @param {string} mode */
+  function open(mode) {
+    stopPlayback()
+    tutorialView.close()
+    document.body.dataset.appMode = mode
+    free.hidden = mode !== 'free'
+    menu.hidden = mode !== 'menu'
+    tutorial.hidden = mode !== 'tutorial'
+    if (mode === 'tutorial') tutorialView.open()
+    const target = mode === 'free' ? free.querySelector('.mode-back')
+      : mode === 'menu' ? document.querySelector('#mode-menu-title') : null
+    if (target instanceof HTMLElement) target.focus()
+    else if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  }
+  const tutorialView = mountTutorial(tutorial, open)
+  document.querySelectorAll('[data-open-mode]').forEach(button => {
+    button.addEventListener('click', () => open(button.getAttribute('data-open-mode') ?? 'menu'))
+  })
+  const logo = free.querySelector('.logo')
+  logo?.addEventListener('click', event => { event.preventDefault(); open('menu') })
+  for (const type of ['keydown', 'keyup']) {
+    document.addEventListener(type, event => {
+      if (document.body.dataset.appMode === 'tutorial' && event instanceof KeyboardEvent && event.key === ' ') {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        if (event.type === 'keydown' && !event.repeat) {
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+          tutorialView.advanceMessage()
+        }
+        return
+      }
+      if (document.body.dataset.appMode === 'free' || (event.target instanceof Node && tutorial.contains(event.target))) return
+      // Menu controls retain native keyboard activation without triggering performance shortcuts.
+      event.stopImmediatePropagation()
+    }, true)
+  }
+  free.hidden = true
+  if (developmentTutorial) open('tutorial')
 }

@@ -130,7 +130,7 @@ export function mountAccompanimentPlay(part, initialMode, face, setMode, play, o
       ]),
     ]),
     part === 'chord'
-      ? h('iframe', { class: 'backing-chord-pads', title: 'バッキングのコードパッド', src: '/chord-pad.html?embedded=1&backing=1', onLoad: onFrameLoad })
+      ? h('iframe', { class: 'backing-chord-pads', title: 'バッキングのコードパッド', src: './chord-pad.html?embedded=1&backing=1', onLoad: onFrameLoad })
       : h('div', { class: ['accompaniment-pads', { 'drum-pads': part === 'drums' }], role: 'group', 'aria-label': part === 'drums' ? 'ドラムパッド' : '演奏パッド' },
         padOrder.map(index => h('button', { type: 'button', class: 'pad', 'data-pad-index': String(index), onClick: () => play(index) }, [h('span', labels[index])]))),
   ] })

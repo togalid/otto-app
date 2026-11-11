@@ -10,6 +10,7 @@ The browser loads authored native ES modules from `dist/`. The transport, score,
 
 | Change | Read first | Focused tests |
 | --- | --- | --- |
+| Tutorial curriculum, eight-bar clock, dedicated lesson UI | `tutorial.js`, `tutorial-view.js`; mode lifecycle in `melody-view.js` | `tests/tutorial.test.mjs`, browser |
 | Instrument and chord choice menus | `choice-menu.js`, `part-steppers.js` | browser |
 | Score grid and part pattern controls | `chord-grid.js`, `backing-detail.js`, `part-steppers.js` | browser |
 | Harmony, chord labels | `chord-harmony.js`, `music.js`, `presets.js` | `music`, `presets` |
@@ -18,6 +19,7 @@ The browser loads authored native ES modules from `dist/`. The transport, score,
 | Drum grid and chord monitor | `drum-grid.js`, `chord-monitor.js` | browser |
 | Otto phrase planning | `otto-phrases.js`, `otto-style.js` | `otto-characterization`, `otto-lab`, `buddy` |
 | Otto interaction and scheduling | `buddy.js` | `buddy-render`, browser |
+| Mobile timing guide | `melody-view.js`, `app.js` scheduling hook, `keyboard.js` | browser, `app-settings` |
 | Melody pad feedback | `melody-view.js`, relevant `app.js` handler | `melody-view` |
 | Synth/mono/timbre | `audio.js`, `tone-engine.js`, `timbres.js` | `mono-line`, `tone-engine`, timbre tests |
 | Basic accompaniment | `backing.js`, `groove.js`, `rhythm.js` | matching tests |

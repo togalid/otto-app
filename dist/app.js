@@ -16,7 +16,7 @@ import { createChoiceMenu, mountSelectMenus } from './choice-menu.js'
 import { mountTransport, mountPlayhead } from './transport-view.js'
 import { mountDrumGrid } from './drum-grid.js'
 import { mountChordMonitor } from './chord-monitor.js'
-import { createMelodyView, mountMelodyPads, mountMelodyLayout, mountBuddyFeedback } from './melody-view.js'
+import { createMelodyView, mountMelodyPads, mountMelodyLayout, mountBuddyFeedback, mountMobileGuide, mountMobileLayout, mountModeMenu } from './melody-view.js'
 import { mountReferencePlayer } from './reference-player.js'
 const playerDisplay = mountReferenceControls()
 const referenceView = playerDisplay.state
@@ -59,6 +59,8 @@ import { BassSynth, genres, genreProgressions, createPartMixer, swungBassBeat } 
 
 /** @type {ReturnType<typeof mountBuddy> | undefined} */
 let buddyController
+/** @type {ReturnType<typeof mountMobileGuide> | undefined} */
+let mobileGuide
 const instrument = new Instrument('melody')
 instrument.setTimbre('lead-round')
 const status = document.querySelector('#status')
@@ -150,6 +152,7 @@ const startButton = /** @type {HTMLButtonElement} */ (
   document.querySelector('#progression-play')
 )
 document.addEventListener('keydown', (event) => {
+  if (document.body.dataset.appMode !== 'free') return
   if (event.target instanceof Element && event.target.closest('dialog[open]')) return
   if (event.target instanceof Element && event.target.closest('#piano-keys')) return
   if (event.code !== 'Space' || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return
@@ -307,10 +310,15 @@ let barPlayback = null
 const playbackHeads = new Map()
 /** @type {Map<number,number>} */
 const waveformStartBeats = new Map()
-progression.onScheduleBar = () => playerDisplay.meter(chordInstrument.context)
+/** @param {number} _bar @param {number} startBeat @param {number} time @param {number} beatSeconds */
+progression.onScheduleBar = (_bar, startBeat, time, beatSeconds) => {
+  playerDisplay.meter(chordInstrument.context)
+  mobileGuide?.schedule(startBeat, time, beatSeconds, progression.beatsPerBar)
+}
 progression.onStart = referenceTrack.startWithAccompaniment
 progression.onStop = () => {
   barPlayback = null
+  mobileGuide?.clear()
   referenceTrack.stopWithAccompaniment()
   playerDisplay.stopMeter()
   clearAccompanimentPads()
@@ -1088,11 +1096,12 @@ mountKeyboard({
   bass: () => instrument.timbre.startsWith('lead-bass-'),
   key: () => activeKey,
   ready: () => instrument.ready(),
-  attack:(midi,glide)=>magicVoice.attack(midi,glide,true),
+  attack:(midi,glide)=>{ if (!glide) mobileGuide?.hit(midi - (document.querySelector('#piano-keys')?.getAttribute('data-magic') === 'true' ? activeKey : 0)); magicVoice.attack(midi,glide,true) },
   release:midi=>magicVoice.release(midi),
   stop: () => { buddyController?.stop();instrument.silence() },
   onError: error => { if(status)status.textContent=error instanceof Error?error.message:'音を再生できませんでした。' },
 })
+mobileGuide = mountMobileGuide(() => progression.running ? chordInstrument.context?.currentTime : undefined)
 refreshMelody()
 const {element: melodyVoiceLabel} = mountMelodyVoiceChoice(melodyTimbre)
 document.querySelector('.melody-heading')?.after(melodyVoiceLabel)
@@ -1107,10 +1116,11 @@ document.querySelector('#track-grid')?.addEventListener('click', event => {
 })
 mountMidiInput({
   transpose:()=>midiPart==='melody' && document.querySelector('#piano-keys')?.getAttribute('data-magic')==='true'?activeKey:0,
-  bend:value=>{ if(midiPart==='melody')instrument.setPitchBend(value); else if(midiPart==='chord')chordInstrument.setPitchBend(value); else if(midiPart==='bass')bass.setPitchBend(value); else if(midiPart==='drums')drums.setPitchBend(value) },
-  modulation:value=>{if(midiPart==='melody'){instrument.setModulation(value);buddyController?.rememberModulation(value)}else if(midiPart==='bass')bass.setModulation(value)},
+  bend:value=>{ if(document.body.dataset.appMode !== 'free')return; if(midiPart==='melody')instrument.setPitchBend(value); else if(midiPart==='chord')chordInstrument.setPitchBend(value); else if(midiPart==='bass')bass.setPitchBend(value); else if(midiPart==='drums')drums.setPitchBend(value) },
+  modulation:value=>{if(document.body.dataset.appMode !== 'free')return;if(midiPart==='melody'){instrument.setModulation(value);buddyController?.rememberModulation(value)}else if(midiPart==='bass')bass.setModulation(value)},
   ready: async () => { await Promise.all([instrument.ready(), chordInstrument.ready()]) },
   attack:midi=>{
+    if(document.body.dataset.appMode !== 'free')return
     const part=midiPart
     midiDestinations.set(midi,part)
     if(part==='melody') magicVoice.attack(midi)
@@ -1492,4 +1502,18 @@ refreshSectionKnobs = mountSectionKnobs({
   workspace, progression, editingSection, mixerKey, meterInput, tempo, keySelect, currentBar: () => resumeMelodyBar,
   contextChanged: () => { sectionContextRevision.value++ },
   harmonyChanged: () => { backingEditorRevision.value++; refreshLabels() },
+})
+
+mountMobileLayout()
+
+
+mountModeMenu(() => {
+  for (const index of heldPads.keys()) releasePad(index)
+  chordInstrument.silence()
+  bass.silence()
+  drums.silence()
+  buddyController?.stop()
+  progression.stop()
+  magicVoice.stop()
+  instrument.silence()
 })

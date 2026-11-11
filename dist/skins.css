@@ -985,6 +985,7 @@ header { min-height: 60px; }
 #pads[hidden],.piano-scroll[hidden] { display:none; }
 .piano-scroll { overflow-x:auto; padding:4px 3px 10px; }
 #piano-keys { --piano-width:36px; --piano-black-width:23px; height:174px; position:relative; touch-action:none; user-select:none; }
+#piano-keys, #piano-keys .piano-key, #piano-keys .piano-key span { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
 .piano-key { position:absolute; top:0; border:0; border-radius:0 0 7px 7px; cursor:pointer; touch-action:none; padding:0; }
 .piano-key span { position:absolute; bottom:12px; left:0; right:0; font-size:10px; pointer-events:none; }
 .piano-white { width:calc(var(--piano-width) - 2px); height:164px; background:var(--oto-key); color:var(--oto-ink); box-shadow:var(--oto-raised); }
@@ -2375,9 +2376,10 @@ main[data-workspace-view='melody'] > #detail-melody { display:block !important; 
 #detail-melody .session-turn-ring { width:64px; height:64px; }
 #detail-melody .session-turn-count strong { font-size:16px; }
 @media(max-width:600px) {
- #detail-melody .melody-top-row { grid-template-columns:minmax(0,1fr); }
- #detail-melody .otto-mode-field { grid-column:1; grid-row:2; justify-self:start; }
- #detail-melody .session-turn-display { grid-column:1; grid-row:3; justify-content:flex-start; }
+ #detail-melody .melody-top-row { grid-template-columns:minmax(0,1fr) auto; gap:6px 8px; }
+ #detail-melody .otto-mode-field { grid-column:1 / -1; grid-row:2; justify-self:start; }
+ #detail-melody .session-turn-display[inert] { display:none; }
+ #detail-melody .session-turn-display { grid-column:1 / -1; grid-row:3; justify-content:flex-start; }
 }
 @media(max-width:520px) {
  #detail-melody .melody-context-knobs { justify-content:flex-end; }
@@ -3029,3 +3031,198 @@ main[data-workspace-view='mixer'][data-mixer-layout]:has(> .has-accompaniment-pl
 main[data-workspace-view='mixer'][data-mixer-layout]:has(> .has-accompaniment-play:not([hidden])):not(.hide-accompaniment-detail) > .track-details:not([hidden]) { margin-top:0; padding-top:12px; border-radius:0 0 18px 18px; background:linear-gradient(90deg,var(--oto-case),var(--oto-case-low)); }
 
 .synth-type-tag { align-self:flex-start; padding:2px 8px; border-radius:7px; background:var(--oto-case-low); color:var(--oto-muted); font-size:11px; font-weight:600; }
+
+/* Narrow windows use a playable one-octave keyboard, regardless of device. */
+@media (max-width: 600px) {
+  #piano-keys { --piano-width: calc(100cqi / 8); }
+  #piano-keys .piano-key span { font-size: 10px; }
+}
+.mobile-guide { display:none; }
+@media (max-width:600px) {
+  #detail-melody:not([hidden]) .mobile-guide { display:block; margin:12px 0 8px; }
+  .mobile-guide-heading { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; font-size:12px; }
+  .mobile-otto-keys { display:grid; grid-template-columns:repeat(8,1fr); height:52px; gap:2px; }
+  .mobile-otto-keys span { display:flex; align-items:end; justify-content:center; padding-bottom:4px; border-radius:0 0 7px 7px; background:var(--oto-key); box-shadow:var(--oto-raised); font-size:10px; }
+  .mobile-otto-keys span[data-playing] { background:var(--oto-secondary); color:var(--oto-key); box-shadow:var(--oto-recess); }
+  .mobile-guide-label { margin:16px 0 6px; font-size:12px; }
+  .mobile-guide-lane { position:relative; height:75px; overflow:hidden; border-radius:7px; background:var(--oto-display); }
+  .mobile-guide-line { position:absolute; z-index:1; left:12%; top:8px; bottom:8px; width:3px; background:var(--oto-secondary); }
+  .mobile-guide-notes { position:absolute; inset:0; }
+  .mobile-guide-note { position:absolute; top:15px; display:grid; place-items:center; width:44px; height:44px; transform:translateX(-50%); border-radius:50%; background:var(--oto-key); color:var(--oto-display-ink); box-shadow:var(--oto-raised); font-weight:700; }
+  .mobile-guide-note[data-hit] { background:var(--oto-secondary); color:var(--oto-key); }
+  .mobile-guide-feedback { min-height:24px; padding-top:5px; color:var(--oto-display-ink); font-size:12px; }
+  .mobile-user-label { display:block; margin:8px 0 4px; font-size:12px; }
+}
+
+#piano-keys .mobile-key-label { display:none; }
+@media (max-width:600px) { #piano-keys .mobile-key-label { display:block; } }
+
+.mobile-performance-controls { display: none; }
+@media (max-width: 600px) {
+  .player-header { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .player-header #player-display { grid-area: 2 / 1 / 3 / 3; }
+  .player-header .player-left .player-transport { grid-area: 2 / 3; }
+  .mobile-performance-controls { display: grid; gap: 4px; margin-top: 8px; }
+  .mobile-control-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; width: 100%; min-height: 44px; padding: 4px 12px;
+    border: 0; border-radius: 7px; background: var(--oto-case); color: var(--oto-ink);
+    font: inherit; font-size: 13px;
+  }
+  .mobile-control-row .style-stepper button { min-width: 44px; min-height: 44px; }
+  .mobile-mixer-toggle { cursor: pointer; }
+  .mobile-mixer-toggle[aria-expanded='true'] { background: var(--oto-selection); }
+  .mobile-mixer-toggle:focus-visible { outline: 2px solid var(--oto-accent); outline-offset: -2px; }
+  .mobile-play-row:empty { display:none; }
+  #detail-melody .melody-top-row > #transport { grid-area:1 / 2; }
+  :is(.mobile-play-row, .melody-top-row) #transport { position: static; margin: 0 0 0 auto; }
+  :is(.mobile-play-row, .melody-top-row) #progression-play {
+    min-height: 44px; padding: 4px 12px; border: 0; border-radius: 7px;
+    background: var(--oto-accent); color: var(--oto-key); box-shadow: var(--oto-raised);
+    cursor: pointer;
+  }
+  :is(.mobile-play-row, .melody-top-row) #progression-play[aria-pressed='true'] { background: var(--oto-secondary); }
+  main[data-workspace-view='mixer'] > #mobile-performance-mixer:not([data-mobile-mixer-open]) { display: none; }
+  #detail-melody:not([hidden]) { margin-top: 8px; }
+  #detail-melody .mobile-guide { margin-top: 8px; }
+  #detail-melody .melody-heading { display: none; }
+  #piano-keys { height: 134px; }
+  #piano-keys .piano-white { height: 124px; }
+  #piano-keys .piano-black { height: 78px; }
+}
+
+body[data-app-mode='menu'] > .shell,
+body[data-app-mode='tutorial'] > .shell,
+.mode-screen[hidden] { display:none; }
+.mode-screen { width:min(680px,calc(100% - 32px)); margin:clamp(32px,12vh,120px) auto; padding:24px; box-sizing:border-box; border-radius:18px; background:var(--oto-case); color:var(--oto-ink); box-shadow:var(--oto-raised); }
+.mode-screen h1 { font-size:24px; margin:16px 0 24px; }
+.mode-choices { display:grid; gap:16px; }
+.mode-screen button, .mode-back { font:inherit; border:0; border-radius:7px; padding:12px 16px; min-height:44px; color:var(--oto-ink); background:var(--oto-key); box-shadow:var(--oto-raised); cursor:pointer; }
+.mode-choices button { display:grid; gap:8px; padding:24px 16px; text-align:left; }
+.mode-choices strong { font-size:18px; }
+.mode-choices span { font-size:13px; line-height:1.6; }
+.mode-screen button:focus-visible, .mode-back:focus-visible { outline:2px solid var(--oto-accent); outline-offset:3px; }
+.mode-screen button:active, .mode-back:active { box-shadow:var(--oto-recess); }
+.mode-back { margin-bottom:8px; }
+
+/* Tutorial: one instrument, one lesson, independent of the free-play mixer. */
+.tutorial-screen[hidden] { display:none; }
+.tutorial-screen { box-sizing:border-box; width:min(720px,100%); min-height:100svh; margin:0 auto; padding:16px; display:flex; flex-direction:column; gap:16px; background:var(--oto-case); color:var(--oto-ink); }
+.tutorial-screen button, .tutorial-screen select { font:inherit; color:inherit; border:0; border-radius:7px; background:var(--oto-key); box-shadow:var(--oto-raised); min-height:44px; padding:10px 14px; cursor:pointer; }
+.tutorial-screen button:disabled { opacity:.4; cursor:default; }
+.tutorial-screen button:focus-visible, .tutorial-screen select:focus-visible { outline:2px solid var(--oto-accent); outline-offset:3px; }
+.tutorial-screen .tutorial-back { align-self:flex-start; }
+.tutorial-selector { display:flex; gap:12px; }
+.tutorial-selector .part-choice-picker { flex:1; min-width:0; display:flex; }
+.tutorial-selector select { width:100%; min-width:0; padding:8px; }
+.tutorial-selector .part-choice-steps { display:flex; }
+.tutorial-selector .part-choice-steps > button { height:100%; display:grid; place-items:center; padding:0; line-height:1; }
+.tutorial-screen .tutorial-start { background:var(--oto-accent); color:var(--oto-key); white-space:nowrap; }
+.tutorial-screen h1 { font-size:16px; margin:0; font-weight:600; color:var(--oto-muted); }
+.tutorial-companion { display:flex; gap:14px; align-items:center; height:128px; }
+.tutorial-companion .talk-avatar { flex:0 0 76px; width:76px; height:76px; }
+.tutorial-screen .tutorial-message { flex:1; min-width:0; box-sizing:border-box; height:100%; overflow-y:auto; text-align:left; line-height:1.6; margin:0; padding:12px 16px; border-radius:7px; background:var(--oto-key); }
+.tutorial-message span, .tutorial-message small { display:block; }
+.tutorial-message small { margin-top:6px; font-size:11px; color:var(--oto-muted); }
+.tutorial-caption { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:14px; margin-bottom:10px; }
+.tutorial-caption span { font-size:12px; color:var(--oto-muted); }
+.tutorial-demo-keys { position:relative; display:grid; grid-template-columns:repeat(8,1fr); gap:4px; }
+.tutorial-demo-keys span { text-align:center; padding:18px 0 8px; background:var(--oto-key); box-shadow:var(--oto-raised); border-radius:0 0 7px 7px; font-size:12px; }
+.tutorial-slide-finger {
+  position:absolute; top:3px; z-index:1; transform:translateX(-50%);
+  font-size:24px; line-height:1; pointer-events:none; transition:left 25ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-slide-finger { display:none; }
+}
+.tutorial-demo-keys .active { background:var(--oto-selection); color:var(--oto-selection-ink); box-shadow:var(--oto-recess); }
+.tutorial-navigation { background:var(--oto-display); color:var(--oto-display-ink); border-radius:7px; padding:16px; }
+.tutorial-note-lane { position:relative; height:100px; overflow:hidden; }
+.tutorial-beat-grid { position:absolute; top:0; bottom:0; width:25%; border-left:1px solid var(--oto-seam); padding-left:6px; font-size:11px; opacity:.6; }
+.tutorial-note { position:absolute; box-sizing:border-box; min-height:26px; padding:3px 8px; border-radius:7px; background:var(--oto-key); color:var(--oto-ink); border-right:3px solid var(--oto-display); font-size:12px; }
+.tutorial-playhead { position:absolute; top:22px; bottom:0; width:3px; background:var(--oto-accent); }
+.tutorial-feedback { min-height:20px; margin:0; font-size:13px; line-height:1.5; }
+.tutorial-navigation-copy { min-width:0; flex:1; }
+.tutorial-navigation-status { display:flex; align-items:center; gap:8px; height:21px; margin-bottom:4px; }
+.tutorial-navigation-status strong { flex:0 0 7.5em; white-space:nowrap; }
+.tutorial-complete { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 4px; }
+.tutorial-screen .tutorial-complete button { min-height:44px; padding:8px 12px; font-size:13px; }
+.tutorial-user { margin-top:auto; padding-top:20px; padding-bottom:env(safe-area-inset-bottom); position:sticky; bottom:0; background:var(--oto-case); }
+.tutorial-keyboard { position:relative; display:grid; grid-template-columns:repeat(8,1fr); gap:4px; padding-bottom:6px; }
+.tutorial-screen .tutorial-white { height:clamp(130px,22svh,190px); border-radius:0 0 7px 7px; padding:0 0 12px; display:flex; align-items:flex-end; justify-content:center; touch-action:none; user-select:none; }
+.tutorial-screen .tutorial-black { position:absolute; top:0; transform:translateX(-50%); width:7%; height:58%; min-height:0; padding:0; background:var(--oto-ink); z-index:1; touch-action:none; }
+.tutorial-screen .tutorial-keyboard .active { background:var(--oto-selection); color:var(--oto-selection-ink); box-shadow:var(--oto-recess); }
+@media(max-width:450px) {
+ .tutorial-screen { padding:12px; gap:12px; }
+ .tutorial-selector { gap:8px; font-size:13px; }
+ .tutorial-selector .part-choice-steps > button { min-width:32px; }
+ .tutorial-screen .tutorial-start { padding:8px 10px; }
+ .tutorial-companion { height:160px; }
+ .tutorial-companion .talk-avatar { flex-basis:60px; width:60px; height:60px; }
+ .tutorial-navigation { padding:12px; }
+}
+
+.tutorial-screen .tutorial-white { font-size:13px; white-space:nowrap; }
+
+.tutorial-note { overflow:hidden; display:grid; place-items:center; padding-inline:0; }
+.tutorial-played { position:absolute; top:0; bottom:0; background:#f4d75d; }
+.tutorial-note-label { position:relative; white-space:nowrap; }
+
+.tutorial-score { position:relative; width:68px; height:68px; color:var(--oto-ink); flex:none; pointer-events:none; }
+.tutorial-score svg { width:100%; height:100%; }
+.tutorial-score circle { fill:none; stroke-width:8; }
+.tutorial-score-track { stroke:var(--oto-seam); opacity:.45; }
+.tutorial-score-progress { stroke:var(--oto-accent); }
+.tutorial-score span { position:absolute; inset:0; display:grid; place-items:center; font-size:14px; font-weight:700; }
+.tutorial-score .tutorial-hanamaru { font-size:68px; line-height:1; }
+.tutorial-navigation-header { justify-content:flex-start; align-items:flex-start; }
+.tutorial-navigation-header .tutorial-score { margin-left:auto; }
+@media(max-width:450px) { .tutorial-score { width:56px; height:56px; } }
+
+.tutorial-selector { align-items:stretch; min-width:0; }
+.tutorial-screen .tutorial-back { flex:none; white-space:nowrap; align-self:stretch; }
+@media(max-width:450px) {
+ .tutorial-screen .tutorial-back { padding:8px; }
+ .tutorial-selector select { text-overflow:ellipsis; }
+}
+
+/* Landscape tutorial: preserve the player's keyboard as height becomes scarce. */
+@media (orientation:landscape) and (max-height:700px) {
+  .tutorial-demo { display:none; }
+  .tutorial-screen { padding:12px; gap:10px; }
+  .tutorial-user { padding-top:4px; }
+}
+@media (orientation:landscape) and (max-height:540px) {
+  .tutorial-screen { padding:8px; gap:6px; }
+  .tutorial-companion { height:64px; flex:none; gap:8px; }
+  .tutorial-companion .talk-avatar { flex-basis:52px; width:52px; height:52px; }
+  .tutorial-screen .tutorial-message { padding:6px 12px; line-height:1.35; }
+  .tutorial-message small { margin-top:2px; }
+  .tutorial-screen .tutorial-white { height:clamp(90px,25svh,130px); }
+  .tutorial-user .tutorial-caption { margin-bottom:4px; }
+}
+@media (orientation:landscape) and (max-height:420px) {
+  .tutorial-companion { height:52px; }
+  .tutorial-companion .talk-avatar { flex-basis:44px; width:44px; height:44px; }
+  .tutorial-navigation { padding:8px; }
+  .tutorial-navigation-header { margin-bottom:4px; }
+  .tutorial-note-lane { height:88px; }
+  .tutorial-score { width:40px; height:40px; }
+  .tutorial-score .tutorial-hanamaru { font-size:48px; }
+  .tutorial-screen .tutorial-white { height:82px; }
+  .tutorial-screen .tutorial-complete button { min-height:44px; }
+}
+
+.tutorial-slide-track {
+  position:absolute; top:34px; left:0; height:54px;
+  background:var(--oto-key);
+  clip-path:polygon(0 0,100% 52%,100% 100%,0 48%);
+}
+.tutorial-slide-track[data-up='true'] {
+  clip-path:polygon(0 52%,100% 0,100% 48%,0 100%);
+}
+.tutorial-slide-fill { height:100%; background:#f4d75d; }
+.tutorial-note.tutorial-slide-note {
+  background:transparent; border:0; min-height:0;
+  padding:0 3px; overflow:visible;
+}

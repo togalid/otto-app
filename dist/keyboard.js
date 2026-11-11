@@ -32,7 +32,7 @@ export function mountKeyboard(source) {
       type: 'button', class: key.black ? 'piano-key piano-black' : 'piano-key piano-white',
       'data-midi': key.midi, 'aria-label': key.label + 'を鳴らす',
       tabindex: key.midi === 60 ? 0 : -1, style: { left: key.left },
-    }, key.midi % 12 === 0 ? [h('span', {'aria-hidden':'true'}, key.label)] : [])),
+    }, key.black ? [] : [h('span', {'aria-hidden':'true', class: key.midi % 12 === 0 ? '' : 'mobile-key-label'}, key.midi % 12 === 0 ? key.label : ({2:'レ',4:'ミ',5:'ファ',7:'ソ',9:'ラ',11:'シ'})[key.midi % 12])])),
   }).mount(board)
   for (const button of Array.from(board.querySelectorAll('button'))) {
     buttons.set(Number(button.dataset.midi), button)
@@ -115,7 +115,7 @@ export function mountKeyboard(source) {
       const label = pianoKey(midi).label.replace(/\d+$/, String(Math.floor(midi / 12) - 1 + offset))
       button.setAttribute('aria-label', label+'を鳴らす')
       const text = button.querySelector('span')
-      if (text) text.textContent = label
+      if (text && !text.classList.contains('mobile-key-label')) text.textContent = label
     })
   }
   const octaveOutput = document.querySelector('#keyboard-octave')

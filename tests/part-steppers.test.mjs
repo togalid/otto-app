@@ -69,7 +69,7 @@ test('backing iframe preserves the key synchronization load hook', () => {
   let loaded = 0
   const view = mountAccompanimentPlay('chord', 'manual', null, () => {}, () => {}, () => { loaded++ })
   const frame = view.element.querySelector('iframe')
-  assert.equal(frame.getAttribute('src'), '/chord-pad.html?embedded=1&backing=1')
+  assert.equal(frame.getAttribute('src'), './chord-pad.html?embedded=1&backing=1')
   frame.dispatchEvent(new Event('load'))
   assert.equal(loaded, 1)
   view.unmount()

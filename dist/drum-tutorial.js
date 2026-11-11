@@ -73,6 +73,20 @@ export function drumSessionHitPosition(beat,early=.3) {
   const bar=Math.floor(beat/4), local=beat%4
   return local>=4-early && bar<7 ? {bar:bar+1,local:local-4} : {bar,local}
 }
+/** Match the nearest unclaimed hit across adjacent session bars.
+ * @param {{beat:number,pad:number}[]} pattern @param {number} pad @param {number} beat
+ * @param {Map<number,Set<number>>} matchedByBar @param {number} [early]
+ */
+export function matchDrumSessionHit(pattern,pad,beat,matchedByBar,early=.3) {
+  let best=null, distance=Infinity
+  for(const bar of [Math.floor(beat/4)-1,Math.floor(beat/4),Math.floor(beat/4)+1]) {
+    if(bar<0 || bar>=8 || beat< -early || beat>=32 || beat-bar*4 < -early)continue
+    const local=beat-bar*4, matched=matchedByBar.get(bar) ?? new Set()
+    const index=matchDrumHit(pattern,pad,local,matched)
+    if(index>=0 && Math.abs(local-pattern[index].beat)<distance){best={bar,index};distance=Math.abs(local-pattern[index].beat)}
+  }
+  return best
+}
 export const DRUM_LESSON_BPM = 50
 /** @param {number} eighthStep */
 export function isDrumMetronomeBeat(eighthStep) { return eighthStep >= 0 && eighthStep < 32 && eighthStep % 2 === 0 }
@@ -111,6 +125,7 @@ export function mountDrumTutorial(host,onBack) {
   /** @type {Set<AudioScheduledSourceNode>} */ const sources=new Set()
   /** @type {Map<number,number>} */ const flashes=new Map()
   /** @type {Set<number>} */ let matches=new Set()
+  /** @type {Map<number,Set<number>>} */ const sessionMatches=new Map()
   /** @type {Set<OscillatorNode>} */ const successSounds=new Set()
   const backing=new Instrument('chord'), melody=new Instrument('melody'), bass=new BassSynth(backing)
   backing.setTimbre('piano'); melody.setTimbre('lead-round'); bass.setVolume(.25)
@@ -186,7 +201,8 @@ export function mountDrumTutorial(host,onBack) {
       if(displayedBar!==bar){displayedBar=bar;if(judgedBar!==bar)state.matched=[]}
       state.phase='play';state.bar=bar;state.beat=local
       state.message=session()?`${bar+1} / 8小節　${advanced()?.message ?? '8ビートを続けよう！'}`:state.stage===1 && state.exercise===0?'右手の薬指でハイハット。2拍目と4拍目は中指でスネアも一緒に叩こう。':state.stage===0?'右・左・右・左……タイミングよく薬指で鳴らそう。':advanced()?.practice ?? (bar%2?'あなたの番。光るパッドに合わせて叩こう！':state.stage===2 && state.exercise===0?'右手の動きを見てね。':'左右の手の動きを見てね。')
-      if((session() || bar%2===1) && judgedBar<bar){judgedBar=bar;matches=new Set();state.matched=[]}
+      if(session()) state.matched=[...(sessionMatches.get(bar) ?? [])]
+      else if(bar%2===1 && judgedBar<bar){judgedBar=bar;matches=new Set();state.matched=[]}
       const pattern=currentPattern()
       state.lit=pattern.filter(hit=>local>=hit.beat&&local<hit.beat+.18).map(hit=>hit.pad)
     }
@@ -199,7 +215,7 @@ export function mountDrumTutorial(host,onBack) {
       backing.setTimbre(state.stage===6?'supersaw':'piano');melody.setTimbre(state.stage===6?'lead-supersaw':'lead-round');bass.timbre=state.stage===6?'synth':'electric'
       if(session())await Promise.all([backing.ready(),melody.ready()]);if(ticket!==generation||!visible)return
       origin=/** @type {AudioContext} */(context).currentTime+4*secondsPerBeat+.12
-      state.score=0;matches=new Set();state.matched=[];nextBar=-1;judgedBar=-1;displayedBar=-1;state.phase='count'
+      state.score=0;matches=new Set();sessionMatches.clear();state.matched=[];nextBar=-1;judgedBar=-1;displayedBar=-1;state.phase='count'
       const accompanied=session()
       const pattern=currentPattern()
       const discoSession=accompanied && state.stage===5
@@ -268,7 +284,12 @@ export function mountDrumTutorial(host,onBack) {
       flashes.set(pad,window.setTimeout(()=>{state.pressed=state.pressed.filter(value=>value!==pad);flashes.delete(pad)},120))
       if(state.phase==='play' || (session() && state.phase==='count')) {
         const beat=((hitTime ?? context.currentTime)-origin)/secondsPerBeat
-        const position=session() ? drumSessionHitPosition(beat, advanced()?.grid===16 ? .125 : .3) : drumUserHitPosition(beat)
+        if(session()) {
+          const pattern=currentPattern(), hit=matchDrumSessionHit(pattern,pad,beat,sessionMatches,advanced()?.grid===16?.125:.3)
+          if(hit){const matched=sessionMatches.get(hit.bar) ?? new Set();matched.add(hit.index);sessionMatches.set(hit.bar,matched);if(state.phase==='play' && state.bar===hit.bar)state.matched=[...matched];state.score++;if(matched.size===pattern.length)playTutorialSuccess(context,successSounds)}
+          return
+        }
+        const position=drumUserHitPosition(beat)
         if(position){
           const {bar,local}=position
           if(judgedBar<bar){judgedBar=bar;matches=new Set();state.matched=[]}

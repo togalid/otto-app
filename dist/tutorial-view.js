@@ -100,7 +100,7 @@ export function mountTutorial(root, navigate) {
   bass.timbre = style?.bass ?? 'electric'
   voice.setTimbre('lead-round')
   userVoice.setTimbre('lead-round')
-  const selected = ref(developmentTutorial ? 5 : 0), message = ref(0), dialogue = ref(true)
+  const selected = ref(0), message = ref(0), dialogue = ref(true)
   const state = ref({phase:'idle',beat:0,bar:0,error:''})
   const held = ref(-1), feedback = ref(''), score = ref(0)
   const successes = new Set()
@@ -469,7 +469,7 @@ export function mountTutorial(root, navigate) {
       if (held.value === midi) release(isSlide())
     },
     advanceMessage(){ if (visible) advance() },
-    open(){visible=true;sessionLevel.value=0;retryTempo.value=80;start()},
+    open(){visible=true;selected.value=0;sessionLevel.value=0;retryTempo.value=80;start()},
     close(){visible=false;midiHeld.clear();stop()},
   }
 }

@@ -3121,7 +3121,7 @@ body[data-app-mode='tutorial'] > .shell,
 .tutorial-screen h1 { font-size:16px; margin:0; font-weight:600; color:var(--oto-muted); }
 .tutorial-companion { display:flex; gap:14px; align-items:center; }
 .tutorial-companion .talk-avatar { flex:0 0 76px; width:76px; height:76px; }
-.tutorial-screen .tutorial-message { display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; flex:1; min-width:0; box-sizing:border-box; text-align:left; line-height:1.6; margin:0; padding:12px 16px; border-radius:7px; background:var(--oto-key); }
+.tutorial-screen .tutorial-message { display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; flex:1; min-width:0; height:84px; overflow-y:auto; box-sizing:border-box; text-align:left; font-size:14px; line-height:1.4; margin:0; padding:10px 14px; border-radius:7px; background:var(--oto-key); }
 .tutorial-message span, .tutorial-message small { display:block; }
 .tutorial-message small { margin-top:6px; font-size:11px; color:var(--oto-muted); }
 .tutorial-caption { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:14px; margin-bottom:10px; }
@@ -3199,7 +3199,7 @@ body[data-app-mode='tutorial'] > .shell,
   .tutorial-screen { padding:8px; gap:6px; }
   .tutorial-companion { flex:none; gap:8px; }
   .tutorial-companion .talk-avatar { flex-basis:52px; width:52px; height:52px; }
-  .tutorial-screen .tutorial-message { padding:6px 12px; line-height:1.35; }
+  .tutorial-screen .tutorial-message { height:76px; padding:6px 12px; line-height:1.35; }
   .tutorial-message small { margin-top:2px; }
   .tutorial-screen .tutorial-white { height:clamp(90px,25svh,130px); }
   .tutorial-user .tutorial-caption { margin-bottom:4px; }

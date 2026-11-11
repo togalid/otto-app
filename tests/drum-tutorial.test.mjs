@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {drumPads,drumLessonPattern,matchDrumHit,DRUM_LESSON_BPM,isDrumMetronomeBeat,drumUserHitPosition,drumSessionHitPosition} from '../dist/drum-tutorial.js'
+import {drumPads,drumLessonPattern,matchDrumHit,matchDrumSessionHit,DRUM_LESSON_BPM,isDrumMetronomeBeat,drumUserHitPosition,drumSessionHitPosition} from '../dist/drum-tutorial.js'
 
 test('first beat accepts slightly early input at both turn changes without accepting Otto’s other beats',()=>{
   const pattern=drumLessonPattern(0)
@@ -80,6 +80,19 @@ test('session accepts both simultaneous hits just before the first beat',()=>{
   const pattern=drumLessonPattern(3), matches=new Set()
   for(const pad of [3,6]) { const index=matchDrumHit(pattern,pad,position.local,matches); assert.ok(index>=0); matches.add(index) }
   assert.equal(drumSessionHitPosition(-.31),null)
+})
+
+test('session keeps adjacent bars independent when simultaneous hits straddle a bar line',()=>{
+  const pattern=drumLessonPattern(6,1), bars=new Map()
+  const early=matchDrumSessionHit(pattern,6,3.96,bars)
+  assert.equal(early?.bar,1)
+  bars.set(1,new Set([early.index]))
+  const previous=matchDrumSessionHit(pattern,4,3.70,bars)
+  assert.equal(previous?.bar,0)
+  const snare=matchDrumSessionHit(pattern,2,4.99,bars)
+  const kick=matchDrumSessionHit(pattern,6,5.04,bars)
+  assert.equal(snare?.bar,1); assert.equal(kick?.bar,1)
+  assert.notEqual(snare?.index,kick?.index)
 })
 
 test('lesson five adds left kick together with left hat on the upbeat of three',()=>{

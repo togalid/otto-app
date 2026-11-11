@@ -43,7 +43,7 @@ const sessionPhrases = [
 
 /** @type {readonly TutorialLesson[]} */
 export const lessons = [
-  { title: 'ドをひとつ', messages: ['こんにちは、Ottoだよ。一緒に弾こう！', 'ぼくが「ド」を弾いたら、次はあなたの番。下の「ド」を2拍、伸ばしてみよう。', 'お手本と真似を4回くり返すよ。'], notes: [{beat:0,midi:60,duration:2}] },
+  { title: 'ドをひとつ', messages: ['こんにちは、Ottoだよ。一緒に弾こう！', 'ぼくが弾いたら、次はあなたの番。最初は「ド」、後半は「ミ」を2拍伸ばしてみよう。', '音をしっかり伸ばすと、黄色く塗られて得点になるよ。', 'お手本と真似を4回くり返すよ。'], notes: [{beat:0,midi:60,duration:2}], laterPhrases: [[{beat:0,midi:64,duration:2}],[{beat:0,midi:64,duration:2}]] },
   { title: 'ドからレへ', messages: ['2つの音を行ったり来たりしよう。', '「ド・レ」。指をひとつ、右に動かしてね。'], notes: [{beat:0,midi:60,duration:1},{beat:2,midi:62,duration:1}] },
   { title: 'ド・レ・ミ', messages: ['音の階段をのぼってみよう。', '「ド・レ・ミ」。あわてず、ひとつずつ。'], notes: [{beat:0,midi:60,duration:.5},{beat:1,midi:62,duration:.5},{beat:2,midi:64,duration:1.5}] },
   { title: '短く、長く', messages: ['短い音と、長い音をつなげよう。', '「ド・レ・ミー」。最後のミを長めにね。'], notes: [{beat:0,midi:60,duration:.35},{beat:.5,midi:62,duration:.35},{beat:1,midi:64,duration:2}] },

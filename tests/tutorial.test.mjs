@@ -2,6 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {lessons,createTutorialPlayer,tutorialBeatSeconds,displayedResponseStart,mergePlayedSegments,responseComplete,lessonThreeChords,recordTutorialSuccess,eighthNoteHit,shortNoteTarget,tutorialNotes,tutorialPentatonic,matchSlideNote,isTutorialFreePitch} from '../dist/tutorial.js'
 
+test('No.1 switches from a two-beat C to a two-beat E for both call and response', () => {
+  for (let bar = 0; bar < 8; bar++) {
+    assert.deepEqual(tutorialNotes(lessons[0], bar), [{beat:0, midi:bar < 4 ? 60 : 64, duration:2}])
+  }
+})
+
 function harness(ready = async () => {}) {
   const states = [], notes = [], timers = new Map()
   let id = 0, silenced = 0

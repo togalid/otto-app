@@ -3216,13 +3216,33 @@ body[data-app-mode='tutorial'] > .shell,
 .tutorial-slide-track {
   position:absolute; top:34px; left:0; height:54px;
   background:var(--oto-key);
-  clip-path:polygon(0 0,100% 52%,100% 100%,0 48%);
+  clip-path:polygon(0 4px,4px 0,calc(100% - 4px) 52%,100% calc(52% + 4px),100% calc(100% - 4px),calc(100% - 4px) 100%,4px 48%,0 calc(48% - 4px));
 }
 .tutorial-slide-track[data-up='true'] {
-  clip-path:polygon(0 52%,100% 0,100% 48%,0 100%);
+  clip-path:polygon(0 calc(52% + 4px),4px 52%,calc(100% - 4px) 0,100% 4px,100% calc(48% - 4px),calc(100% - 4px) 48%,4px 100%,0 calc(100% - 4px));
 }
 .tutorial-slide-fill { height:100%; background:#f4d75d; }
 .tutorial-note.tutorial-slide-note {
   background:transparent; border:0; min-height:0;
-  padding:0 3px; overflow:visible;
+  padding:0 3px; overflow:visible; transform:translateY(-50%);
 }
+
+.tutorial-screen .tutorial-white.tutorial-avoid:not(.active) { background:color-mix(in srgb, var(--oto-ink) 24%, var(--oto-key)); color:var(--oto-ink); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .tutorial-screen .tutorial-white.tutorial-avoid-flash:not(.active) {
+    animation:tutorial-avoid-flash 1s ease-in-out infinite alternate;
+  }
+  @keyframes tutorial-avoid-flash {
+    from { background:var(--oto-key); }
+    to { background:color-mix(in srgb, var(--oto-ink) 40%, var(--oto-key)); }
+  }
+}
+
+.tutorial-note.tutorial-connected-note {
+  border-right:0; border-radius:0;
+}
+.tutorial-note.tutorial-connected-first { border-radius:7px 0 0 7px; }
+.tutorial-note.tutorial-connected-last { border-radius:0 7px 7px 0; }
+
+.tutorial-note.tutorial-connected-first.tutorial-connected-last { border-radius:7px; }

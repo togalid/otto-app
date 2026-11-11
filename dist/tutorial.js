@@ -1,5 +1,5 @@
 /** @typedef {{beat:number,midi:number,duration:number}} TutorialNote */
-/** @typedef {{title:string,messages:readonly string[],notes:readonly TutorialNote[],patterns?:readonly (readonly TutorialNote[])[],freePitch?:boolean}} TutorialLesson */
+/** @typedef {{title:string,messages:readonly string[],notes:readonly TutorialNote[],patterns?:readonly (readonly TutorialNote[])[],freePitch?:boolean,earlyPhrases?:readonly (readonly TutorialNote[])[],laterPhrases?:readonly (readonly TutorialNote[])[]}} TutorialLesson */
 /** @typedef {{phase:'idle'|'loading'|'countdown'|'otto'|'you'|'complete'|'error',beat:number,bar:number,error:string}} TutorialState */
 /** @typedef {{ready:()=>Promise<void>,context?:{currentTime:number},playAt:(notes:readonly number[],time:number,duration:number,level?:number)=>void,silence:()=>void}} TutorialVoice */
 
@@ -9,8 +9,9 @@
 const slide = (pitches,spacing) => pitches.map((midi,i)=>({beat:i*spacing,midi,duration:.25}))
 const fifthUp = slide([60,62,64,65,67],.5)
 const fifthDown = slide([67,65,64,62,60],.5)
-const octaveUp = slide([60,62,64,65,67,69,71,72],.375)
-const octaveDown = slide([72,71,69,67,65,64,62,60],.375)
+const octaveRhythm = [0,.5,1,1.5,2,2.25,2.5,2.75]
+const octaveUp = [60,62,64,65,67,69,71,72].map((midi,i)=>({beat:octaveRhythm[i],midi,duration:.25}))
+const octaveDown = [72,71,69,67,65,64,62,60].map((midi,i)=>({beat:octaveRhythm[i],midi,duration:.25}))
 /** @param {readonly number[]} beats */
 const rhythm = beats => beats.map((beat,i)=>({beat,midi:[60,64,67,69,62,72][i%6],duration:.25}))
 export const tutorialPentatonic = [60,62,64,67,69,72]
@@ -24,15 +25,35 @@ export const lessons = [
   { title: '小さなメロディ', messages: ['最後は、ここまでの音をつないだメロディ！', '「ド・ミ・レ・ド」。4回やりとりできたらゴールだよ。'], notes: [{beat:0,midi:60,duration:.7},{beat:1,midi:64,duration:.7},{beat:2,midi:62,duration:.7},{beat:3,midi:60,duration:.8}] },
   { title: 'ドからソへスライド', messages: ['指やマウスを押したまま、ドからソまで滑らせてみよう。', '途中のレ・ミ・ファも通るよ。上ったら、次はソからドへ下ろそう。', 'ぼくと交代で、上り・下りを2回ずつやってみよう！'], notes:fifthUp, patterns:[fifthUp,fifthDown] },
   { title: '高いドまでスライド', messages: ['今度はドから高いドまで、ひと息でスライド！', '次は高いドから低いドへ。白い鍵盤をなぞって、下りも楽しもう。', 'ぼくの速さを聴いて、上り・下りを交代でやってみよう！'], notes:octaveUp, patterns:[octaveUp,octaveDown] },
-  { title: '好きな音でリズム', freePitch:true, messages: ['ここからは、音を自分で選んでみよう！', '鍵盤はド・レ・ミ・ソ・ラのペンタトニック。どれを押しても、この伴奏と一緒に楽しめるよ。', 'ぼくのリズムだけまねしてね。音の高さは同じでも、変えてもいいよ！'], notes:rhythm([0,2]) },
-  { title: 'リズムにのって遊ぼう', freePitch:true, messages: ['次は1拍ずつ、好きな音で遊ぼう。', 'ド・レ・ミ・ソ・ラから自由に選んでね。同じ音を続けてもいいよ。', '音は自由、タイミングはぼくのリズムに合わせよう！'], notes:rhythm([0,1,2,3]) },
-  { title: '自分だけのメロディ', freePitch:true, messages: ['最後は短い音も混ぜて、自分だけのメロディ！', 'ぼくのリズムに合わせて、ペンタトニックの好きな音を弾こう。', '4回できたら、フリー演奏でも自由にわちゃわちゃ遊んでみよう！'], notes:rhythm([0,.5,1.5,2,3,3.5]) },
+  { title: '好きな音でリズム', freePitch:true, messages: ['ここからは、リズムに合わせて好きな鍵盤を押してみよう。', 'ファとシは不協和音になりやすいから、白い鍵盤だけつかおう。', '白い鍵盤なら、どこを押してもいいよ。リズムに合わせて弾いてみよう。'], notes:rhythm([0,2]), earlyPhrases:[
+    [{beat:0,midi:60,duration:1},{beat:2,midi:67,duration:1}],
+    [{beat:0,midi:69,duration:1},{beat:2,midi:62,duration:1}],
+  ], laterPhrases:[
+    [60,62,64,60,67].map((midi,i)=>({beat:i*.5,midi,duration:.5})),
+    [67,64,62,60,62].map((midi,i)=>({beat:i*.5,midi,duration:.5})),
+  ] },
+  { title: '自分だけのメロディ', freePitch:true, messages: ['最後は短い音も混ぜて、自分だけのメロディ！', 'ぼくのリズムに合わせて、好きな白い鍵盤を弾こう。', '5小節目からは、スライドも使ってみよう！'], notes:rhythm([0,.5,1.5,2,3,3.5]), laterPhrases:[
+    [{beat:0,midi:64,duration:.5},{beat:.5,midi:67,duration:.5},{beat:1,midi:69,duration:1},{beat:2.5,midi:67,duration:.5},{beat:3,midi:64,duration:1}],
+    [{beat:0,midi:67,duration:.5},{beat:.5,midi:69,duration:.5},{beat:1.5,midi:72,duration:1},{beat:2.5,midi:69,duration:.5},{beat:3,midi:67,duration:1}],
+  ] },
 ]
 
 /** The Otto bar and following user bar share the same phrase.
  * @param {TutorialLesson} lesson @param {number} bar */
 export function tutorialNotes(lesson,bar) {
+  if (lesson.earlyPhrases && bar < 4) return lesson.earlyPhrases[Math.floor(Math.max(0,bar) / 2)]
+  if (lesson.laterPhrases && bar >= 4) return lesson.laterPhrases[Math.min(lesson.laterPhrases.length - 1, Math.floor((bar - 4) / 2))]
   return lesson.patterns?.[Math.floor(Math.max(0,Math.min(7,bar))/2)%lesson.patterns.length] ?? lesson.notes
+}
+
+/** Advance one note of a slide only when its pitch and timing match.
+ * @param {readonly TutorialNote[]} notes @param {number} progress @param {number} midi @param {number} beat
+ * @returns {number} Number of matched notes.
+ */
+export function matchSlideNote(notes, progress, midi, beat) {
+  const note = notes[progress]
+  if (!note || note.midi !== midi || Math.abs(beat - note.beat) > .30) return progress
+  return progress + 1
 }
 
 /** Snap a near-onset response to the beginning of the displayed note. */
@@ -44,7 +65,7 @@ export function displayedResponseStart(start, noteBeat) {
 /** Find a short note (up to an eighth note) hit close to its onset.
  * @param {readonly TutorialNote[]} notes @param {number} midi @param {number} beat @param {boolean} [anyPitch] */
 export function eighthNoteHit(notes, midi, beat, anyPitch = false) {
-  return notes.filter(note => (anyPitch || note.midi === midi) && note.duration <= .5 + .001 && Math.abs(note.beat - beat) <= .35)
+  return notes.filter(note => (anyPitch || note.midi === midi) && (anyPitch || note.duration <= .5 + .001) && Math.abs(note.beat - beat) <= .35)
     .sort((a,b)=>Math.abs(a.beat-beat)-Math.abs(b.beat-beat))[0]
 }
 
@@ -139,7 +160,7 @@ export function createTutorialPlayer({voice,onUpdate,accompaniment,setTimer = (c
         return phrase.map((note, noteIndex) => {
           const next = phrase[noteIndex + 1]
           // Keep the mono voice held until the next key takes over.
-          const duration = lesson.patterns && next
+          const duration = (lesson.patterns || ((index === 7 || index === 8) && round >= 2 && next && note.beat + note.duration >= next.beat - .001)) && next
             ? (next.beat - note.beat) * tutorialBeatSeconds + .01
             : note.duration * tutorialBeatSeconds
           return {midi:note.midi, time:startTime + (round * 8 + note.beat) * tutorialBeatSeconds, duration}

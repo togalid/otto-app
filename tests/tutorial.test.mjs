@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {lessons,createTutorialPlayer,tutorialBeatSeconds,displayedResponseStart,responseComplete,lessonThreeChords,recordTutorialSuccess,eighthNoteHit,shortNoteTarget,tutorialNotes,tutorialPentatonic} from '../dist/tutorial.js'
+import {lessons,createTutorialPlayer,tutorialBeatSeconds,displayedResponseStart,responseComplete,lessonThreeChords,recordTutorialSuccess,eighthNoteHit,shortNoteTarget,tutorialNotes,tutorialPentatonic,matchSlideNote} from '../dist/tutorial.js'
 
 function harness(ready = async () => {}) {
   const states = [], notes = [], timers = new Map()
@@ -11,8 +11,8 @@ function harness(ready = async () => {}) {
   return {player,voice,context,states,notes,timers,get silenced(){return silenced},tick(time){context.currentTime=time;for(const cb of timers.values())cb()}}
 }
 
-test('ten self-contained lessons fit a one-octave keyboard and one demo bar',()=>{
-  assert.equal(lessons.length,10)
+test('nine self-contained lessons fit a one-octave keyboard and one demo bar',()=>{
+  assert.equal(lessons.length,9)
   for(const lesson of lessons) {
     assert.ok(lesson.messages.length > 1)
     assert.ok(lesson.notes.length)
@@ -214,8 +214,56 @@ test('free-pitch lessons use pentatonic examples and judge the nearest rhythm on
       assert.equal(target.bar,1)
     }
   }
-  const notes=lessons[9].notes
+  const notes=lessons[8].notes
   assert.equal(eighthNoteHit(notes,69,.3,true),notes[1])
   assert.equal(eighthNoteHit(notes,69,1,true),undefined)
   assert.equal(eighthNoteHit(notes,69,0,false),undefined)
+})
+
+test('No.8 introduces different pitches with the same rhythm before its longer phrases', () => {
+  const lesson = lessons[7]
+  const first = tutorialNotes(lesson,0)
+  const second = tutorialNotes(lesson,2)
+  assert.deepEqual(first.map(note => note.beat), [0,2])
+  assert.deepEqual(second.map(note => note.beat), [0,2])
+  assert.ok([...first,...second].every(note => note.duration === 1))
+  assert.equal(shortNoteTarget(first,72,4.05,true)?.note,first[0])
+  assert.notDeepEqual(first.map(note => note.midi), second.map(note => note.midi))
+  assert.equal(tutorialNotes(lesson,1), first)
+  assert.equal(tutorialNotes(lesson,3), second)
+  assert.ok([...first,...second].every(note => tutorialPentatonic.includes(note.midi)))
+  assert.equal(tutorialNotes(lesson,4).length, 5)
+})
+
+
+test('No.7 slide requires each note in order and near the expected beat', () => {
+  for (const bar of [0,2]) {
+    const notes = tutorialNotes(lessons[6],bar)
+    let matched = 0
+    assert.equal(matchSlideNote(notes,matched,notes[0].midi,-.31),0)
+    assert.equal(matchSlideNote(notes,matched,notes[0].midi,.31),0)
+    assert.equal(matchSlideNote(notes,matched,notes.at(-1).midi,0),0)
+    for (const note of notes) matched = matchSlideNote(notes,matched,note.midi,note.beat + .1)
+    assert.equal(matched,notes.length)
+    let rushed = 0
+    for (const note of notes) rushed = matchSlideNote(notes,rushed,note.midi,0)
+    assert.ok(rushed < notes.length)
+  }
+})
+
+
+test('final lesson changes to melodic rhythms after four bars', () => {
+  const lesson = lessons[8]
+  assert.equal(lesson.title, '自分だけのメロディ')
+  assert.equal(tutorialNotes(lesson, 0), tutorialNotes(lesson, 1))
+  assert.equal(tutorialNotes(lesson, 4), tutorialNotes(lesson, 5))
+  assert.equal(tutorialNotes(lesson, 6), tutorialNotes(lesson, 7))
+  assert.notDeepEqual(tutorialNotes(lesson, 0).map(note => note.beat), tutorialNotes(lesson, 4).map(note => note.beat))
+  for (const bar of [4,6]) {
+    for (const note of tutorialNotes(lesson, bar)) {
+      assert.ok(tutorialPentatonic.includes(note.midi))
+      assert.ok(note.beat + note.duration <= 4)
+      assert.equal(shortNoteTarget(tutorialNotes(lesson, bar), 60, (bar + 1) * 4 + note.beat, true)?.note, note)
+    }
+  }
 })

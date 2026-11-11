@@ -1517,4 +1517,4 @@ const tutorialView = mountModeMenu(() => {
   progression.stop()
   magicVoice.stop()
   instrument.silence()
-}, () => midiInput.connect())
+}, () => midiInput.connect(), () => partSettings.apply(melodyMode, 'session'))

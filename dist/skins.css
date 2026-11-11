@@ -2308,7 +2308,7 @@ main[data-workspace-view='melody'] > #detail-melody { display:block !important; 
 
 #piano-scroll { container-type:inline-size; scrollbar-width:none; padding-top:0; }
 #piano-keys {
-  --piano-width:calc(100cqi / 22);
+  --piano-width:calc(100cqi / 15);
   --piano-black-width:min(23px, calc(var(--piano-width) * .64));
 }
 #piano-keys .piano-key span { font-size:clamp(7px, 1.4cqi, 10px); }
@@ -3034,7 +3034,7 @@ main[data-workspace-view='mixer'][data-mixer-layout]:has(> .has-accompaniment-pl
 
 /* Narrow windows use a playable one-octave keyboard, regardless of device. */
 @media (max-width: 600px) {
-  #piano-keys { --piano-width: calc(100cqi / 8); }
+  #piano-keys { --piano-width: calc(100cqi / 15); }
   #piano-keys .piano-key span { font-size: 10px; }
 }
 .mobile-guide { display:none; }
@@ -3231,7 +3231,7 @@ body[data-app-mode='tutorial'] > .shell,
   padding:0 3px; overflow:visible; transform:translateY(-50%); display:flex; flex-direction:column; align-items:center; line-height:1.1;
 }
 
-.tutorial-screen .tutorial-white.tutorial-avoid:not(.active) { background:color-mix(in srgb, var(--oto-ink) 24%, var(--oto-key)); color:var(--oto-ink); }
+
 
 
 
@@ -3266,5 +3266,47 @@ body[data-app-mode='tutorial'] > .shell,
   .tutorial-note.tutorial-connected-note { padding-inline:2px; }
 }
 
-.tutorial-slide-symbol { display:flex; align-items:center; height:17px; font-size:15px; }
+.tutorial-slide-symbol { position:relative; z-index:1; display:flex; align-items:center; height:17px; font-size:15px; }
 .tutorial-slide-symbol .tutorial-note-symbol { width:10px; height:16px; }
+
+.tutorial-note.tutorial-pitch-note {
+  min-height:36px; display:flex; flex-direction:column;
+  align-items:flex-start; justify-content:center; padding:2px 5px; line-height:1;
+}
+
+/* Align the note glyph and pitch name around one shared center. */
+.tutorial-pitch-note .tutorial-slide-symbol,
+.tutorial-pitch-note .tutorial-note-label {
+  width:1.4em; min-width:1.4em; text-align:center; justify-content:center;
+}
+
+.tutorial-navigation-header .tutorial-session-ring + .tutorial-score { margin-left:8px; }
+
+/* Free-play session guide and settings share the same workspace. */
+#detail-melody .session-guide-toggle { grid-column:1 / -1; justify-self:end; margin:0; }
+#detail-melody .session-rhythm-guide { grid-column:1 / -1; display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:10px 12px; border-radius:7px; background:var(--oto-display); color:var(--oto-display-ink); }
+#detail-melody .session-rhythm-beats { display:flex; flex:1; min-width:200px; gap:4px; }
+#detail-melody .session-rhythm-beats > span { display:flex; flex:1; align-items:center; justify-content:center; gap:6px; min-height:36px; border-radius:7px; background:var(--oto-key); }
+#detail-melody .session-rhythm-beats > span[data-current] { background:var(--oto-selection); color:var(--oto-selection-ink); }
+#detail-melody .session-rhythm-beats small { font-size:11px; }
+#detail-melody .melody-top-row[data-guide-view='settings'] .session-rhythm-guide { display:none; }
+#detail-melody .melody-top-row[data-guide-view='rhythm'] .otto-mode-field,
+#detail-melody .melody-top-row[data-guide-view='rhythm'] .session-timing-field,
+#detail-melody .melody-top-row[data-guide-view='rhythm'] .session-offset-stepper { display:none; }
+
+/* Keep guidance above the keys and secondary settings in a separate view. */
+#detail-melody .session-guide-toggle { grid-column:1 / -1; grid-row:auto; justify-self:start; }
+.session-guide-toggle input { position:absolute; opacity:0; width:1px; height:1px; }
+.session-guide-toggle label:has(input:focus-visible) > span { outline:2px solid var(--oto-accent); outline-offset:2px; }
+#detail-melody .session-rhythm-guide { background:var(--oto-case-low); gap:16px; padding:12px 16px; }
+.session-guide-copy { display:flex; flex-direction:column; gap:6px; }
+.session-guide-copy strong { font-size:14px; font-weight:600; }
+.session-guide-copy small { font-size:12px; color:var(--oto-display-ink); }
+#detail-melody .session-rhythm-beats > span { flex-direction:column; gap:2px; min-height:52px; font-size:22px; }
+#detail-melody .session-rhythm-beats > span[data-current] { background:var(--oto-selection); box-shadow:inset 0 0 0 1px var(--oto-secondary); }
+@media(max-width:600px) {
+ #detail-melody .session-rhythm-guide { padding:10px; gap:10px; }
+ #detail-melody .session-rhythm-beats { flex-basis:100%; min-width:0; }
+ .session-guide-copy strong { font-size:13px; }
+ .session-guide-copy small { font-size:11px; }
+}

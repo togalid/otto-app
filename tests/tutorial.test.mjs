@@ -11,8 +11,8 @@ function harness(ready = async () => {}) {
   return {player,voice,context,states,notes,timers,get silenced(){return silenced},tick(time){context.currentTime=time;for(const cb of timers.values())cb()}}
 }
 
-test('nine self-contained lessons fit a one-octave keyboard and one demo bar',()=>{
-  assert.equal(lessons.length,9)
+test('ten self-contained lessons fit a one-octave keyboard and one demo bar',()=>{
+  assert.equal(lessons.length,10)
   for(const lesson of lessons) {
     assert.ok(lesson.messages.length > 0)
     assert.ok(lesson.notes.length)
@@ -205,7 +205,7 @@ test('slides alternate ascent and descent with the same phrase for the response'
 })
 
 test('free-pitch lessons use pentatonic examples and judge the nearest rhythm onset',()=>{
-  for (const lesson of lessons.slice(7)) {
+  for (const lesson of lessons.slice(7, 9)) {
     assert.equal(lesson.freePitch,true)
     assert.ok(lesson.notes.every(n=>tutorialPentatonic.includes(n.midi)&&n.duration<=.5))
     for (const note of lesson.notes) {
@@ -272,8 +272,8 @@ test('final lesson changes to melodic rhythms after four bars', () => {
 test('No.8 accepts every white key including F and B', () => {
   for (const midi of [60,62,64,65,67,69,71,72]) assert.equal(isTutorialFreePitch(7,midi),true)
   assert.equal(isTutorialFreePitch(7,61),false)
-  assert.equal(isTutorialFreePitch(8,65),false)
-  assert.equal(isTutorialFreePitch(8,71),false)
+  assert.equal(isTutorialFreePitch(8,65),true)
+  assert.equal(isTutorialFreePitch(8,71),true)
 })
 
 test('No.7 plays each rhythm ascending and descending before switching', () => {
@@ -329,4 +329,28 @@ test('No.9 has the requested phrases in bars 1, 3 and 7', () => {
   assert.deepEqual(last.map(note=>note.midi),[60,62,64,62,60])
   assert.deepEqual(last.map(note=>note.beat),[0,.5,1,2,2.5])
   assert.deepEqual(last.map(note=>note.duration),[.5,.5,1,.5,1.5])
+})
+
+
+test('session schedules eight calls and replies over sixteen bars', async () => {
+  const h = harness()
+  await h.player.start(9)
+  const origin = 10 + 4 * tutorialBeatSeconds + .05
+  const rhythms = new Set()
+  for (let round = 0; round < 8; round++) {
+    const phrase = tutorialNotes(lessons[9],round * 2)
+    assert.equal(phrase,tutorialNotes(lessons[9],round * 2 + 1))
+    rhythms.add(phrase.map(note=>note.beat).join(','))
+    for (const note of phrase) h.tick(origin + (round * 8 + note.beat) * tutorialBeatSeconds)
+    h.tick(origin + (round * 8 + 4.01) * tutorialBeatSeconds)
+    assert.equal(h.states.at(-1).phase,'you')
+    assert.equal(h.states.at(-1).bar,round * 2 + 1)
+  }
+  assert.equal(rhythms.size,8)
+  const finalNote = tutorialNotes(lessons[9],15).at(-1)
+  assert.equal(finalNote.duration,2)
+  assert.deepEqual(shortNoteTarget([finalNote],60,62,true,16),{bar:15,note:finalNote})
+  assert.equal(recordTutorialSuccess(new Set(),15,true,16),true)
+  h.tick(origin + 64 * tutorialBeatSeconds)
+  assert.equal(h.states.at(-1).phase,'complete')
 })

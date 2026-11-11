@@ -102,6 +102,7 @@ export function mountBuddy(source, mountView = mountBuddyView) {
     view.speaking = false; view.line = selectedLine(); view.hideContinue = true; view.hideJoin = true; view.hideImitate = true
     source.refreshTransport()
     view.sessionRunning=false;view.turnProgress=0;view.turnRemaining=0
+    document.dispatchEvent(new CustomEvent('session-rhythm-beat', {detail:{beat:-1, beats:meter()}}))
     view.status = '停止'
   }
   let dialogueKey='',dialogueText='',dialogueIndex=0
@@ -266,6 +267,7 @@ export function mountBuddy(source, mountView = mountBuddyView) {
     }
     const turn = sessionTurn(beat)
     view.sessionRunning=sessionMode.value
+    if (sessionMode.value) document.dispatchEvent(new CustomEvent('session-rhythm-beat', {detail: {beat: beat % meter(), beats: meter()}}))
     view.turnProgress=(beat%(meter()*turnBars*2))/(meter()*turnBars*2)
     panel.style?.setProperty('--otto-beat-duration',`${60/sessionBpm}s`)
     view.turnRemaining=Math.ceil(meter()*turnBars-turn.local)

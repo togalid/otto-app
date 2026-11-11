@@ -1,5 +1,5 @@
 /** @typedef {{beat:number,midi:number,duration:number}} TutorialNote */
-/** @typedef {{title:string,messages:readonly string[],notes:readonly TutorialNote[],patterns?:readonly (readonly TutorialNote[])[],freePitch?:boolean,earlyPhrases?:readonly (readonly TutorialNote[])[],laterPhrases?:readonly (readonly TutorialNote[])[]}} TutorialLesson */
+/** @typedef {{title:string,messages:readonly string[],notes:readonly TutorialNote[],patterns?:readonly (readonly TutorialNote[])[],freePitch?:boolean,session?:boolean,earlyPhrases?:readonly (readonly TutorialNote[])[],laterPhrases?:readonly (readonly TutorialNote[])[]}} TutorialLesson */
 /** @typedef {{phase:'idle'|'loading'|'countdown'|'otto'|'you'|'complete'|'error',beat:number,bar:number,error:string}} TutorialState */
 /** @typedef {{ready:()=>Promise<void>,context?:{currentTime:number},playAt:(notes:readonly number[],time:number,duration:number,level?:number)=>void,silence:()=>void}} TutorialVoice */
 
@@ -21,10 +21,25 @@ export const tutorialPentatonic = [60,62,64,67,69,72]
 
 /** @param {number} lessonIndex @param {number} midi */
 export function isTutorialFreePitch(lessonIndex, midi) {
-  return lessonIndex === 7
-    ? [60,62,64,65,67,69,71,72].includes(midi)
-    : tutorialPentatonic.includes(midi)
+  return (lessonIndex === 7 || lessonIndex === 8) && [60,62,64,65,67,69,71,72].includes(midi)
 }
+
+// One call per two-bar exchange, mostly starting on beat one.
+/** @param {number} bar */
+export const isSessionSlide = bar => bar === 4 || bar === 5 || bar === 10 || bar === 11
+
+const sessionPhrases = [
+  rhythm([0,1,2,3]), rhythm([0,1,2.5,3]),
+  slide([60,62,64,65,67],.5), rhythm([0,1.5,2,3]),
+  rhythm([0,.5,1,2]), slide([67,65,64,62,60],.5),
+  rhythm([0,1,2,3.5]), rhythm([0,1,2]),
+].map((phrase,round) => phrase.map((note,index) => ({
+  ...note,
+  beat:note.beat + (round === 5 ? .5 : 0),
+  midi:isSessionSlide(round * 2) ? note.midi : tutorialPentatonic[(round + index * (round % 2 ? 5 : 1)) % 6],
+  duration:isSessionSlide(round * 2) ? .5 : round === 0 ? 1
+    : round === 6 && index === 2 ? 1 : round === 7 && index === 2 ? 2 : Math.min(.5, (phrase[index+1]?.beat ?? 4) - note.beat),
+})))
 
 /** @type {readonly TutorialLesson[]} */
 export const lessons = [
@@ -49,11 +64,19 @@ export const lessons = [
     [{beat:0,midi:64,duration:.5},{beat:.5,midi:67,duration:.5},{beat:1,midi:69,duration:1},{beat:2.5,midi:67,duration:.5},{beat:3,midi:64,duration:1}],
     [{beat:0,midi:60,duration:.5},{beat:.5,midi:62,duration:.5},{beat:1,midi:64,duration:1},{beat:2,midi:62,duration:.5},{beat:2.5,midi:60,duration:1.5}],
   ] },
+  {title:'Ottoとセッション',session:true,freePitch:true,notes:sessionPhrases[0],
+    messages:['ドラム、ベース、コードの伴奏に乗って、Ottoと16小節のセッション！','4拍ずつ交代で弾こう。ナビのリズムに合わせて弾いてみよう！']},
 ]
 
 /** The Otto bar and following user bar share the same phrase.
  * @param {TutorialLesson} lesson @param {number} bar */
-export function tutorialNotes(lesson,bar) {
+export function tutorialNotes(lesson,bar,level = 0) {
+  if (lesson.session) {
+    const phrase = sessionPhrases[Math.floor(Math.max(0,Math.min(15,bar))/2)]
+    if (!level || isSessionSlide(bar)) return phrase
+    return phrase.map((note, index) => index === 1 && (phrase[index + 1]?.beat ?? 4) > note.beat + .5
+      ? {...note, beat: note.beat + .5, duration: Math.min(note.duration, .5)} : note)
+  }
   if (lesson.earlyPhrases && bar < 4) return lesson.earlyPhrases[Math.floor(Math.max(0,bar) / 2)]
   if (lesson.laterPhrases && bar >= 4) return lesson.laterPhrases[Math.min(lesson.laterPhrases.length - 1, Math.floor((bar - 4) / 2))]
   return lesson.patterns?.[Math.floor(Math.max(0,Math.min(7,bar))/2)%lesson.patterns.length] ?? lesson.notes
@@ -83,9 +106,9 @@ export function eighthNoteHit(notes, midi, beat, anyPitch = false) {
 }
 
 /** Resolve a short-note tap to the nearest user turn, including just before its first beat.
- * @param {readonly TutorialNote[]} notes @param {number} midi @param {number} absoluteBeat @param {boolean} [anyPitch] */
-export function shortNoteTarget(notes, midi, absoluteBeat, anyPitch = false) {
-  for (const bar of [1,3,5,7]) {
+ * @param {readonly TutorialNote[]} notes @param {number} midi @param {number} absoluteBeat @param {boolean} [anyPitch] @param {number} [totalBars] */
+export function shortNoteTarget(notes, midi, absoluteBeat, anyPitch = false, totalBars = 8) {
+  for (let bar = 1; bar < totalBars; bar += 2) {
     const note = eighthNoteHit(notes,midi,absoluteBeat-bar*4,anyPitch)
     if (note) return {bar,note}
   }
@@ -126,9 +149,9 @@ export function responseComplete(notes, played, bar) {
 }
 
 /** Register each successful response only once per lesson run.
- * @param {Set<number>} successes @param {number} bar @param {boolean} complete */
-export function recordTutorialSuccess(successes, bar, complete) {
-  if (!complete || bar < 1 || bar > 7 || bar % 2 !== 1 || successes.has(bar)) return false
+ * @param {Set<number>} successes @param {number} bar @param {boolean} complete @param {number} [totalBars] */
+export function recordTutorialSuccess(successes, bar, complete, totalBars = 8) {
+  if (!complete || bar < 1 || bar >= totalBars || bar % 2 !== 1 || successes.has(bar)) return false
   successes.add(bar)
   return true
 }
@@ -159,7 +182,7 @@ export function createTutorialPlayer({voice,onUpdate,accompaniment,setTimer = (c
   /** @type {number|undefined} */
   let timer
   /** @param {TutorialState['phase']} phase @param {number} [beat] @param {string} [error] */
-  const publish = (phase,beat = 0,error = '') => onUpdate({phase,beat,bar:Math.max(0,Math.min(8,Math.floor(beat / 4))),error})
+  const publish = (phase,beat = 0,error = '') => onUpdate({phase,beat,bar:Math.max(0,Math.floor(beat / 4)),error})
   function cancel() {
     generation++
     origin = undefined
@@ -170,43 +193,51 @@ export function createTutorialPlayer({voice,onUpdate,accompaniment,setTimer = (c
   }
   function stop() { cancel(); publish('idle') }
   /** @param {number} index */
-  async function start(index) {
+  let beatSeconds = tutorialBeatSeconds
+  /** @param {number} index @param {number} [level] */
+  async function start(index, level = 0) {
     cancel()
     const token = generation
     const lesson = lessons[index]
     if (!Number.isInteger(index) || !lesson) { publish('error',0,'チュートリアルを選び直してください。'); return }
+    beatSeconds = lesson.session && level > 0 ? 60 / 90 : tutorialBeatSeconds
+    const totalBeats = lesson.session ? 64 : 32
     publish('loading')
     try {
       await Promise.all([voice.ready(), accompaniment?.ready()])
       if (token !== generation) return
       if (!voice.context) throw new Error('音声を開始できませんでした。もう一度スタートを押してください。')
-      const startTime = voice.context.currentTime + 4 * tutorialBeatSeconds + .05
+      const startTime = voice.context.currentTime + 4 * beatSeconds + .05
       origin = startTime
-      const events = Array.from({length:4}, (_, round) => {
-        const phrase = tutorialNotes(lesson, round * 2)
+      const events = Array.from({length:totalBeats / 8}, (_, round) => {
+        const phrase = tutorialNotes(lesson, round * 2, level)
         return phrase.map((note, noteIndex) => {
           const next = phrase[noteIndex + 1]
           // Keep the mono voice held until the next key takes over.
-          const connected = (lesson.patterns || ((index === 7 || index === 8) && round >= 2 && next && note.beat + note.duration >= next.beat - .001)) && next
+          const connected = (lesson.patterns || (lesson.session && isSessionSlide(round * 2)) || ((index === 7 || index === 8) && round >= 2 && next && note.beat + note.duration >= next.beat - .001)) && next
           const duration = connected
-            ? (next.beat - note.beat) * tutorialBeatSeconds + (next.midi === note.midi ? -.025 : .01)
-            : note.duration * tutorialBeatSeconds
-          return {midi:note.midi, time:startTime + (round * 8 + note.beat) * tutorialBeatSeconds, duration}
+            ? (next.beat - note.beat) * beatSeconds + (next.midi === note.midi ? -.025 : .01)
+            : note.duration * beatSeconds
+          return {midi:note.midi, time:startTime + (round * 8 + note.beat) * beatSeconds, duration}
         })
       }).flat()
-      const backing = Array.from({length:36},(_,i) => ({beat:i-4,time:startTime+(i-4)*tutorialBeatSeconds}))
+      const backing = Array.from({length:totalBeats + 4},(_,i) => ({beat:i-4,time:startTime+(i-4)*beatSeconds}))
       let backingCursor = 0
       let cursor = 0
       const tick = () => {
         if (token !== generation || !voice.context) return
         try {
           const now = voice.context.currentTime
-          const beat = Math.max(-4,(now - startTime) / tutorialBeatSeconds)
-          if (now >= startTime + 32 * tutorialBeatSeconds) { cancel(); publish('complete',32); return }
+          const beat = Math.max(-4,(now - startTime) / beatSeconds)
+          if (now >= startTime + totalBeats * beatSeconds) { cancel(); publish('complete',totalBeats); return }
           while (backingCursor < backing.length && backing[backingCursor].time < now + .12) {
             const event = backing[backingCursor++]
             if (event.time >= now - .08 && accompaniment) {
               if (event.beat < 0) accompaniment.playAt([event.beat === -4 ? 84 : 79],event.time,.12,.45)
+              else if (lesson.session) {
+                const chord = lessonThreeChords[[0,3,2,4][Math.floor(event.beat / 4) % 4]]
+                accompaniment.playAt(chord.notes,event.time,.52,event.beat % 2 === 0 ? .35 : .22,chord.bass)
+              }
               else if (index === 1) {
                 const chord = lessonThreeChords[Math.floor(event.beat / 2) % lessonThreeChords.length]
                 accompaniment.playAt(chord.notes,event.time,.35,event.beat % 4 === 0 ? .32 : .18,chord.bass)
@@ -232,5 +263,5 @@ export function createTutorialPlayer({voice,onUpdate,accompaniment,setTimer = (c
       publish('error',0,error instanceof Error ? error.message : '音声を開始できませんでした。もう一度スタートを押してください。')
     }
   }
-  return {start,stop, currentBeat:()=>origin !== undefined && voice.context ? (voice.context.currentTime-origin)/tutorialBeatSeconds : undefined}
+  return {start,stop, currentBeat:()=>origin !== undefined && voice.context ? (voice.context.currentTime-origin)/beatSeconds : undefined}
 }

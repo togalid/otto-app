@@ -20,7 +20,7 @@ export function mountKeyboard(source) {
   /** @type {Map<number,HTMLButtonElement>} */
   const buttons=new Map()
   let white = 0
-  const keys = pianoNotes.map(midi => {
+  const keys = pianoNotes.slice(0, 25).map(midi => {
     const key = pianoKey(midi)
     const left = key.black
       ? `calc(${white} * var(--piano-width) - var(--piano-black-width) / 2)`
@@ -89,7 +89,7 @@ export function mountKeyboard(source) {
     const midi=Number(/** @type {HTMLElement} */(button).dataset.midi)
     if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
       event.preventDefault()
-      const next=event.key==='Home'?48:event.key==='End'?84:Math.max(48,Math.min(84,midi+(event.key==='ArrowRight'?1:-1)))
+      const next=event.key==='Home'?48:event.key==='End'?72:Math.max(48,Math.min(72,midi+(event.key==='ArrowRight'?1:-1)))
       if(keyboardMidi!==undefined){source.attack(next,true);source.release(keyboardMidi);keyboardMidi=next;buttons.forEach((key,n)=>key.toggleAttribute('data-held',n===next))}
       focusKey(next);return
     }
@@ -110,7 +110,7 @@ export function mountKeyboard(source) {
   board.addEventListener('focusout',event=>{if(!board.contains(/** @type {Node|null} */(event.relatedTarget)))release()})
   function refreshLabels() {
     const offset = octave - (original.bass?.() ? 2 : 0)
-    board.setAttribute('aria-label', `C${3 + offset}からC${6 + offset}の鍵盤`)
+    board.setAttribute('aria-label', `C${3 + offset}からC${5 + offset}の鍵盤`)
     buttons.forEach((button,midi)=>{
       const label = pianoKey(midi).label.replace(/\d+$/, String(Math.floor(midi / 12) - 1 + offset))
       button.setAttribute('aria-label', label+'を鳴らす')

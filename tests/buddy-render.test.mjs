@@ -39,7 +39,7 @@ test('Otto sustained notes do not rewrite pad/key highlights on every audio tick
     document: {
       querySelector: element,
       querySelectorAll: selector => selector === '#pads button' ? pads : keys,
-      createElementNS: () => new ElementStub(), addEventListener() {},
+      createElementNS: () => new ElementStub(), addEventListener() {}, dispatchEvent() {},
     },
     window: { addEventListener() {} },
   }

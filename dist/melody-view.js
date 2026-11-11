@@ -1,4 +1,5 @@
-import { mountTutorial, developmentTutorial } from './tutorial-view.js'
+import { mountDrumTutorial } from './drum-tutorial.js'
+import { mountTutorial } from './tutorial-view.js'
 import { createApp, h } from './vendor/vue.runtime.esm-browser.prod.js'
 import { genres } from './groove.js'
 import { presets, notes, melodyPalette, melodyRole, displayChordParts } from './music.js'
@@ -456,46 +457,62 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
   const free = /** @type {HTMLElement} */ (document.querySelector('.shell'))
   const menu = /** @type {HTMLElement} */ (document.querySelector('#mode-menu'))
   const tutorial = /** @type {HTMLElement} */ (document.querySelector('#tutorial-menu'))
+  const categories = document.createElement('section')
+  categories.className = 'mode-screen tutorial-categories'
+  categories.hidden = true
+  categories.innerHTML = '<button type="button" data-category-back>← メニュー</button><h1 tabindex="-1">どの楽器で遊ぶ？</h1><div class="mode-choices"><button type="button" data-lesson="tutorial"><strong>メロディ編</strong><span>鍵盤で音とリズムを楽しもう · 10レッスン</span></button><button type="button" data-lesson="drum-tutorial"><strong>ドラム編</strong><span>8つのパッドで8ビートを叩こう · 1レッスン</span></button><button type="button" disabled><strong>ベース編</strong><span>準備中</span></button><button type="button" disabled><strong>コード編</strong><span>準備中</span></button></div>'
+  const drumRoot = document.createElement('section')
+  drumRoot.className = 'tutorial-screen drum-tutorial'
+  drumRoot.hidden = true
+  menu.after(categories, drumRoot)
+  const drumView = mountDrumTutorial(drumRoot, () => open('categories'))
+  categories.querySelector('[data-category-back]')?.addEventListener('click', () => open('menu'))
+  categories.querySelectorAll('[data-lesson]').forEach(button => button.addEventListener('click', () => open(button.getAttribute('data-lesson') ?? 'categories')))
   /** @param {string} mode */
   function open(mode) {
     stopPlayback()
     tutorialView.close()
+    drumView.close()
+    categories.hidden = mode !== 'categories'
+    drumRoot.hidden = mode !== 'drum-tutorial'
+    if (mode === 'drum-tutorial') drumView.open()
     document.body.dataset.appMode = mode
     free.hidden = mode !== 'free'
     menu.hidden = mode !== 'menu'
     tutorial.hidden = mode !== 'tutorial'
     if (mode === 'tutorial') tutorialView.open()
     const target = mode === 'free' ? free.querySelector('.mode-back')
-      : mode === 'menu' ? document.querySelector('#mode-menu-title') : null
+      : mode === 'menu' ? document.querySelector('#mode-menu-title') : mode === 'categories' ? categories.querySelector('h1') : null
     if (target instanceof HTMLElement) target.focus()
     else if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
   }
   const tutorialView = mountTutorial(tutorial, mode => {
-    open(mode)
+    open(mode === 'menu' ? 'categories' : mode)
     if (mode === 'free') { selectSession(); document.dispatchEvent(new Event('tutorial-free-session')) }
   }, connectMidi)
   document.querySelectorAll('[data-open-mode]').forEach(button => {
-    button.addEventListener('click', () => open(button.getAttribute('data-open-mode') ?? 'menu'))
+    button.addEventListener('click', () => open(button.getAttribute('data-open-mode') === 'tutorial' ? 'categories' : button.getAttribute('data-open-mode') ?? 'menu'))
   })
   const logo = free.querySelector('.logo')
   logo?.addEventListener('click', event => { event.preventDefault(); open('menu') })
   for (const type of ['keydown', 'keyup']) {
     document.addEventListener(type, event => {
-      if (document.body.dataset.appMode === 'tutorial' && event instanceof KeyboardEvent && event.key === ' ') {
+      if (['tutorial','drum-tutorial'].includes(document.body.dataset.appMode ?? '') && event instanceof KeyboardEvent && event.key === ' ') {
         event.preventDefault()
         event.stopImmediatePropagation()
         if (event.type === 'keydown' && !event.repeat) {
           if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
-          tutorialView.advanceMessage()
+          if (document.body.dataset.appMode === 'drum-tutorial') drumView.advanceMessage()
+          else tutorialView.advanceMessage()
         }
         return
       }
-      if (document.body.dataset.appMode === 'free' || (event.target instanceof Node && tutorial.contains(event.target))) return
+      if (document.body.dataset.appMode === 'free' || document.body.dataset.appMode === 'drum-tutorial' || (event.target instanceof Node && tutorial.contains(event.target))) return
       // Menu controls retain native keyboard activation without triggering performance shortcuts.
       event.stopImmediatePropagation()
     }, true)
   }
   free.hidden = true
-  if (developmentTutorial) open('tutorial')
+  open('menu')
   return tutorialView
 }

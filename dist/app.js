@@ -114,6 +114,7 @@ async function play(index, hold = false) {
 buttons.push(...mountMelodyPads({ play, release: releasePad, clickRelease: index => buddyController?.release(index) }))
 
 document.addEventListener('keydown', (event) => {
+  if (document.body.dataset.appMode !== 'free') return
   if (event.target instanceof Element && event.target.closest('dialog[open]')) return
   if (
     event.repeat ||
@@ -130,6 +131,7 @@ document.addEventListener('keydown', (event) => {
   void play(index, true)
 })
 document.addEventListener('keyup', event => {
+  if (document.body.dataset.appMode !== 'free') return
   const index = notes.findIndex(note => note.key === event.key.toLowerCase())
   if (index >= 0) releasePad(index)
 })
@@ -174,6 +176,7 @@ document.addEventListener('keydown', (event) => {
 }, true)
 // Left and right browse styles while ordinary controls keep their native keys.
 document.addEventListener('keydown', event => {
+  if (document.body.dataset.appMode !== 'free') return
   if (event.defaultPrevented || event.repeat || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
   if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
   if (document.querySelector('dialog[open]')) return

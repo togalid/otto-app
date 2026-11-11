@@ -3310,3 +3310,54 @@ body[data-app-mode='tutorial'] > .shell,
  .session-guide-copy strong { font-size:13px; }
  .session-guide-copy small { font-size:11px; }
 }
+
+.tutorial-categories .mode-choices { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.tutorial-categories button:disabled { opacity:.5; cursor:default; box-shadow:none; }
+@media(max-width:480px) { .tutorial-categories .mode-choices { grid-template-columns:1fr; gap:12px; } }
+
+/* Drum lesson: mirrored two-hand pads and an eighth-note timeline. */
+.drum-tutorial { width:min(880px,100%); }
+.drum-lesson { display:flex; flex-direction:column; gap:16px; }
+.drum-lesson-header { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.drum-lesson-header strong { flex:1; font-size:18px; }
+.drum-stage-steps { display:flex; gap:8px; flex-wrap:wrap; font-size:13px; }
+.drum-stage-steps span { padding:8px 10px; border-radius:7px; background:var(--oto-case-low); }
+.drum-stage-steps [data-current] { background:var(--oto-secondary); color:var(--oto-key); }
+.drum-lesson-message { padding:16px; border-radius:7px; background:var(--oto-key); min-height:104px; box-sizing:border-box; }
+.drum-lesson-message p { margin:0 0 12px; line-height:1.65; }
+.drum-complete-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.drum-lesson-guide { padding:16px; border-radius:7px; background:var(--oto-case-low); }
+.drum-guide-heading { display:flex; justify-content:space-between; gap:12px; margin-bottom:12px; }
+.drum-beat-count, .drum-guide-row { display:grid; grid-template-columns:100px repeat(8,minmax(0,1fr)); gap:4px; align-items:center; }
+.drum-beat-count::before { content:''; }
+.drum-beat-count span { text-align:center; padding:5px 0; border-radius:4px; font-size:13px; }
+.drum-beat-count [data-current] { background:var(--oto-secondary); color:var(--oto-key); }
+.drum-guide-row { margin-top:4px; }
+.drum-guide-row small { font-size:11px; }
+.drum-guide-row > span { min-height:24px; display:grid; place-items:center; border-left:1px dotted var(--oto-display-ink); }
+.drum-guide-row [data-note] { background:var(--oto-key); border-radius:5px; }
+.drum-guide-row [data-hit] { background:#f7db63; color:#292e29; box-shadow:inset 0 0 0 1px #bca74f; }
+.drum-pad-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-top:8px; touch-action:none; }
+.drum-tutorial .drum-tutorial-pad { display:flex; flex-direction:column; justify-content:center; align-items:center; gap:8px; min-height:118px; padding:12px 4px; touch-action:none; user-select:none; -webkit-user-select:none; }
+.drum-tutorial-pad small { font-size:12px; }
+.drum-tutorial-pad strong { font-size:16px; }
+.drum-tutorial-pad kbd { font:inherit; font-size:11px; opacity:.65; }
+.drum-tutorial .drum-tutorial-pad[data-lit], .drum-tutorial .drum-tutorial-pad:active { background:var(--oto-selection); box-shadow:var(--oto-recess); }
+.drum-pad-hint { font-size:12px; margin:0; text-align:center; }
+@media(max-width:600px) {
+ .drum-lesson { gap:12px; }
+ .drum-lesson-header strong { font-size:15px; }
+ .drum-stage-steps { gap:4px; font-size:10px; }
+ .drum-stage-steps span { padding:6px; }
+ .drum-lesson-guide { padding:10px; }
+ .drum-beat-count, .drum-guide-row { grid-template-columns:64px repeat(8,minmax(0,1fr)); gap:2px; }
+ .drum-guide-row small { font-size:10px; }
+ .drum-pad-grid { gap:8px; }
+ .drum-tutorial .drum-tutorial-pad { min-height:94px; gap:6px; }
+ .drum-tutorial-pad strong { font-size:12px; }
+ .drum-tutorial-pad small { font-size:10px; }
+}
+@media(max-height:500px) and (orientation:landscape) {
+ .drum-tutorial .drum-tutorial-pad { min-height:64px; }
+ .drum-lesson-message { min-height:0; padding:10px; }
+}

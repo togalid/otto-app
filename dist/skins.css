@@ -2298,10 +2298,10 @@ main[data-workspace-view='melody'] > #detail-melody { display:block !important; 
 #piano-keys .piano-key:is([data-held],[data-playing],[data-pc-playing]) { background:var(--oto-secondary); color:var(--oto-key); box-shadow:var(--oto-recess); }
 :root[data-skin='soda'] #piano-keys .piano-black:is([data-held],[data-playing],[data-pc-playing]) { background:var(--oto-selection); box-shadow:inset 0 0 0 2px var(--oto-accent); }
 
-.waveform-reticle::after { width:4px; height:28px; background:#f3cb52; opacity:1; border-radius:2px; }
+.waveform-reticle::after { width:1px; height:28px; background:#f3cb52; opacity:1; border-radius:2px; }
 .waveform-reticle { transition:color .16s,filter .16s; }
 .waveform-reticle.on-target { color:var(--oto-accent); filter:drop-shadow(0 0 3px color-mix(in srgb,var(--oto-accent) 25%,transparent)); }
-.waveform-reticle.on-target::after { width:6px; }
+.waveform-reticle.on-target::after { width:1px; }
 .waveform-scope-cue { position:absolute; bottom:calc(100% + 12px); left:50%; transform:translateX(-50%); white-space:nowrap; padding:6px 10px; border-radius:7px; background:var(--oto-key); color:var(--oto-secondary); font-size:12px; font-weight:600; box-shadow:var(--oto-raised); }
 .waveform-scope-cue::after { content:''; position:absolute; top:100%; left:calc(50% - 5px); border:5px solid transparent; border-top-color:var(--oto-key); }
 
@@ -3278,35 +3278,6 @@ body[data-app-mode='tutorial'] > .shell,
 
 .tutorial-navigation-header .tutorial-session-ring + .tutorial-score { margin-left:8px; }
 
-/* Free-play session guide and settings share the same workspace. */
-#detail-melody .session-guide-toggle { grid-column:1 / -1; justify-self:end; margin:0; }
-#detail-melody .session-rhythm-guide { grid-column:1 / -1; display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:10px 12px; border-radius:7px; background:var(--oto-display); color:var(--oto-display-ink); }
-#detail-melody .session-rhythm-beats { display:flex; flex:1; min-width:200px; gap:4px; }
-#detail-melody .session-rhythm-beats > span { display:flex; flex:1; align-items:center; justify-content:center; gap:6px; min-height:36px; border-radius:7px; background:var(--oto-key); }
-#detail-melody .session-rhythm-beats > span[data-current] { background:var(--oto-selection); color:var(--oto-selection-ink); }
-#detail-melody .session-rhythm-beats small { font-size:11px; }
-#detail-melody .melody-top-row[data-guide-view='settings'] .session-rhythm-guide { display:none; }
-#detail-melody .melody-top-row[data-guide-view='rhythm'] .otto-mode-field,
-#detail-melody .melody-top-row[data-guide-view='rhythm'] .session-timing-field,
-#detail-melody .melody-top-row[data-guide-view='rhythm'] .session-offset-stepper { display:none; }
-
-/* Keep guidance above the keys and secondary settings in a separate view. */
-#detail-melody .session-guide-toggle { grid-column:1 / -1; grid-row:auto; justify-self:start; }
-.session-guide-toggle input { position:absolute; opacity:0; width:1px; height:1px; }
-.session-guide-toggle label:has(input:focus-visible) > span { outline:2px solid var(--oto-accent); outline-offset:2px; }
-#detail-melody .session-rhythm-guide { background:var(--oto-case-low); gap:16px; padding:12px 16px; }
-.session-guide-copy { display:flex; flex-direction:column; gap:6px; }
-.session-guide-copy strong { font-size:14px; font-weight:600; }
-.session-guide-copy small { font-size:12px; color:var(--oto-display-ink); }
-#detail-melody .session-rhythm-beats > span { flex-direction:column; gap:2px; min-height:52px; font-size:22px; }
-#detail-melody .session-rhythm-beats > span[data-current] { background:var(--oto-selection); box-shadow:inset 0 0 0 1px var(--oto-secondary); }
-@media(max-width:600px) {
- #detail-melody .session-rhythm-guide { padding:10px; gap:10px; }
- #detail-melody .session-rhythm-beats { flex-basis:100%; min-width:0; }
- .session-guide-copy strong { font-size:13px; }
- .session-guide-copy small { font-size:11px; }
-}
-
 .tutorial-categories .mode-choices { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .tutorial-categories button:disabled { opacity:.5; cursor:default; box-shadow:none; }
 @media(max-width:480px) { .tutorial-categories .mode-choices { grid-template-columns:1fr; gap:12px; } }
@@ -3541,3 +3512,61 @@ body[data-app-mode='tutorial'] > .shell,
 .mode-screen .selection-start:disabled { background:var(--oto-case); color:var(--oto-ink); opacity:.6; cursor:default; box-shadow:none; }
 
 .selection-art .mode-scene { display:block; width:100%; height:100%; object-fit:contain; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .mode-screen :is(.selection-choice, .selection-start):enabled {
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 120ms ease;
+  }
+  .selection-pointer { transition: transform 150ms ease; }
+  .mode-screen :is(.selection-choice, .selection-start):enabled:active {
+    transform: translateY(2px);
+    box-shadow: var(--oto-recess);
+  }
+  .selection-enter { animation: selection-arrive 220ms cubic-bezier(.2,.75,.25,1) both; }
+  .selection-detail .selection-enter { animation-delay: 25ms; }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mode-screen .selection-choice[aria-pressed='false']:enabled:hover {
+    background-color: color-mix(in srgb, var(--oto-key) 88%, var(--oto-secondary));
+    border-left-color: var(--oto-secondary);
+  }
+  .mode-screen .selection-start:enabled:hover {
+    background-color: color-mix(in srgb, var(--oto-accent) 88%, var(--oto-ink));
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .mode-screen .selection-choice:enabled:hover .selection-pointer { transform: translateX(3px); }
+}
+
+@keyframes selection-arrive {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Keep the free-play keyboard close to the mixer. */
+main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody { margin-top:8px; }
+
+.song-session-prototype header { min-height:0; }
+.song-session-prototype h1 { font-size:20px; margin:0; }
+.song-session-prototype main { flex:1; }
+.song-session-prototype button { font:inherit; min-height:44px; padding:10px 16px; border:0; border-radius:7px; background:var(--oto-key); color:var(--oto-ink); box-shadow:var(--oto-raised); cursor:pointer; }
+.song-session-prototype button:focus-visible { outline:2px solid var(--oto-accent); outline-offset:3px; }
+.song-session-prototype { width:min(980px, 100%); }
+.song-session-prototype main { display:grid; align-content:start; gap:14px; }
+.song-session-transport { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:12px; }
+.song-session-transport strong { padding:12px; border-radius:7px; overflow-wrap:anywhere; background:var(--oto-display); color:var(--oto-display-ink); }
+.song-session-parts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.song-session-parts button span { display:block; }
+.song-session-parts button[aria-pressed='true'] { background:var(--oto-secondary); color:var(--oto-key); box-shadow:var(--oto-recess); }
+.song-session-score-status { margin:0 0 8px; font-size:13px; }
+.song-session-keys { gap:0; }
+.song-session-prototype .song-session-keys .tutorial-black { width:7%; }
+.song-session-keys button:active { background:var(--oto-selection); color:var(--oto-selection-ink); }
+.song-session-note { top:48%; overflow:hidden; white-space:nowrap; }
+.song-session-note.song-session-hit { background:#f4d75d; color:var(--oto-ink); }
+
+.song-session-prototype .song-session-octave { justify-self:start; }
+.song-session-prototype .song-session-octave .style-stepper > button { width:44px; min-width:44px; min-height:44px; padding:0; box-shadow:none; }
+.song-session-prototype .song-session-octave output { min-width:4ch; }

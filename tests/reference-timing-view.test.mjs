@@ -54,8 +54,8 @@ test('reference alignment keeps source timing, seeking and key controls connecte
     timingTempo.value = '133.4'
     timingTempo.dispatchEvent(new Event('input', {bubbles: true}))
     await nextTick()
-    assert.equal(tempo.value, '133')
-    assert.equal(host.querySelector('.timing-tempo-knob output').textContent, '133')
+    assert.equal(tempo.value, '133.4')
+    assert.equal(host.querySelector('.timing-tempo-knob output').textContent, '133.4')
     // Vue updates keep the same input node so installed knob gesture handlers survive.
     assert.equal(host.querySelector('.timing-tempo-knob input'), timingTempo)
 

@@ -243,7 +243,7 @@ export function mountReferenceTiming(host, options) {
     if (!direction) return
     event.preventDefault()
     setTempo(
-      Math.max(40, Math.min(200, Math.round(Number(tempo.value)) + direction)),
+      Math.max(40, Math.min(200, (Math.round(Number(tempo.value) * 10) + direction) / 10)),
     )
   }
   /** @param {boolean} [redraw] */
@@ -552,12 +552,7 @@ export function mountReferenceTiming(host, options) {
                     'aria-label': '位置合わせのテンポ',
                     onInput: /** @param {Event} event */ (event) =>
                       setTempo(
-                        Math.round(
-                          Number(
-                            /** @type {HTMLInputElement} */ (event.target)
-                              .value,
-                          ),
-                        ),
+                        Number(/** @type {HTMLInputElement} */ (event.target).value),
                       ),
                     onKeydown: tempoKey,
                   }),
@@ -717,7 +712,7 @@ export function mountReferenceTiming(host, options) {
     sensitivity,
     integer,
   ] of /** @type {[string,number,boolean][]} */ ([
-    ['.timing-tempo-knob input', 0.5, true],
+    ['.timing-tempo-knob input', 0.5, false],
     [
       '.reference-key-assist input[aria-label="聴き比べるルート音"]',
       0.1,

@@ -1,3 +1,4 @@
+import { mountSongSession } from './song-session.js'
 import { mountDrumTutorial } from './drum-tutorial.js'
 import { mountTutorial, developmentTutorial } from './tutorial-view.js'
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
@@ -101,41 +102,6 @@ buddyInline?.before(melodyTopRow)
 if (buddyInline) melodyTopRow.append(buddyInline)
 const melodyModeField = melodyLabHost?.querySelector('.otto-mode-field')
 if (melodyModeField) melodyTopRow.append(melodyModeField)
-
-const guidePanel = document.createElement('section')
-guidePanel.className = 'session-rhythm-guide'
-guidePanel.setAttribute('aria-label', 'リズムガイド')
-guidePanel.innerHTML = '<div class="session-guide-copy"><strong>リズムに合わせて弾いてみよう</strong><small>好きな音でOK。スライドも使ってみよう！</small></div><div class="session-rhythm-beats" aria-label="1、2、3、4拍"><span>♩<small>1</small></span><span>♩<small>2</small></span><span>♩<small>3</small></span><span>♩<small>4</small></span></div>'
-const guideToggle = document.createElement('fieldset')
-guideToggle.className = 'segmented-control session-guide-toggle'
-guideToggle.setAttribute('aria-label', '表示切り替え')
-guideToggle.innerHTML = '<legend class="sr-only">表示切り替え</legend><label><input type="radio" name="session-guide-view" value="rhythm"><span>リズムガイド</span></label><label><input type="radio" name="session-guide-view" value="settings" checked><span>演奏設定</span></label>'
-melodyTopRow.append(guideToggle, guidePanel)
-/** @param {string} value */
-function setGuideView(value) {
-  melodyTopRow.dataset.guideView = value
-  const selected = /** @type {HTMLInputElement | null} */ (guideToggle.querySelector(`input[value="${value}"]`))
-  if (selected) selected.checked = true
-}
-guideToggle.addEventListener('change', event => {
-  if (event.target instanceof HTMLInputElement) setGuideView(event.target.value)
-})
-document.addEventListener('tutorial-free-session', () => setGuideView('rhythm'))
-document.addEventListener('session-rhythm-beat', event => {
-  if (!(event instanceof CustomEvent)) return
-  const {beat: position, beats} = event.detail
-  const beat = Math.floor(position)
-  const track = guidePanel.querySelector('.session-rhythm-beats')
-  if (track && track.children.length !== beats && beats > 0) {
-    track.innerHTML = Array.from({length: beats}, (_, index) => `<span>♩<small>${index + 1}</small></span>`).join('')
-    track.setAttribute('aria-label', `${beats}拍のリズム`)
-  }
-  Array.from(guidePanel.querySelectorAll('.session-rhythm-beats > span')).forEach((node, index) => {
-    node.toggleAttribute('data-current', beat === index)
-  })
-})
-setGuideView('rhythm')
-
 
 const melodyChoices = document.createElement('div')
 melodyChoices.className = 'melody-choice-row'
@@ -456,19 +422,24 @@ export function mountMobileLayout() {
  * @param {Element} host @param {MenuChoice[]} choices @param {(id:string)=>void} confirm */
 export function mountSelectionStage(host, choices, confirm) {
   const selected = ref(choices[0].id)
+  const hasSwitched = ref(false)
   const current = () => choices.find(choice => choice.id === selected.value) ?? choices[0]
   const app = createApp({render: () => {
     const item = current()
     return h('div', {class:'selection-stage'}, [
       h('div', {class:'selection-list', role:'group', 'aria-label':'遊び方を選ぶ'}, choices.map((choice, index) =>
         h('button', {type:'button', class:'selection-choice', 'aria-pressed':choice.id === selected.value, disabled:choice.disabled,
-          onClick:() => {selected.value = choice.id}}, [
+          onClick:() => {
+            if (selected.value === choice.id) return
+            hasSwitched.value = true
+            selected.value = choice.id
+          }}, [
           h('span', {class:'selection-number', 'aria-hidden':'true'}, String(index + 1).padStart(2,'0')),
           h('span', {class:'selection-choice-copy'}, [h('strong', choice.title), h('small', choice.disabled || choice.previewOnly ? '準備中' : choice.subtitle)]),
           h('span', {'aria-hidden':'true', class:'selection-pointer'}, choice.disabled ? '…' : '›'),
         ]))),
       h('div', {class:'selection-feature', 'data-instrument':item.icon}, [
-        h('div', {class:'selection-art', 'aria-hidden':'true'}, item.image ? [h('img',{class:'mode-scene',src:item.image,alt:'',width:480,height:320})] : [
+        h('div', {key:`art-${item.id}`, class:['selection-art', hasSwitched.value && 'selection-enter'], 'aria-hidden':'true'}, item.image ? [h('img',{class:'mode-scene',src:item.image,alt:'',width:480,height:320})] : [
           h('span', {class:'selection-orbit orbit-one'}), h('span', {class:'selection-orbit orbit-two'}),
           h('svg', {class:'selection-otto', viewBox:'0 0 100 100'}, [
             h('circle',{cx:50,cy:50,r:38,fill:'currentColor'}),
@@ -484,7 +455,9 @@ export function mountSelectionStage(host, choices, confirm) {
           h('span',{class:'selection-note note-one'},'♪'),h('span',{class:'selection-note note-two'},'♫'),
         ]),
         h('div',{class:'selection-detail','aria-live':'polite'},[
-          h('span',{class:'selection-badge'},item.badge),h('h2',item.title),h('p',item.description),
+          h('div',{key:item.id,class:hasSwitched.value ? 'selection-enter' : undefined},[
+            h('span',{class:'selection-badge'},item.badge),h('h2',item.title),h('p',item.description),
+          ]),
         ]),
         h('button',{type:'button',class:'selection-start',disabled:item.disabled || item.previewOnly,onClick:()=>{if (!item.disabled && !item.previewOnly) confirm(item.id)}},[h('span',item.disabled || item.previewOnly ? '準備中' : 'これであそぶ'),h('span',{'aria-hidden':'true'},'▶')]),
       ]),
@@ -508,17 +481,25 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
   const drumRoot = document.createElement('section')
   drumRoot.className = 'tutorial-screen drum-tutorial'
   drumRoot.hidden = true
-  menu.after(categories, drumRoot)
+  const songPrototype = document.createElement('section')
+  songPrototype.className = 'tutorial-screen song-session-prototype'
+  songPrototype.hidden = true
+  songPrototype.innerHTML = '<header class="selection-header"><button type="button" data-song-back>← メニュー</button><h1 tabindex="-1">曲でセッション</h1></header><main aria-label="曲でセッションの試作エリア"></main>'
+  songPrototype.querySelector('[data-song-back]')?.addEventListener('click', () => open('menu'))
+  menu.after(categories, drumRoot, songPrototype)
+  const songSession = mountSongSession(/** @type {HTMLElement} */ (songPrototype.querySelector('main')), connectMidi)
   const drumView = mountDrumTutorial(drumRoot, () => open('categories'))
   categories.querySelector('[data-category-back]')?.addEventListener('click', () => open('menu'))
 
   /** @param {string} mode */
   function open(mode) {
     stopPlayback()
+    if (!songPrototype.hidden) songSession.stop()
     tutorialView.close()
     drumView.close()
     categories.hidden = mode !== 'categories'
     drumRoot.hidden = mode !== 'drum-tutorial'
+    songPrototype.hidden = mode !== 'song-session'
     if (mode === 'drum-tutorial') drumView.open()
     document.body.dataset.appMode = mode
     free.hidden = mode !== 'free'
@@ -526,19 +507,19 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
     tutorial.hidden = mode !== 'tutorial'
     if (mode === 'tutorial') tutorialView.open()
     const target = mode === 'free' ? free.querySelector('.mode-back')
-      : mode === 'menu' ? document.querySelector('#mode-menu-title') : mode === 'categories' ? categories.querySelector('h1') : null
+      : mode === 'song-session' ? songPrototype.querySelector('h1') : mode === 'menu' ? document.querySelector('#mode-menu-title') : mode === 'categories' ? categories.querySelector('h1') : null
     if (target instanceof HTMLElement) target.focus()
     else if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
   }
   const tutorialView = mountTutorial(tutorial, mode => {
     open(mode === 'menu' ? 'categories' : mode)
-    if (mode === 'free') { selectSession(); document.dispatchEvent(new Event('tutorial-free-session')) }
+    if (mode === 'free') selectSession()
   })
   const modeHost = menu.querySelector('#mode-selection')
   if (modeHost) mountSelectionStage(modeHost, [
     {id:'categories',title:'チュートリアル',subtitle:'お手本に合わせてチャレンジ',description:'聴いて、まねして、ひとつずつ。楽器を選んでリズムの冒険へ。',badge:'はじめてでも大丈夫',icon:'keys',image:'./mode-tutorial.svg'},
     {id:'free',title:'フリー演奏',subtitle:'好きなスタイルでセッション',description:'スタイルを選んで、自分らしく。好きな曲を読み込んで、一緒に演奏することも。',badge:'あそび方は自由',icon:'session',image:'./mode-free.svg'},
-    {id:'song-session',title:'曲でセッション',subtitle:'曲を選んで、すぐに演奏',description:'用意された曲を選んで、すぐにOttoと演奏。位置合わせや細かな設定なしで楽しめるモードを準備中です。',badge:'COMING SOON',icon:'session',image:'./mode-song.svg',previewOnly:true},
+    {id:'song-session',title:'曲でセッション',subtitle:'曲を選んで、すぐに演奏',description:'用意された曲を選んで、すぐにOttoと演奏。位置合わせや細かな設定なしで楽しめるモードを準備中です。',badge:'試作中',icon:'session',image:'./mode-song.svg'},
   ], open)
   const categoryHost = categories.querySelector('.category-selection')
   if (categoryHost) mountSelectionStage(categoryHost, [
@@ -560,6 +541,12 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
   logo?.addEventListener('click', event => { event.preventDefault(); open('menu') })
   for (const type of ['keydown', 'keyup']) {
     document.addEventListener(type, event => {
+      if (document.body.dataset.appMode === 'song-session' && event instanceof KeyboardEvent && event.key === ' ') {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        if (event.type === 'keydown' && !event.repeat) void songSession.togglePlayback()
+        return
+      }
       if (['tutorial','drum-tutorial'].includes(document.body.dataset.appMode ?? '') && event instanceof KeyboardEvent && event.key === ' ') {
         event.preventDefault()
         event.stopImmediatePropagation()
@@ -576,6 +563,6 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
     }, true)
   }
   free.hidden = true
-  open(developmentTutorial ? 'drum-tutorial' : 'menu')
-  return tutorialView
+  open(developmentTutorial ? 'song-session' : 'menu')
+  return Object.assign(tutorialView, { songMidiAttack: songSession.midiAttack, songMidiRelease: songSession.midiRelease })
 }

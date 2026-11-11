@@ -1127,6 +1127,7 @@ const midiInput = mountMidiInput({
   ready: async () => { await Promise.all([instrument.ready(), chordInstrument.ready()]) },
   attack:midi=>{
     if(document.body.dataset.appMode === 'tutorial') { midiDestinations.set(midi,'tutorial'); tutorialView?.midiAttack(midi); return }
+    if(document.body.dataset.appMode === 'song-session') { midiDestinations.set(midi,'song-session'); tutorialView?.songMidiAttack(midi); return }
     if(document.body.dataset.appMode !== 'free')return
     const part=midiPart
     midiDestinations.set(midi,part)
@@ -1141,7 +1142,7 @@ const midiInput = mountMidiInput({
       if(time!==undefined)drums.hitAt(sound,time+.01,.85,duration,pitch,index===7)
     }
   },
-  release:midi=>{const part=midiDestinations.get(midi);midiDestinations.delete(midi);if(part==='tutorial')tutorialView?.midiRelease(midi);else if(part==='melody')magicVoice.release(midi);else if(part==='chord')chordInstrument.release(midi)},
+  release:midi=>{const part=midiDestinations.get(midi);midiDestinations.delete(midi);if(part==='tutorial')tutorialView?.midiRelease(midi);else if(part==='song-session')tutorialView?.songMidiRelease(midi);else if(part==='melody')magicVoice.release(midi);else if(part==='chord')chordInstrument.release(midi)},
 })
 buddyController = mountBuddy({
   progression, instrument, drums,

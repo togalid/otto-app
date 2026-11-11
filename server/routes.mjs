@@ -1,5 +1,7 @@
 // Explicit public files: server code, configuration, and user files are never exposed.
 export const routes = new Map([
+  ['/song-session.js', ['song-session.js', 'text/javascript']],
+  ['/otto-session-demo.mp3', ['otto-session-demo.mp3', 'audio/mpeg']],
   ...['mode-tutorial.svg','mode-free.svg','mode-song.svg'].map(file => [`/${file}`, [file, 'image/svg+xml']]),
   ['/selection-browser.css', ['selection-browser.css', 'text/css']],
   ...['tutorial.js', 'tutorial-view.js', 'drum-tutorial.js'].map(file => [`/${file}`, [file, 'text/javascript']]),

@@ -8,7 +8,7 @@ test('style changes and arrangement round trips keep score and section settings 
   const html = await readFile(new URL('../dist/index.html', import.meta.url), 'utf8')
   const {window} = new JSDOM(html, {url: 'http://localhost', pretendToBeVisual: true})
   window.matchMedia = () => ({matches: true, addEventListener() {}})
-  const names = ['window', 'document', 'Element', 'HTMLElement', 'SVGElement', 'HTMLInputElement', 'HTMLSelectElement', 'HTMLOptionElement', 'HTMLOptGroupElement', 'Event', 'CustomEvent', 'MouseEvent', 'MutationObserver', 'localStorage', 'requestAnimationFrame', 'cancelAnimationFrame']
+  const names = ['window', 'document', 'Element', 'HTMLElement', 'SVGElement', 'HTMLButtonElement', 'HTMLInputElement', 'HTMLSelectElement', 'HTMLOptionElement', 'HTMLOptGroupElement', 'Event', 'CustomEvent', 'MouseEvent', 'MutationObserver', 'localStorage', 'requestAnimationFrame', 'cancelAnimationFrame']
   const previous = names.map(name => Object.getOwnPropertyDescriptor(globalThis, name))
   for (const name of names) Object.defineProperty(globalThis, name, {configurable: true, writable: true, value: name === 'window' ? window : name.endsWith('AnimationFrame') ? window[name].bind(window) : window[name]})
   const savedBlobs = []

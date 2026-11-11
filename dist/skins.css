@@ -3436,3 +3436,108 @@ body[data-app-mode='tutorial'] > .shell,
 
 .tutorial-tempo { display:inline-flex; align-items:center; gap:8px; padding:4px 8px; color:var(--oto-ink); font-size:12px; white-space:nowrap; }
 .tutorial-tempo output { min-width:4.5em; font-variant-numeric:tabular-nums; }
+
+/* Title screen: the existing Otto mark and raised instrument keys. */
+#mode-menu { width:min(800px,calc(100% - 32px)); margin:clamp(16px,5vh,56px) auto; padding:24px clamp(20px,5vw,48px); overflow:hidden; }
+#mode-menu .mode-home-actions { display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+.home-stage { position:relative; text-align:center; padding:32px 0; }
+#mode-menu h1 { margin:0; display:grid; justify-items:center; gap:12px; }
+.home-logo { display:flex; align-items:center; font-size:clamp(90px,16vw,144px); font-weight:900; letter-spacing:-.07em; line-height:1; }
+.home-logo .logo-face { width:1em; height:1em; margin-right:.02em; }
+.home-tagline { font-size:clamp(22px,4vw,30px); letter-spacing:.12em; }
+.home-invite { font-size:14px; margin:16px 0 0; }
+.home-beats { display:flex; justify-content:center; align-items:end; gap:6px; height:28px; margin-bottom:12px; }
+.home-beats i { width:8px; height:12px; border-radius:4px; background:var(--oto-secondary); animation:home-beat 1.6s ease-in-out infinite alternate; }
+.home-beats i:nth-child(2) { height:26px; animation-delay:-.4s; background:var(--oto-accent); }
+.home-beats i:nth-child(3) { height:18px; animation-delay:-.8s; }
+.home-beats i:nth-child(4) { height:24px; animation-delay:-1.2s; }
+#mode-menu .home-modes { grid-template-columns:1fr 1fr; gap:16px; }
+#mode-menu .home-modes button { position:relative; grid-template-columns:1fr auto; gap:16px; padding:24px; border-top:4px solid var(--oto-secondary); }
+#mode-menu .home-modes button:first-child { border-top-color:var(--oto-accent); }
+#mode-menu .home-mode-icon { grid-column:1 / -1; font-size:36px; line-height:1; color:var(--oto-accent); }
+#mode-menu .home-modes strong { font-size:20px; }
+#mode-menu .home-modes strong span { display:block; font-size:12px; font-weight:400; margin-top:8px; }
+#mode-menu .home-arrow { align-self:center; font-size:24px; }
+.home-rhythm { text-align:center; color:var(--oto-secondary); margin:28px 0 4px; letter-spacing:8px; font-size:12px; }
+@keyframes home-beat { to { transform:scaleY(.5); } }
+@media(prefers-reduced-motion:reduce) { .home-beats i { animation:none; } }
+@media(max-width:540px) {
+ #mode-menu { padding:16px 20px 20px; }
+ .home-stage { padding:24px 0; }
+ #mode-menu .home-modes { grid-template-columns:1fr; gap:14px; }
+ #mode-menu .home-modes button { grid-template-columns:40px 1fr auto; align-items:center; padding:20px 16px; gap:12px; }
+ #mode-menu .home-mode-icon { grid-column:auto; }
+ #mode-menu .home-modes strong { font-size:18px; }
+ .home-rhythm { margin-top:24px; }
+}
+
+/* Shared mode / instrument selection. More choices extend the list, not the stage. */
+#mode-menu, .tutorial-categories { width:min(980px,calc(100% - 32px)); padding:28px; margin:24px auto; }
+#mode-menu .home-stage { padding:0 0 24px; }
+#mode-menu h1 { display:flex; align-items:center; justify-content:center; gap:24px; }
+#mode-menu .home-logo { font-size:72px; }
+#mode-menu .home-tagline { font-size:24px; }
+#mode-menu .home-invite { margin-top:8px; }
+#mode-menu .home-beats { display:none; }
+.selection-header { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.selection-step { color:var(--oto-secondary); font-size:12px; letter-spacing:.15em; font-weight:800; }
+.tutorial-categories h1 { margin:24px 0 8px; font-size:30px; }
+.selection-intro { margin:0 0 28px; font-size:14px; }
+.selection-stage { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); gap:28px; align-items:stretch; }
+.selection-list { display:flex; flex-direction:column; gap:12px; padding:12px 0; }
+.mode-screen .selection-choice { display:flex; align-items:center; gap:14px; text-align:left; padding:22px 16px; width:100%; min-height:90px; border-left:5px solid transparent; }
+.mode-screen .selection-choice[aria-pressed='true'] { background:var(--oto-secondary); color:var(--oto-key); border-left-color:var(--oto-accent); box-shadow:var(--oto-recess); }
+.selection-choice-copy { display:grid; gap:8px; }
+.selection-choice strong { font-size:20px; }
+.selection-choice small { font-size:12px; line-height:1.5; }
+.selection-number { font-size:13px; font-weight:800; opacity:.75; }
+.selection-pointer { margin-left:auto; font-size:28px; }
+.mode-screen .selection-choice:disabled { opacity:.48; cursor:default; box-shadow:none; }
+.selection-feature { min-width:0; border-radius:18px; padding:20px; background:var(--oto-key); box-shadow:var(--oto-raised); }
+.selection-art { position:relative; height:230px; overflow:hidden; display:flex; align-items:center; justify-content:center; border-radius:12px; background:var(--oto-case); }
+.selection-orbit { position:absolute; width:180px; height:180px; border:24px solid var(--oto-secondary); border-radius:50%; opacity:.12; }
+.orbit-one { left:-90px; top:-70px; }
+.orbit-two { right:-80px; bottom:-90px; border-color:var(--oto-accent); }
+.selection-otto { width:156px; height:156px; position:absolute; top:12px; transform:rotate(-9deg); color:var(--oto-ink); }
+.selection-instrument { display:flex; position:absolute; bottom:14px; width:188px; height:70px; gap:4px; transform:rotate(5deg); padding:8px; border-radius:12px; background:var(--oto-secondary); box-shadow:var(--oto-raised); }
+.selection-instrument i { display:block; position:relative; flex:1; border-radius:3px; background:var(--oto-key); }
+.selection-instrument.keys i:nth-child(3n+1)::after,.selection-instrument.session i:nth-child(3n+1)::after { content:''; position:absolute; width:65%; height:60%; right:-30%; top:0; background:var(--oto-ink); z-index:1; border-radius:0 0 3px 3px; }
+.selection-instrument.drums { display:grid; grid-template-columns:repeat(4,1fr); height:82px; }
+.selection-instrument.drums i:nth-child(3n) { background:var(--oto-accent); }
+.selection-note { position:absolute; color:var(--oto-accent); font-size:42px; font-weight:800; }
+.note-one { left:16%; top:28px; transform:rotate(-18deg); }
+.note-two { right:12%; top:66px; transform:rotate(18deg); color:var(--oto-secondary); }
+.selection-detail { padding:20px 0 16px; min-height:138px; box-sizing:border-box; }
+.selection-badge { font-size:11px; font-weight:800; letter-spacing:.08em; color:var(--oto-secondary); }
+.selection-detail h2 { margin:8px 0; font-size:28px; }
+.selection-detail p { font-size:14px; line-height:1.7; margin:0; }
+.mode-screen .selection-start { display:flex; justify-content:space-between; align-items:center; width:100%; background:var(--oto-accent); color:var(--oto-key); font-weight:800; padding:18px 20px; font-size:18px; }
+@media(max-width:640px) {
+ #mode-menu, .tutorial-categories { width:calc(100% - 20px); padding:18px; margin:10px auto; }
+ #mode-menu .mode-home-actions button { font-size:12px; padding:8px 12px; }
+ #mode-menu h1 { gap:12px; padding-top:16px; }
+ #mode-menu .home-logo { font-size:54px; }
+ #mode-menu .home-tagline { font-size:18px; letter-spacing:.02em; }
+ #mode-menu .home-invite { font-size:12px; }
+ .selection-stage { grid-template-columns:1fr; gap:16px; }
+ .selection-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:0; }
+ .mode-screen .selection-choice { padding:12px 10px; gap:8px; min-height:82px; border-left-width:4px; }
+ .selection-choice strong { font-size:16px; }
+ .selection-choice small { font-size:11px; }
+ .selection-number,.selection-pointer { display:none; }
+ .selection-feature { padding:14px; }
+ .selection-art { height:180px; }
+ .selection-otto { width:125px; height:125px; top:0; }
+ .selection-instrument { width:150px; height:54px; bottom:10px; }
+ .selection-instrument.drums { height:66px; }
+ .selection-detail { min-height:0; padding:16px 0; }
+ .selection-detail h2 { font-size:24px; }
+ .selection-detail p { font-size:13px; }
+ .tutorial-categories h1 { font-size:25px; margin-top:20px; }
+ .selection-intro { font-size:12px; margin-bottom:20px; }
+}
+@media(max-width:360px) { #mode-menu h1 { flex-direction:column; gap:4px; } .selection-choice strong { font-size:14px; } }
+
+.mode-screen .selection-start:disabled { background:var(--oto-case); color:var(--oto-ink); opacity:.6; cursor:default; box-shadow:none; }
+
+.selection-art .mode-scene { display:block; width:100%; height:100%; object-fit:contain; }

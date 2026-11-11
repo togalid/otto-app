@@ -1,6 +1,6 @@
 import { mountDrumTutorial } from './drum-tutorial.js'
 import { mountTutorial, developmentTutorial } from './tutorial-view.js'
-import { createApp, h } from './vendor/vue.runtime.esm-browser.prod.js'
+import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { genres } from './groove.js'
 import { presets, notes, melodyPalette, melodyRole, displayChordParts } from './music.js'
 
@@ -451,6 +451,49 @@ export function mountMobileLayout() {
   resize()
 }
 
+/** @typedef {{id:string, title:string, subtitle:string, description:string, badge:string, icon:string, image?:string, disabled?:boolean, previewOnly?:boolean}} MenuChoice */
+/** Shared selection stage: selection previews; only the explicit start enters a mode.
+ * @param {Element} host @param {MenuChoice[]} choices @param {(id:string)=>void} confirm */
+export function mountSelectionStage(host, choices, confirm) {
+  const selected = ref(choices[0].id)
+  const current = () => choices.find(choice => choice.id === selected.value) ?? choices[0]
+  const app = createApp({render: () => {
+    const item = current()
+    return h('div', {class:'selection-stage'}, [
+      h('div', {class:'selection-list', role:'group', 'aria-label':'遊び方を選ぶ'}, choices.map((choice, index) =>
+        h('button', {type:'button', class:'selection-choice', 'aria-pressed':choice.id === selected.value, disabled:choice.disabled,
+          onClick:() => {selected.value = choice.id}}, [
+          h('span', {class:'selection-number', 'aria-hidden':'true'}, String(index + 1).padStart(2,'0')),
+          h('span', {class:'selection-choice-copy'}, [h('strong', choice.title), h('small', choice.disabled || choice.previewOnly ? '準備中' : choice.subtitle)]),
+          h('span', {'aria-hidden':'true', class:'selection-pointer'}, choice.disabled ? '…' : '›'),
+        ]))),
+      h('div', {class:'selection-feature', 'data-instrument':item.icon}, [
+        h('div', {class:'selection-art', 'aria-hidden':'true'}, item.image ? [h('img',{class:'mode-scene',src:item.image,alt:'',width:480,height:320})] : [
+          h('span', {class:'selection-orbit orbit-one'}), h('span', {class:'selection-orbit orbit-two'}),
+          h('svg', {class:'selection-otto', viewBox:'0 0 100 100'}, [
+            h('circle',{cx:50,cy:50,r:38,fill:'currentColor'}),
+            h('path',{d:'M23 37Q30 20 48 20M37 42v12m26-12v12M58 78Q72 74 78 62',fill:'none',stroke:'var(--oto-key)','stroke-width':5,'stroke-linecap':'round'}),
+            h('circle',{cx:50,cy:57,r:4,fill:'var(--oto-accent)'}),
+            h('path',{d:'M10 50V40a40 40 0 0 1 80 0v10',fill:'none',stroke:'currentColor','stroke-width':5}),
+            h('rect',{x:4,y:42,width:13,height:25,rx:6,fill:'var(--oto-key)',stroke:'currentColor','stroke-width':3}),
+            h('rect',{x:83,y:42,width:13,height:25,rx:6,fill:'var(--oto-key)',stroke:'currentColor','stroke-width':3}),
+          ]),
+          h('div',{class:['selection-instrument',item.icon]}, item.icon === 'drums'
+            ? Array.from({length:8},(_,i)=>h('i',{key:i}))
+            : Array.from({length:7},(_,i)=>h('i',{key:i}))),
+          h('span',{class:'selection-note note-one'},'♪'),h('span',{class:'selection-note note-two'},'♫'),
+        ]),
+        h('div',{class:'selection-detail','aria-live':'polite'},[
+          h('span',{class:'selection-badge'},item.badge),h('h2',item.title),h('p',item.description),
+        ]),
+        h('button',{type:'button',class:'selection-start',disabled:item.disabled || item.previewOnly,onClick:()=>{if (!item.disabled && !item.previewOnly) confirm(item.id)}},[h('span',item.disabled || item.previewOnly ? '準備中' : 'これであそぶ'),h('span',{'aria-hidden':'true'},'▶')]),
+      ]),
+    ])
+  }})
+  app.mount(host)
+  return () => app.unmount()
+}
+
 /** @param {() => void} stopPlayback @param {() => Promise<string>} connectMidi
  * @param {() => void} selectSession */
 export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
@@ -460,14 +503,15 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
   const categories = document.createElement('section')
   categories.className = 'mode-screen tutorial-categories'
   categories.hidden = true
-  categories.innerHTML = '<button type="button" data-category-back>← メニュー</button><h1 tabindex="-1">どの楽器で遊ぶ？</h1><div class="mode-choices"><button type="button" data-lesson="tutorial"><strong>メロディ編</strong><span>鍵盤で音とリズムを楽しもう · 10レッスン</span></button><button type="button" data-lesson="drum-tutorial"><strong>ドラム編</strong><span>8つのパッドで基本から応用まで · 10レッスン</span></button><button type="button" disabled><strong>ベース編</strong><span>準備中</span></button><button type="button" disabled><strong>コード編</strong><span>準備中</span></button></div>'
+  categories.innerHTML = '<div class="selection-header"><button type="button" data-category-back>← メニュー</button><span class="selection-step">TUTORIAL</span></div><h1 tabindex="-1">どの楽器で遊ぶ？</h1><p class="selection-intro">気になる楽器を選んで、Ottoとチャレンジ。</p><div class="category-selection"></div>'
+
   const drumRoot = document.createElement('section')
   drumRoot.className = 'tutorial-screen drum-tutorial'
   drumRoot.hidden = true
   menu.after(categories, drumRoot)
   const drumView = mountDrumTutorial(drumRoot, () => open('categories'))
   categories.querySelector('[data-category-back]')?.addEventListener('click', () => open('menu'))
-  categories.querySelectorAll('[data-lesson]').forEach(button => button.addEventListener('click', () => open(button.getAttribute('data-lesson') ?? 'categories')))
+
   /** @param {string} mode */
   function open(mode) {
     stopPlayback()
@@ -490,6 +534,19 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
     open(mode === 'menu' ? 'categories' : mode)
     if (mode === 'free') { selectSession(); document.dispatchEvent(new Event('tutorial-free-session')) }
   })
+  const modeHost = menu.querySelector('#mode-selection')
+  if (modeHost) mountSelectionStage(modeHost, [
+    {id:'categories',title:'チュートリアル',subtitle:'お手本に合わせてチャレンジ',description:'聴いて、まねして、ひとつずつ。楽器を選んでリズムの冒険へ。',badge:'はじめてでも大丈夫',icon:'keys',image:'./mode-tutorial.svg'},
+    {id:'free',title:'フリー演奏',subtitle:'好きなスタイルでセッション',description:'スタイルを選んで、自分らしく。好きな曲を読み込んで、一緒に演奏することも。',badge:'あそび方は自由',icon:'session',image:'./mode-free.svg'},
+    {id:'song-session',title:'曲でセッション',subtitle:'曲を選んで、すぐに演奏',description:'用意された曲を選んで、すぐにOttoと演奏。位置合わせや細かな設定なしで楽しめるモードを準備中です。',badge:'COMING SOON',icon:'session',image:'./mode-song.svg',previewOnly:true},
+  ], open)
+  const categoryHost = categories.querySelector('.category-selection')
+  if (categoryHost) mountSelectionStage(categoryHost, [
+    {id:'tutorial',title:'メロディ編',subtitle:'鍵盤で音とリズムを楽しもう',description:'ひとつの音から、なめらかなメロディへ。Ottoのお手本に合わせて弾いてみよう。',badge:'10 LESSONS',icon:'keys'},
+    {id:'drum-tutorial',title:'ドラム編',subtitle:'8つのパッドでビートを刻もう',description:'左右の手で、トン、タン。基本のリズムからセッションまで、少しずつステップアップ。',badge:'10 LESSONS',icon:'drums'},
+    {id:'bass',title:'ベース編',subtitle:'',description:'',badge:'',icon:'keys',disabled:true},
+    {id:'chords',title:'コード編',subtitle:'',description:'',badge:'',icon:'keys',disabled:true},
+  ], open)
   const midiButton = document.querySelector('#mode-midi')
   if (midiButton instanceof HTMLButtonElement) midiButton.addEventListener('click', async () => {
     midiButton.disabled = true

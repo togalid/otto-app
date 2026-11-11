@@ -114,33 +114,51 @@ export function mountPresetChoices() {
 
 /** @param {HTMLSelectElement} genreSelect @param {(id:string)=>Promise<void>} chooseStyle */
 function mountStyleBrowser(genreSelect, chooseStyle) {
-const styleDialog = document.createElement('dialog')
-styleDialog.className = 'style-browser'
-styleDialog.setAttribute('aria-label', 'ジャンルとスタイルを選ぶ')
-document.body.append(styleDialog)
-/** @param {typeof genres[number]} item */
-function numberedStyle(item) {
-  const index = genres.filter(style => style.group === item.group).findIndex(style => style.id === item.id)
-  return `${String(index + 1).padStart(2, '0')}: ${item.label}`
-}
-const styleGroup = ref('')
-createApp({render: () => [
-  h('div', {class: 'style-browser-header'}, [
-    ...(styleGroup.value ? [h('button', {type: 'button', onClick: () => { styleGroup.value = '' }}, '← ジャンル')] : [h('strong', 'ジャンル')]),
-    h('button', {type: 'button', 'aria-label': '閉じる', onClick: () => styleDialog.close()}, '×'),
-  ]),
-  ...(styleGroup.value
-    ? genres.filter(item => item.group === styleGroup.value).map(item => h('button', {
-      type: 'button', class: 'style-browser-choice', 'aria-current': item.id === genreSelect.value ? 'true' : undefined,
-      onClick: () => { void chooseStyle(item.id); styleDialog.close() },
-    }, numberedStyle(item)))
-    : [...new Set(genres.map(item => item.group))].map(group => h('button', {
-      type: 'button', class: 'style-browser-choice', onClick: () => { styleGroup.value = group },
-    }, group + ' ›'))),
-]}).mount(styleDialog)
-document.getElementById('style-open')?.addEventListener('click', () => { styleGroup.value = ''; styleDialog.showModal() })
-styleDialog.addEventListener('click', event => { if (event.target === styleDialog) styleDialog.close() })
-styleDialog.addEventListener('close', () => document.getElementById('style-open')?.focus({preventScroll: true}))
-
-
+  const styleDialog = document.createElement('dialog')
+  styleDialog.className = 'style-browser selection-browser'
+  styleDialog.setAttribute('aria-label', 'スタイルを選ぼう')
+  document.body.append(styleDialog)
+  const groups = [...new Set(genres.map(item => item.group))]
+  const selected = ref(genres[0].id)
+  const family = ref(genres[0].group)
+  const applying = ref(false)
+  const error = ref('')
+  const current = () => genres.find(item => item.id === selected.value) ?? genres[0]
+  createApp({render: () => [
+    h('div', {class: 'style-browser-header'}, [
+      h('h2', 'スタイルを選ぼう'),
+      h('button', {type:'button', 'aria-label':'閉じる', onClick:()=>styleDialog.close()}, '×'),
+    ]),
+    h('label', {class:'selection-family'}, ['ジャンル', h('select', {
+      value:family.value, disabled:applying.value,
+      onChange:(/** @type {Event} */ event)=>{
+        family.value = /** @type {HTMLSelectElement} */ (event.target).value
+        selected.value = genres.find(item=>item.group===family.value)?.id ?? genres[0].id
+      },
+    }, groups.map(group=>h('option',{value:group},group)))]),
+    h('div',{class:'selection-browser-body'},[
+      h('div',{class:'selection-track-list',role:'group','aria-label':'スタイル一覧'},genres.filter(item=>item.group===family.value).map((item,index)=>h('button',{
+        type:'button',class:'style-browser-choice','aria-pressed':item.id===selected.value,disabled:applying.value,
+        onClick:()=>{selected.value=item.id;error.value=''},
+      },[h('span',{class:'selection-track-number'},String(index+1).padStart(2,'0')),h('strong',item.label),h('span',{class:'selection-track-tempo'},`${item.bpm} BPM`)]))),
+      h('section',{class:'selection-track-detail','aria-label':'選択中のスタイル'},[
+        h('div',{class:'selection-record','aria-hidden':'true'},[h('span','♫')]),
+        h('div',{'aria-live':'polite'},[h('p',{class:'selection-track-family'},current().group),h('h3',current().label),h('p',{class:'selection-bpm'},[h('strong',String(current().bpm)),' BPM'])]),
+        h('button',{type:'button',class:'selection-confirm',disabled:applying.value,onClick:async()=>{
+          applying.value=true;error.value=''
+          try { await chooseStyle(selected.value);styleDialog.close() }
+          catch { error.value='変更できませんでした。もう一度お試しください。' }
+          finally { applying.value=false }
+        }},applying.value?'変更中…':'このスタイルで遊ぶ →'),
+        h('p',{class:'selection-error',role:'status'},error.value),
+      ]),
+    ]),
+  ]}).mount(styleDialog)
+  document.getElementById('style-open')?.addEventListener('click',()=>{
+    const item=genres.find(item=>item.id===genreSelect.value) ?? genres[0]
+    selected.value=item.id;family.value=item.group;error.value=''
+    styleDialog.showModal()
+  })
+  styleDialog.addEventListener('click',event=>{if(event.target===styleDialog)styleDialog.close()})
+  styleDialog.addEventListener('close',()=>document.getElementById('style-open')?.focus({preventScroll:true}))
 }

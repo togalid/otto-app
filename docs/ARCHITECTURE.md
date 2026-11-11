@@ -115,3 +115,9 @@ Prioritize further work by coupling, not line count:
 4. Removed legacy Buddy selectors and a superseded session spacing declaration. For broader CSS consolidation, compare computed styles across skins, selection states and viewport widths because historical overrides are order-sensitive.
 
 Large preset/timbre tables are mostly data and are lower priority. Do not migrate frameworks, introduce global state infrastructure, or split data files solely to reduce line counts. Free/Full still share one implementation.
+
+## Selection lobby
+
+Mode and tutorial-instrument selection use the shared Vue selector in `melody-view.js`: browsing changes the preview, and a separate confirmation enters the mode. New mode entries belong in its option data. The planned curated-MP3 mode (“曲でセッション”) is a preview-only, unavailable entry; it does not load audio or claim a catalog exists. A future catalog should provide preconfigured source timing and session settings before enabling entry.
+
+`arrangement-selects.js` owns the style list, selected-detail preview and explicit application through the existing `chooseStyle` path. `selection-browser.css` supplies its responsive appearance. The song/settings dialog remains JSON save/load. Validate preview/cancel without changing active music, confirmation, keyboard focus, and narrow screens.

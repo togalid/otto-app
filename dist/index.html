@@ -11,19 +11,24 @@
     <title>oto — 音であそぼう</title>
     <link rel="stylesheet" href="./style.css" />
     <link rel="stylesheet" href="./skins.css" />
+    <link rel="stylesheet" href="./selection-browser.css">
     <script type="module" src="./app.js"></script>
     <script type="module" src="./skins.js"></script>
   </head>
   <body data-app-mode="menu">
     <section id="mode-menu" class="mode-screen" aria-labelledby="mode-menu-title">
-      <div class="mode-home-header">
-        <h1 id="mode-menu-title" tabindex="-1">Ottoと音であそぼう</h1>
-        <div class="mode-home-actions"><button id="mode-appearance" type="button" aria-haspopup="dialog" aria-controls="appearance-dialog">外観</button><button id="mode-midi" type="button">MIDI接続</button></div>
+      <div class="mode-home-actions"><button id="mode-appearance" type="button" aria-haspopup="dialog" aria-controls="appearance-dialog">外観</button><button id="mode-midi" type="button">MIDI接続</button></div>
+      <div class="home-stage">
+        <div class="home-beats" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <h1 id="mode-menu-title" tabindex="-1"><span class="home-logo" aria-label="Otto">          <svg class="logo-face" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <circle cx="32" cy="35" r="25" fill="currentColor"/>
+            <path d="M15 24q5-9 16-11m-7 18v7m16-7v7m-3 14q8-2 12-9" fill="none" stroke="var(--oto-key)" stroke-width="3.5" stroke-linecap="round"/>
+            <circle cx="32" cy="39" r="2.8" fill="var(--oto-accent)"/>
+          </svg>tto
+</span><span class="home-tagline">音であそぼう。</span></h1>
+        <p class="home-invite">きいて、まねして、夢中になろう。</p>
       </div>
-      <div class="mode-choices">
-        <button type="button" data-open-mode="tutorial"><strong>チュートリアルモード</strong><span>Ottoのお手本を聴いて、真似してみよう</span></button>
-        <button type="button" data-open-mode="free"><strong>フリー演奏モード</strong><span>好きなスタイルで、一緒に演奏しよう</span></button>
-      </div>
+      <div id="mode-selection"></div>
     </section>
     <section id="tutorial-menu" class="tutorial-screen" aria-label="チュートリアル" hidden>
     </section>

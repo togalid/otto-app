@@ -1,0 +1,39 @@
+/* Shared visual vocabulary for the music selection lobby. */
+.style-browser.selection-browser { width:min(860px,calc(100vw - 32px)); max-height:calc(100svh - 32px); padding:24px; box-sizing:border-box; border-radius:18px; }
+.selection-browser .style-browser-header { gap:16px; }
+.selection-browser h2 { margin:0; font-size:24px; }
+.selection-browser button { font:inherit; min-height:44px; box-shadow:var(--oto-raised); }
+.selection-browser button:active { box-shadow:var(--oto-recess); }
+.selection-browser button:focus-visible,.selection-browser select:focus-visible { outline:3px solid var(--oto-secondary); outline-offset:3px; }
+.selection-family { display:flex; align-items:center; gap:12px; margin:12px 0 20px; font-weight:700; }
+.selection-family select { flex:1; min-width:0; padding:12px; border:0; border-radius:7px; background:var(--oto-key); color:var(--oto-ink); font:inherit; box-shadow:var(--oto-recess); }
+.selection-browser-body { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:24px; align-items:start; }
+.selection-track-list { display:grid; gap:10px; max-height:52svh; overflow:auto; padding:4px 6px 8px; }
+.selection-browser .style-browser-choice { display:grid; grid-template-columns:28px 1fr auto; align-items:center; gap:8px; padding:16px 12px; margin:0; box-sizing:border-box; border-inline-start:4px solid transparent; }
+.selection-browser .style-browser-choice[aria-pressed=true] { background:var(--oto-case-low); border-inline-start-color:var(--oto-accent); box-shadow:var(--oto-recess); }
+.selection-track-number { color:var(--oto-secondary); font-size:12px; font-weight:800; }
+.selection-track-tempo { font-size:11px; white-space:nowrap; }
+.selection-track-detail { text-align:center; padding:20px; border-radius:18px; background:var(--oto-key); box-shadow:var(--oto-raised); overflow-wrap:anywhere; }
+.selection-record { display:grid; place-items:center; width:160px; max-width:100%; aspect-ratio:1; margin:0 auto 20px; border-radius:50%; color:var(--oto-key); background:repeating-radial-gradient(circle,var(--oto-ink) 0 10px,var(--oto-secondary) 11px 12px,var(--oto-ink) 13px 20px); }
+.selection-record span { display:grid; place-items:center; width:64px; height:64px; border-radius:50%; font-size:38px; background:var(--oto-accent); }
+.selection-track-family { color:var(--oto-secondary); font-size:13px; font-weight:700; margin:0 0 8px; }
+.selection-track-detail h3 { font-size:24px; margin:0; line-height:1.4; }
+.selection-bpm { margin:12px 0 20px; font-size:12px; }
+.selection-bpm strong { font-size:28px; }
+.selection-browser .selection-confirm { width:100%; border:0; border-radius:7px; padding:14px 12px; background:var(--oto-accent); color:var(--oto-key); font-weight:800; cursor:pointer; }
+.selection-error { font-size:12px; margin:12px 0 0; }
+.selection-error:empty { display:none; }
+@media(max-width:580px) {
+ .style-browser.selection-browser { padding:16px; }
+ .selection-browser h2 { font-size:20px; }
+ .selection-browser-body { grid-template-columns:1fr; gap:16px; }
+ .selection-track-list { max-height:30svh; }
+ .selection-track-detail { display:grid; grid-template-columns:64px 1fr; align-items:center; gap:12px; text-align:left; padding:16px; }
+ .selection-record { width:64px; margin:0; }
+ .selection-record span { width:32px; height:32px; font-size:22px; }
+ .selection-track-detail h3 { font-size:18px; }
+ .selection-track-family { margin-bottom:4px; }
+ .selection-bpm { margin:4px 0 0; }
+ .selection-bpm strong { font-size:18px; }
+ .selection-confirm,.selection-error { grid-column:1 / -1; }
+}

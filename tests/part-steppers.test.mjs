@@ -50,9 +50,11 @@ test('accompaniment Vue surface preserves pad order, mode callbacks and disposal
   const modes = []
   const view = mountAccompanimentPlay('drums', 'auto', null, mode => modes.push(mode), index => played.push(index))
   document.body.append(view.element)
-  const pads = [...view.element.querySelectorAll('.pad')]
-  assert.deepEqual(pads.map(pad => Number(pad.dataset.padIndex)), [4, 5, 6, 7, 0, 1, 2, 3])
-  pads[4].click()
+  const pads = [...view.element.querySelectorAll('.drum-tutorial-pad')]
+  assert.equal(pads.length, 8)
+  assert.match(pads[0].getAttribute('aria-label'), /左手.*ハイハット/)
+  assert.match(pads[6].getAttribute('aria-label'), /右手.*キック/)
+  pads[6].click()
   assert.deepEqual(played, [0])
   const otto = view.element.querySelector('input[value="otto"]')
   otto.click()

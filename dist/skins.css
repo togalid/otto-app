@@ -3368,8 +3368,9 @@ body[data-app-mode='tutorial'] > .shell,
 .drum-guide-hand svg { width:48px; height:50px; }
 @media(max-width:600px) { .drum-guide-hands { gap:6px; } .drum-guide-hand svg { width:35px; height:37px; } }
 
-.mode-home-header { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:8px; }
-.mode-home-actions { display:flex; flex-wrap:wrap; gap:8px; margin-inline-start:auto; }
+.mode-home-header { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; margin-bottom:24px; }
+.mode-home-header h1 { margin:0; }
+.mode-home-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; margin-inline-start:auto; }
 .tutorial-selector :is(select,button) { box-sizing:border-box; height:44px; }
 .tutorial-selector .part-choice-steps > button { height:44px; }
 

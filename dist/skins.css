@@ -3335,16 +3335,19 @@ body[data-app-mode='tutorial'] > .shell,
 :is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad[data-lit], :is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad:active { background:var(--oto-selection); box-shadow:var(--oto-recess); }
 .drum-pad-hint { font-size:12px; margin:0; text-align:center; }
 @media(max-width:600px) {
- .drum-lesson { gap:12px; }
+ .drum-lesson { gap:12px; min-height:calc(100svh - 24px); }
  .drum-lesson-guide { padding:10px; }
  .drum-beat-count, .drum-guide-row { grid-template-columns:64px repeat(var(--drum-grid-columns,8),minmax(0,1fr)); gap:2px; }
  .drum-guide-row small { font-size:10px; }
  .drum-pad-grid { gap:8px; }
+ .drum-tutorial .drum-pad-grid { position:sticky; bottom:0; z-index:3; margin-top:auto; padding:8px 0 max(8px, env(safe-area-inset-bottom)); background:var(--oto-case); }
  :is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad { min-height:94px; gap:6px; }
  .drum-tutorial-pad strong { font-size:12px; }
  .drum-tutorial-pad small { font-size:10px; }
 }
 @media(max-height:500px) and (orientation:landscape) {
+ .drum-lesson { min-height:calc(100svh - 16px); }
+ .drum-tutorial .drum-pad-grid { position:sticky; bottom:0; z-index:3; margin-top:auto; padding:6px 0 max(6px, env(safe-area-inset-bottom)); background:var(--oto-case); }
  :is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad { min-height:64px; }
 }
 

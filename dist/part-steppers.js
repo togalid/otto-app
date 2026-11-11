@@ -1,3 +1,4 @@
+import { drumPads, padIcon } from './drum-tutorial.js'
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 
 export function mountPartSteppers() {
@@ -113,7 +114,21 @@ export function mountAccompanimentPlay(part, initialMode, face, setMode, play, o
   element.className = 'accompaniment-play'
   const mode = ref(initialMode)
   const labels = part === 'drums' ? drums.map(([label]) => String(label)) : notes.map((note, index) => note + (index === 7 ? '3' : '2'))
-  const padOrder = part === 'drums' ? [4, 5, 6, 7, 0, 1, 2, 3] : labels.map((_, index) => index)
+  const padOrder = labels.map((_, index) => index)
+  const drumSoundIndices = [2, 1, 5, 7, 3, 4, 0, 3]
+  const onDrumKey = (/** @type {KeyboardEvent} */ event) => {
+    if (part !== 'drums' || !element.isConnected || event.repeat || event.ctrlKey || event.metaKey || event.altKey || document.body.dataset.appMode !== 'free') return
+    const target = /** @type {HTMLElement|null} */ (event.target)
+    if (target?.closest('input, select, textarea, [contenteditable=true]')) return
+    const index = drumPads.findIndex(pad => pad.key === event.key.toLowerCase())
+    if (index < 0) return
+    event.preventDefault()
+    const button = element.querySelectorAll('.drum-tutorial-pad')[index]
+    button?.setAttribute('data-lit', '')
+    window.setTimeout(() => button?.removeAttribute('data-lit'), 120)
+    play(drumSoundIndices[index])
+  }
+  if (part === 'drums') document.addEventListener('keydown', onDrumKey)
   const modes = /** @type {const} */ ([['auto', 'パターン'], ['manual', '自分が弾く'], ['otto', 'Ottoが弾く']])
   const app = createApp({ render: () => [
     h('div', { class: 'accompaniment-play-heading' }, [
@@ -129,13 +144,19 @@ export function mountAccompanimentPlay(part, initialMode, face, setMode, play, o
           }), h('span', label)]))),
       ]),
     ]),
-    part === 'chord'
+    part === 'drums'
+      ? h('div', {class:'drum-pad-grid', role:'group', 'aria-label':'左右のドラムパッド'}, drumPads.map((pad,index) =>
+        h('button', {type:'button', class:'drum-tutorial-pad', 'aria-label':`${pad.hand}手 ${pad.finger} ${pad.name} ${pad.key}キー`,
+          onPointerdown:(/** @type {PointerEvent} */ event) => { if(event.button!==0)return; event.preventDefault(); play(drumSoundIndices[index]) },
+          onClick:(/** @type {MouseEvent} */ event) => { if(event.detail===0)play(drumSoundIndices[index]) },
+        }, [h('span',{class:'drum-pad-name'},[padIcon(pad.sound),h('strong',pad.name)]), h('kbd',pad.key.toUpperCase())])))
+      : part === 'chord'
       ? h('iframe', { class: 'backing-chord-pads', title: 'バッキングのコードパッド', src: './chord-pad.html?embedded=1&backing=1', onLoad: onFrameLoad })
-      : h('div', { class: ['accompaniment-pads', { 'drum-pads': part === 'drums' }], role: 'group', 'aria-label': part === 'drums' ? 'ドラムパッド' : '演奏パッド' },
+      : h('div', { class: 'accompaniment-pads', role: 'group', 'aria-label': '演奏パッド' },
         padOrder.map(index => h('button', { type: 'button', class: 'pad', 'data-pad-index': String(index), onClick: () => play(index) }, [h('span', labels[index])]))),
   ] })
   app.mount(element)
-  return { element, unmount: () => app.unmount() }
+  return { element, unmount: () => { document.removeEventListener('keydown', onDrumKey); app.unmount() } }
 }
 
 // Preserve the public adapter for standalone consumers; the mixer uses the

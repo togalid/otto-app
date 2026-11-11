@@ -3103,7 +3103,7 @@ body[data-app-mode='tutorial'] > .shell,
 .mode-choices span { font-size:13px; line-height:1.6; }
 .mode-screen button:focus-visible, .mode-back:focus-visible { outline:2px solid var(--oto-accent); outline-offset:3px; }
 .mode-screen button:active, .mode-back:active { box-shadow:var(--oto-recess); }
-.mode-back { margin-bottom:8px; }
+.player-brand .mode-back { margin:0; padding:6px 10px; min-height:36px; font-size:13px; white-space:nowrap; }
 
 /* Tutorial: one instrument, one lesson, independent of the free-play mixer. */
 .tutorial-screen[hidden] { display:none; }
@@ -3119,9 +3119,9 @@ body[data-app-mode='tutorial'] > .shell,
 .tutorial-selector .part-choice-steps > button { height:100%; display:grid; place-items:center; padding:0; line-height:1; }
 .tutorial-screen .tutorial-start { background:var(--oto-accent); color:var(--oto-key); white-space:nowrap; }
 .tutorial-screen h1 { font-size:16px; margin:0; font-weight:600; color:var(--oto-muted); }
-.tutorial-companion { display:flex; gap:14px; align-items:center; height:128px; }
+.tutorial-companion { display:flex; gap:14px; align-items:center; }
 .tutorial-companion .talk-avatar { flex:0 0 76px; width:76px; height:76px; }
-.tutorial-screen .tutorial-message { display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; flex:1; min-width:0; box-sizing:border-box; height:100%; overflow-y:auto; text-align:left; line-height:1.6; margin:0; padding:12px 16px; border-radius:7px; background:var(--oto-key); }
+.tutorial-screen .tutorial-message { display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; flex:1; min-width:0; box-sizing:border-box; text-align:left; line-height:1.6; margin:0; padding:12px 16px; border-radius:7px; background:var(--oto-key); }
 .tutorial-message span, .tutorial-message small { display:block; }
 .tutorial-message small { margin-top:6px; font-size:11px; color:var(--oto-muted); }
 .tutorial-caption { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:14px; margin-bottom:10px; }
@@ -3160,7 +3160,6 @@ body[data-app-mode='tutorial'] > .shell,
  .tutorial-selector { gap:8px; font-size:13px; }
  .tutorial-selector .part-choice-steps > button { min-width:32px; }
  .tutorial-screen .tutorial-start { padding:8px 10px; }
- .tutorial-companion { height:160px; }
  .tutorial-companion .talk-avatar { flex-basis:60px; width:60px; height:60px; }
  .tutorial-navigation { padding:12px; }
 }
@@ -3198,7 +3197,7 @@ body[data-app-mode='tutorial'] > .shell,
 }
 @media (orientation:landscape) and (max-height:540px) {
   .tutorial-screen { padding:8px; gap:6px; }
-  .tutorial-companion { height:64px; flex:none; gap:8px; }
+  .tutorial-companion { flex:none; gap:8px; }
   .tutorial-companion .talk-avatar { flex-basis:52px; width:52px; height:52px; }
   .tutorial-screen .tutorial-message { padding:6px 12px; line-height:1.35; }
   .tutorial-message small { margin-top:2px; }
@@ -3206,7 +3205,6 @@ body[data-app-mode='tutorial'] > .shell,
   .tutorial-user .tutorial-caption { margin-bottom:4px; }
 }
 @media (orientation:landscape) and (max-height:420px) {
-  .tutorial-companion { height:52px; }
   .tutorial-companion .talk-avatar { flex-basis:44px; width:44px; height:44px; }
   .tutorial-navigation { padding:8px; }
   .tutorial-navigation-header { margin-bottom:4px; }
@@ -3244,8 +3242,6 @@ body[data-app-mode='tutorial'] > .shell,
 .tutorial-note.tutorial-connected-first.tutorial-connected-last { border-radius:7px; }
 
 @media (max-height:540px) {
-  .tutorial-companion:has(.tutorial-complete) { height:auto; min-height:64px; }
-  .tutorial-companion:has(.tutorial-complete) .tutorial-message { height:auto; }
 }
 
 /* Duration rows in the tutorial rhythm guide. */
@@ -3318,46 +3314,121 @@ body[data-app-mode='tutorial'] > .shell,
 /* Drum lesson: mirrored two-hand pads and an eighth-note timeline. */
 .drum-tutorial { width:min(880px,100%); }
 .drum-lesson { display:flex; flex-direction:column; gap:16px; }
-.drum-lesson-header { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-.drum-lesson-header strong { flex:1; font-size:18px; }
-.drum-stage-steps { display:flex; gap:8px; flex-wrap:wrap; font-size:13px; }
-.drum-stage-steps span { padding:8px 10px; border-radius:7px; background:var(--oto-case-low); }
-.drum-stage-steps [data-current] { background:var(--oto-secondary); color:var(--oto-key); }
-.drum-lesson-message { padding:16px; border-radius:7px; background:var(--oto-key); min-height:104px; box-sizing:border-box; }
-.drum-lesson-message p { margin:0 0 12px; line-height:1.65; }
-.drum-complete-actions { display:flex; flex-wrap:wrap; gap:10px; }
 .drum-lesson-guide { padding:16px; border-radius:7px; background:var(--oto-case-low); }
-.drum-guide-heading { display:flex; justify-content:space-between; gap:12px; margin-bottom:12px; }
-.drum-beat-count, .drum-guide-row { display:grid; grid-template-columns:100px repeat(8,minmax(0,1fr)); gap:4px; align-items:center; }
+.drum-guide-heading { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:start; gap:12px; margin-bottom:12px; }
+.drum-beat-count, .drum-guide-row { display:grid; grid-template-columns:100px repeat(var(--drum-grid-columns,8),minmax(0,1fr)); gap:4px; align-items:center; }
 .drum-beat-count::before { content:''; }
 .drum-beat-count span { text-align:center; padding:5px 0; border-radius:4px; font-size:13px; }
 .drum-beat-count [data-current] { background:var(--oto-secondary); color:var(--oto-key); }
 .drum-guide-row { margin-top:4px; }
 .drum-guide-row small { font-size:11px; }
+.drum-guide-row small[data-highlight] { color:var(--oto-accent); font-weight:700; }
 .drum-guide-row > span { min-height:24px; display:grid; place-items:center; border-left:1px dotted var(--oto-display-ink); }
 .drum-guide-row [data-note] { background:var(--oto-key); border-radius:5px; }
 .drum-guide-row [data-hit] { background:#f7db63; color:#292e29; box-shadow:inset 0 0 0 1px #bca74f; }
 .drum-pad-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-top:8px; touch-action:none; }
-.drum-tutorial .drum-tutorial-pad { display:flex; flex-direction:column; justify-content:center; align-items:center; gap:8px; min-height:118px; padding:12px 4px; touch-action:none; user-select:none; -webkit-user-select:none; }
+:is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad { appearance:none; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:8px; min-height:118px; padding:12px 4px; border:0; border-radius:7px; background:var(--oto-key); color:var(--oto-ink); box-shadow:var(--oto-raised); font:inherit; cursor:pointer; touch-action:none; user-select:none; -webkit-user-select:none; }
+:is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad:focus-visible { outline:2px solid var(--oto-accent); outline-offset:3px; }
 .drum-tutorial-pad small { font-size:12px; }
 .drum-tutorial-pad strong { font-size:16px; }
 .drum-tutorial-pad kbd { font:inherit; font-size:11px; opacity:.65; }
-.drum-tutorial .drum-tutorial-pad[data-lit], .drum-tutorial .drum-tutorial-pad:active { background:var(--oto-selection); box-shadow:var(--oto-recess); }
+:is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad[data-lit], :is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad:active { background:var(--oto-selection); box-shadow:var(--oto-recess); }
 .drum-pad-hint { font-size:12px; margin:0; text-align:center; }
 @media(max-width:600px) {
  .drum-lesson { gap:12px; }
- .drum-lesson-header strong { font-size:15px; }
- .drum-stage-steps { gap:4px; font-size:10px; }
- .drum-stage-steps span { padding:6px; }
  .drum-lesson-guide { padding:10px; }
- .drum-beat-count, .drum-guide-row { grid-template-columns:64px repeat(8,minmax(0,1fr)); gap:2px; }
+ .drum-beat-count, .drum-guide-row { grid-template-columns:64px repeat(var(--drum-grid-columns,8),minmax(0,1fr)); gap:2px; }
  .drum-guide-row small { font-size:10px; }
  .drum-pad-grid { gap:8px; }
- .drum-tutorial .drum-tutorial-pad { min-height:94px; gap:6px; }
+ :is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad { min-height:94px; gap:6px; }
  .drum-tutorial-pad strong { font-size:12px; }
  .drum-tutorial-pad small { font-size:10px; }
 }
 @media(max-height:500px) and (orientation:landscape) {
- .drum-tutorial .drum-tutorial-pad { min-height:64px; }
- .drum-lesson-message { min-height:0; padding:10px; }
+ :is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad { min-height:64px; }
 }
+
+:is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad { position:relative; }
+.drum-hand-left { transform:scaleX(-1); }
+.drum-hand-palm { fill:var(--oto-key); stroke:var(--oto-ink); stroke-width:1.5; }
+.drum-hand-active { fill:var(--oto-accent); }
+.drum-hand-active[data-hint] { fill:color-mix(in srgb, var(--oto-accent) 35%, var(--oto-key)); animation:drum-finger-hint 2s ease-in-out infinite; }
+@keyframes drum-finger-hint {
+  0%, 100% { fill:color-mix(in srgb, var(--oto-accent) 30%, var(--oto-key)); }
+  50% { fill:color-mix(in srgb, var(--oto-accent) 75%, var(--oto-key)); }
+}
+@media (prefers-reduced-motion:reduce) { .drum-hand-active[data-hint] { animation:none; } }
+
+.drum-guide-heading > .tutorial-score { justify-self:end; }
+.drum-guide-hands { display:flex; justify-content:center; align-items:center; gap:14px; flex:1; min-width:0; }
+.drum-guide-hand { display:flex; flex-direction:column; align-items:center; gap:2px; font-size:11px; }
+.drum-guide-hand svg { width:48px; height:50px; }
+@media(max-width:600px) { .drum-guide-hands { gap:6px; } .drum-guide-hand svg { width:35px; height:37px; } }
+
+.mode-home-header { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:8px; }
+.mode-home-actions { display:flex; flex-wrap:wrap; gap:8px; margin-inline-start:auto; }
+.tutorial-selector :is(select,button) { box-sizing:border-box; height:44px; }
+.tutorial-selector .part-choice-steps > button { height:44px; }
+
+:is(#oto-buddy, .talk-avatar):is([data-perfect], [data-happy]) .buddy-eyes { display:none; }
+:is(#oto-buddy, .talk-avatar):is([data-perfect], [data-happy]) .buddy-happy-eyes { display:block; visibility:visible; stroke:var(--oto-key); }
+.tutorial-companion .talk-avatar[data-perfect] { animation:tutorial-otto-bounce .55s ease-in-out 3; }
+@keyframes tutorial-otto-bounce { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-10px); } }
+@media (prefers-reduced-motion:reduce) { .tutorial-companion .talk-avatar[data-perfect] { animation:none; } }
+
+
+/* The light is a soft circle, independent of the pressed shadow and motion. */
+:root {
+  --oto-note-glow: radial-gradient(ellipse 52% 58% at center,
+    rgb(255 255 255 / .72) 0%, rgb(255 211 209 / .62) 22%,
+    rgb(255 145 142 / .30) 52%, rgb(255 145 142 / 0) 100%);
+}
+.tutorial-demo-keys .active,
+.tutorial-screen .tutorial-keyboard .active,
+:is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad:is([data-lit], [data-placement], :active),
+:root[data-skin] #piano-keys .piano-key:is([data-held], [data-playing], [data-pc-playing]) {
+  background: var(--oto-note-glow), var(--oto-key);
+  color: var(--oto-ink);
+}
+.tutorial-screen .tutorial-keyboard .tutorial-black.active,
+:root[data-skin] #piano-keys .piano-black:is([data-held], [data-playing], [data-pc-playing]) {
+  background: var(--oto-note-glow), var(--oto-ink);
+  color: var(--oto-key);
+}
+:root[data-skin] #piano-keys .piano-key:is([data-held], [data-playing], [data-pc-playing]) {
+  box-shadow: var(--oto-recess);
+}
+:root #detail-melody .pad:is(:active, .playing, [data-playing], [data-pc-playing]),
+:root .accompaniment-pads .pad:active {
+  background: var(--oto-note-glow), var(--oto-key) !important;
+}
+
+/* Drum and melody share the four-beat time axis. */
+.drum-lesson-guide { --drum-label-width:100px; }
+.drum-timeline { position:relative; margin-left:var(--drum-label-width); height:30px; }
+.drum-timeline-grid { display:grid; grid-template-columns:repeat(var(--drum-grid-columns,8),minmax(0,1fr)); height:100%; }
+.drum-timeline-grid span { padding-left:6px; font-size:11px; color:var(--oto-muted); border-left:1px solid var(--oto-seam); }
+.drum-timeline-grid .drum-grid-eighth { border-left-style:dashed; opacity:.65; }
+.drum-playhead { position:absolute; top:0; width:3px; height:30px; background:var(--oto-accent); pointer-events:none; z-index:2; }
+.drum-guide-row { gap:0; }
+.drum-guide-row > span { border-left:1px dashed var(--oto-seam); }
+.drum-guide-row > .drum-grid-beat { border-left-style:solid; }
+.drum-timeline-grid .drum-grid-sixteenth, .drum-guide-row > .drum-grid-sixteenth { border-left-style:dashed; border-left-color:color-mix(in srgb, var(--oto-seam) 55%, transparent); }
+.drum-guide-row > [data-note] { font-size:clamp(7px, 1.5vw, 13px); }
+@media(max-width:600px) { .drum-lesson-guide { --drum-label-width:64px; } .drum-guide-row { gap:0; } }
+
+.drum-pad-name { display:flex; align-items:center; justify-content:center; gap:8px; }
+.drum-pad-icon { width:28px; height:28px; flex:none; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+@media (max-width:480px) { .drum-pad-name { gap:4px; } .drum-pad-icon { width:20px; height:20px; } }
+
+/* The companion message advances on tap without taking pointer focus. */
+.tutorial-companion .tutorial-message:focus,
+.tutorial-companion .tutorial-message:focus-visible { outline:none; }
+
+.tutorial-score .drum-count-label { font-size:clamp(10px, 1.1vw, 14px); white-space:nowrap; }
+
+.drum-guide-row[data-hand-divider] { position:relative; }
+.drum-guide-row[data-hand-divider]::before { content:''; position:absolute; left:0; right:0; top:-3px; border-top:1px solid var(--oto-seam); pointer-events:none; }
+
+.tutorial-tempo { display:inline-flex; align-items:center; gap:8px; padding:4px 8px; color:var(--oto-ink); font-size:12px; white-space:nowrap; }
+.tutorial-tempo output { min-width:4.5em; font-variant-numeric:tabular-nums; }

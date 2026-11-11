@@ -1,5 +1,5 @@
 import { mountDrumTutorial } from './drum-tutorial.js'
-import { mountTutorial } from './tutorial-view.js'
+import { mountTutorial, developmentTutorial } from './tutorial-view.js'
 import { createApp, h } from './vendor/vue.runtime.esm-browser.prod.js'
 import { genres } from './groove.js'
 import { presets, notes, melodyPalette, melodyRole, displayChordParts } from './music.js'
@@ -460,7 +460,7 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
   const categories = document.createElement('section')
   categories.className = 'mode-screen tutorial-categories'
   categories.hidden = true
-  categories.innerHTML = '<button type="button" data-category-back>← メニュー</button><h1 tabindex="-1">どの楽器で遊ぶ？</h1><div class="mode-choices"><button type="button" data-lesson="tutorial"><strong>メロディ編</strong><span>鍵盤で音とリズムを楽しもう · 10レッスン</span></button><button type="button" data-lesson="drum-tutorial"><strong>ドラム編</strong><span>8つのパッドで8ビートを叩こう · 1レッスン</span></button><button type="button" disabled><strong>ベース編</strong><span>準備中</span></button><button type="button" disabled><strong>コード編</strong><span>準備中</span></button></div>'
+  categories.innerHTML = '<button type="button" data-category-back>← メニュー</button><h1 tabindex="-1">どの楽器で遊ぶ？</h1><div class="mode-choices"><button type="button" data-lesson="tutorial"><strong>メロディ編</strong><span>鍵盤で音とリズムを楽しもう · 10レッスン</span></button><button type="button" data-lesson="drum-tutorial"><strong>ドラム編</strong><span>8つのパッドで基本から応用まで · 10レッスン</span></button><button type="button" disabled><strong>ベース編</strong><span>準備中</span></button><button type="button" disabled><strong>コード編</strong><span>準備中</span></button></div>'
   const drumRoot = document.createElement('section')
   drumRoot.className = 'tutorial-screen drum-tutorial'
   drumRoot.hidden = true
@@ -489,7 +489,13 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
   const tutorialView = mountTutorial(tutorial, mode => {
     open(mode === 'menu' ? 'categories' : mode)
     if (mode === 'free') { selectSession(); document.dispatchEvent(new Event('tutorial-free-session')) }
-  }, connectMidi)
+  })
+  const midiButton = document.querySelector('#mode-midi')
+  if (midiButton instanceof HTMLButtonElement) midiButton.addEventListener('click', async () => {
+    midiButton.disabled = true
+    try { midiButton.textContent = await connectMidi() }
+    finally { midiButton.disabled = false }
+  })
   document.querySelectorAll('[data-open-mode]').forEach(button => {
     button.addEventListener('click', () => open(button.getAttribute('data-open-mode') === 'tutorial' ? 'categories' : button.getAttribute('data-open-mode') ?? 'menu'))
   })
@@ -513,6 +519,6 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
     }, true)
   }
   free.hidden = true
-  open('menu')
+  open(developmentTutorial ? 'drum-tutorial' : 'menu')
   return tutorialView
 }

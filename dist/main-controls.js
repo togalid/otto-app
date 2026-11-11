@@ -310,6 +310,14 @@ export function bindSynthKnob(element) {
   bindKnobDrag(element, (Number(element.max) - Number(element.min)) / 270)
 }
 
+const tempoKnobs = new WeakSet()
+/** @param {unknown} element */
+export function bindTempoKnob(element) {
+  if (!(element instanceof HTMLInputElement) || tempoKnobs.has(element)) return
+  tempoKnobs.add(element)
+  bindKnobDrag(element, .6, true)
+}
+
 /** @param {HTMLInputElement} input @param {number} sensitivity @param {boolean} [integer] */
 export function bindKnobDrag(input, sensitivity, integer = false) {
   const knob = input.parentElement
@@ -434,7 +442,8 @@ for (const [source, field, caption] of /** @type {[HTMLInputElement, 'key'|'mete
     if(Number.isFinite(value)&&value>=40&&value<=200){input.value=String(Math.round(value*10)/10);input.dispatchEvent(new Event('input',{bubbles:true}))}
     else refresh()
   })
-  bindKnobDrag(input,field==='bpm'?.6:field==='meter'?.035:.12,true)
+  if(field==='bpm')bindTempoKnob(input)
+  else bindKnobDrag(input,field==='meter'?.035:.12,true)
   sectionKnobs.push(refresh)
 }
 const refreshSectionKnobs=()=>sectionKnobs.forEach(refresh=>refresh())

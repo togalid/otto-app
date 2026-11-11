@@ -1,5 +1,6 @@
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { Instrument } from './audio.js'
+import { bindTempoKnob } from './main-controls.js'
 import { lessons, createTutorialPlayer, displayedResponseStart, mergePlayedSegments, responseComplete, recordTutorialSuccess, shortNoteTarget, tutorialNotes, isTutorialFreePitch, matchSlideNote, isSessionSlide } from './tutorial.js'
 import { genres, BassSynth } from './groove.js'
 import { DrumSynth } from './rhythm.js'
@@ -9,9 +10,68 @@ export const developmentTutorial = typeof location !== 'undefined' && ['localhos
 const pitches = [60,62,64,65,67,69,71,72]
 const names = ['ド','レ','ミ','ファ','ソ','ラ','シ','ド']
 
+/**
+ * @param {{drawing:string, line:string, advance?:()=>void, hint?:string, error?:string, actions?:(ReturnType<typeof h>|null)[], perfect?:boolean, happy?:boolean}} props
+ */
+export function TutorialCompanion({drawing,line,advance,hint,error,actions,perfect,happy}) {
+  return h('div',{class:'tutorial-companion'},[
+    h('div',{class:'talk-avatar','data-look':'headphones','data-perfect':perfect?'':undefined,'data-happy':happy?'':undefined,'aria-hidden':'true',innerHTML:drawing}),
+    h(advance?'button':'div',{
+      class:'tutorial-message',
+      type:advance?'button':undefined,
+      onPointerdown:advance ? event=>event.preventDefault() : undefined,
+      onClick:advance,
+    },[
+      h('span',line),
+      error?h('small',{role:'alert'},error):null,
+      hint?h('small',hint):null,
+      actions?h('div',{class:'tutorial-complete'},actions):null,
+    ]),
+  ])
+}
+
+/** @param {{onBack:()=>void, onSelect:(index:number)=>void, index:number, count:number, label:string, options:ReturnType<typeof h>[], onStop?:()=>void}} props */
+export function TutorialSelector({onBack,onSelect,index,count,label,options,onStop}) {
+  return h('header',{class:'tutorial-selector'},[
+    h('button',{type:'button',class:'tutorial-back',onClick:onBack},'← メニュー'),
+    h('div',{class:'part-choice-picker'},[
+      h('select',{'aria-label':label,value:index,onChange:(/** @type {Event} */ event)=>onSelect(Number(/** @type {HTMLSelectElement} */(event.target).value))},options),
+      h('div',{class:'part-choice-steps'},[
+        h('button',{type:'button','aria-label':'前のレッスン',disabled:index===0,onClick:()=>onSelect(index-1)},'←'),
+        h('button',{type:'button','aria-label':'次のレッスン',disabled:index===count-1,onClick:()=>onSelect(index+1)},'→'),
+      ]),
+    ]),
+    onStop?h('button',{type:'button',class:'tutorial-start',onClick:onStop},'■ 停止'):null,
+  ])
+}
+
+/** @param {{value:number,onTempoUpdate:(value:number)=>void}} props */
+export function TutorialTempo({value,onTempoUpdate}) {
+  return h('div',{class:'tutorial-tempo'},[h('span','テンポ'),h('span',{class:'volume-knob',style:{'--angle':`${(value-110)*1.3}deg`}},[h('input',{type:'range',min:40,max:180,step:1,value,ref:bindTempoKnob,'aria-label':'テンポ BPM',onInput:(/** @type {Event} */ event)=>onTempoUpdate(Number(/** @type {HTMLInputElement} */(event.target).value))}),h('span',{'aria-hidden':'true'})]),h('output',`${value} BPM`)])
+}
+
+/** @param {AudioContext} context @param {Set<OscillatorNode>} successSounds */
+export function playTutorialSuccess(context, successSounds) {
+    const now = context.currentTime
+    // Two short, bright tones make the rising quiz-show confirmation distinct.
+    for (const [frequency,offset] of [[1046.5,0],[1568,.085]]) {
+      const oscillator = context.createOscillator(), gain = context.createGain()
+      const start = now + offset
+      oscillator.type = 'triangle'
+      oscillator.frequency.setValueAtTime(frequency,start)
+      gain.gain.setValueAtTime(.0001,start)
+      gain.gain.exponentialRampToValueAtTime(.075,start+.008)
+      gain.gain.exponentialRampToValueAtTime(.0001,start+.15)
+      oscillator.connect(gain); gain.connect(context.destination)
+      successSounds.add(oscillator)
+      oscillator.onended = () => { successSounds.delete(oscillator); oscillator.disconnect(); gain.disconnect() }
+      oscillator.start(start); oscillator.stop(start+.16)
+    }
+}
+
 /** Dedicated lesson screen; free-play settings and transport are never mutated.
- * @param {HTMLElement} root @param {(mode:string)=>void} navigate @param {()=>Promise<string>} connectMidi */
-export function mountTutorial(root, navigate, connectMidi) {
+ * @param {HTMLElement} root @param {(mode:string)=>void} navigate */
+export function mountTutorial(root, navigate) {
   const voice = new Instrument('melody')
   const userVoice = new Instrument('melody')
   const backingVoice = new Instrument('chord')
@@ -43,7 +103,6 @@ export function mountTutorial(root, navigate, connectMidi) {
   const selected = ref(developmentTutorial ? 5 : 0), message = ref(0), dialogue = ref(true)
   const state = ref({phase:'idle',beat:0,bar:0,error:''})
   const held = ref(-1), feedback = ref(''), score = ref(0)
-  const midiStatus = ref('MIDI接続')
   const successes = new Set()
   /** @type {Set<OscillatorNode>} */
   const successSounds = new Set()
@@ -54,21 +113,7 @@ export function mountTutorial(root, navigate, connectMidi) {
   function playSuccess() {
     const context = voice.context
     if (!context || context.state !== 'running') return
-    const now = context.currentTime
-    // Two short, bright tones make the rising quiz-show confirmation distinct.
-    for (const [frequency,offset] of [[1046.5,0],[1568,.085]]) {
-      const oscillator = context.createOscillator(), gain = context.createGain()
-      const start = now + offset
-      oscillator.type = 'triangle'
-      oscillator.frequency.setValueAtTime(frequency,start)
-      gain.gain.setValueAtTime(.0001,start)
-      gain.gain.exponentialRampToValueAtTime(.075,start+.008)
-      gain.gain.exponentialRampToValueAtTime(.0001,start+.15)
-      oscillator.connect(gain); gain.connect(context.destination)
-      successSounds.add(oscillator)
-      oscillator.onended = () => { successSounds.delete(oscillator); oscillator.disconnect(); gain.disconnect() }
-      oscillator.start(start); oscillator.stop(start+.16)
-    }
+    playTutorialSuccess(context, successSounds)
   }
   /** @type {import('./tutorial.js').TutorialState} */
   let previous = {phase:'idle',beat:0,bar:0,error:''}
@@ -87,6 +132,7 @@ export function mountTutorial(root, navigate, connectMidi) {
   /** @type {ReturnType<typeof setTimeout>|undefined} */
   let clickTimer
   const sessionLevel = ref(0)
+  const retryTempo = ref(80)
   const responseNotes = (/** @type {number} */ bar) => tutorialNotes(lessons[selected.value],bar,sessionLevel.value)
   const player = createTutorialPlayer({voice, accompaniment, onUpdate: next => {
     if (previous.phase === 'you' && next.phase === 'you' && previous.bar === next.bar && held.value >= 0 && !lessons[selected.value].freePitch && !isSlide()) {
@@ -110,7 +156,7 @@ export function mountTutorial(root, navigate, connectMidi) {
   function stop() { player.stop(); release(); userVoice.silence(); silenceSuccess() }
   function start() { stop(); slideProgress.value = 0; slideResultBar = -1; successes.clear(); score.value = 0; played.length = 0; playedRevision.value++; dialogue.value = true; message.value = 0; feedback.value = '' }
   /** @param {number} index */
-  function select(index) { stop(); slideProgress.value = 0; slideResultBar = -1; successes.clear(); score.value = 0; played.length = 0; playedRevision.value++; selected.value = index; sessionLevel.value = 0; dialogue.value = false; feedback.value = '' }
+  function select(index) { stop(); slideProgress.value = 0; slideResultBar = -1; successes.clear(); score.value = 0; played.length = 0; playedRevision.value++; selected.value = index; sessionLevel.value = 0; retryTempo.value = 80; dialogue.value = false; feedback.value = '' }
   function nextLesson() {
     if (selected.value >= lessons.length - 1) return
     select(selected.value + 1)
@@ -126,7 +172,7 @@ export function mountTutorial(root, navigate, connectMidi) {
       return
     }
     if (message.value < lessons[selected.value].messages.length - 1) message.value++
-    else { dialogue.value = false; void player.start(selected.value, sessionLevel.value) }
+    else { dialogue.value = false; void player.start(selected.value, sessionLevel.value, retryTempo.value) }
   }
   /** @param {number} midi */
   function markEighthNote(midi) {
@@ -300,29 +346,22 @@ export function mountTutorial(root, navigate, connectMidi) {
       return phase === 'otto' && notes.some(note => note.midi === midi && beat >= note.beat && beat < note.beat + note.duration)
     }
     return [
-      h('div',{class:'tutorial-selector'},[
-        h('button',{class:'tutorial-back',onClick:()=>navigate('menu')},'← メニュー'),
-        h('button',{class:'tutorial-midi',onClick:async()=>{midiStatus.value = await connectMidi()}},midiStatus.value),
-        h('div',{class:'part-choice-picker'},[
-          h('select',{'aria-label':'チュートリアル番号',value:selected.value,onChange:(/** @type {Event} */ event)=>select(Number(/** @type {HTMLSelectElement} */(event.target).value))},['メロディ基礎','メロディ発展'].map((label,group)=>h('optgroup',{label},lessons.slice(group*5,group*5+5).map((l,i)=>h('option',{value:group*5+i},`No.${group*5+i+1} · ${l.title}`))))),
-          h('div',{class:'part-choice-steps'},[
-            h('button',{'aria-label':'前のチュートリアル',disabled:selected.value===0,onClick:()=>select(selected.value-1)},'←'),
-            h('button',{'aria-label':'次のチュートリアル',disabled:selected.value===lessons.length-1,onClick:()=>select(selected.value+1)},'→'),
-          ]),
-        ]),
-        running ? h('button',{class:'tutorial-start',onClick:()=>{stop();dialogue.value=false}},'■ 停止') : null,
-      ]),
-      h('div',{class:'tutorial-companion'},[
-        h('div',{class:'talk-avatar','data-look':'headphones','aria-hidden':'true',innerHTML:drawing}),
-        h(dialogue.value || phase==='idle' || phase==='error'?'button':phase==='complete'?'div':'p',{class:'tutorial-message',onClick:dialogue.value || phase==='idle' || phase==='error'?advance:undefined},[
-          h('span',line),dialogue.value?h('small',`${message.value+1} / ${lesson.messages.length}　タップして${message.value===lesson.messages.length-1?'演奏へ':'次へ'} →`):phase==='idle' || phase==='error'?h('small','タップしてレッスンをスタート →'):null,
-          phase==='complete'?h('div',{class:'tutorial-complete'},[
-            h('button',{onClick:start},'もう一度'),
-            lesson.session && sessionLevel.value === 0 ? h('button',{onClick:()=>{sessionLevel.value = 1; start()}},'もう少しレベルを上げる') : null,
-            selected.value<lessons.length-1?h('button',{onClick:nextLesson},'次のレッスン →'):h('button',{onClick:()=>navigate('free')},'フリー演奏へ'),
-          ]):null,
-        ]),
-      ]),
+      h(TutorialSelector,{
+        onBack:()=>navigate('menu'),onSelect:select,index:selected.value,count:lessons.length,label:'チュートリアル番号',
+        options:['メロディ基礎','メロディ発展'].map((label,group)=>h('optgroup',{label},lessons.slice(group*5,group*5+5).map((l,i)=>h('option',{value:group*5+i},`No.${group*5+i+1} · ${l.title}`)))),
+        onStop:running?()=>{stop();dialogue.value=false}:undefined,
+      }),
+      h(TutorialCompanion,{
+        drawing,line,perfect:phase==='complete' && score.value===scoreGoal,
+        advance:dialogue.value || phase==='idle' || phase==='error'?advance:undefined,
+        hint:dialogue.value?`${message.value+1} / ${lesson.messages.length}　タップして${message.value===lesson.messages.length-1?'演奏へ':'次へ'} →`:phase==='idle' || phase==='error'?'タップしてレッスンをスタート →':undefined,
+        actions:phase==='complete'?[
+          h('button',{onClick:start},'もう一度'),
+          h(TutorialTempo,{value:retryTempo.value,onTempoUpdate:(/** @type {number} */ value)=>{retryTempo.value=value}}),
+          lesson.session && sessionLevel.value === 0 ? h('button',{onClick:()=>{sessionLevel.value = 1; retryTempo.value = 90; start()}},'もう少しレベルを上げる') : null,
+          selected.value<lessons.length-1?h('button',{onClick:nextLesson},'次のレッスン →'):h('button',{onClick:()=>navigate('free')},'フリー演奏へ'),
+        ]:undefined,
+      }),
       h('section',{class:'tutorial-demo','aria-label':'Ottoのけんばん'},[
         h('div',{class:'tutorial-caption'},[h('strong','Ottoのけんばん'),h('span',{role:'status'},phase==='otto'?'お手本を聴こう':phase==='you'?'あなたの番':phase==='complete'?'できた！':'')]),
         h('div',{class:'tutorial-demo-keys','aria-hidden':'true'},[
@@ -430,7 +469,7 @@ export function mountTutorial(root, navigate, connectMidi) {
       if (held.value === midi) release(isSlide())
     },
     advanceMessage(){ if (visible) advance() },
-    open(){visible=true;sessionLevel.value=0;start()},
+    open(){visible=true;sessionLevel.value=0;retryTempo.value=80;start()},
     close(){visible=false;midiHeld.clear();stop()},
   }
 }

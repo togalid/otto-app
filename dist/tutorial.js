@@ -194,13 +194,13 @@ export function createTutorialPlayer({voice,onUpdate,accompaniment,setTimer = (c
   function stop() { cancel(); publish('idle') }
   /** @param {number} index */
   let beatSeconds = tutorialBeatSeconds
-  /** @param {number} index @param {number} [level] */
-  async function start(index, level = 0) {
+  /** @param {number} index @param {number} [level] @param {number} [bpm] */
+  async function start(index, level = 0, bpm) {
     cancel()
     const token = generation
     const lesson = lessons[index]
     if (!Number.isInteger(index) || !lesson) { publish('error',0,'チュートリアルを選び直してください。'); return }
-    beatSeconds = lesson.session && level > 0 ? 60 / 90 : tutorialBeatSeconds
+    beatSeconds = bpm && Number.isFinite(bpm) ? 60 / Math.max(40,Math.min(180,bpm)) : lesson.session && level > 0 ? 60 / 90 : tutorialBeatSeconds
     const totalBeats = lesson.session ? 64 : 32
     publish('loading')
     try {

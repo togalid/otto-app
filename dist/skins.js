@@ -30,8 +30,11 @@ const dialog = /** @type {HTMLDialogElement} */ (document.querySelector('#appear
 const opener = /** @type {HTMLButtonElement} */ (document.querySelector('#appearance-open'))
 /** @type {Promise<ReturnType<import('./appearance-dialog.js').mountAppearanceDialog>> | undefined} */
 let appearancePromise
-opener.addEventListener('click', async () => {
-  opener.disabled = true
+const homeOpener = /** @type {HTMLButtonElement} */ (document.querySelector('#mode-appearance'))
+let lastOpener = opener
+async function openAppearance(/** @type {HTMLButtonElement} */ trigger) {
+  lastOpener = trigger
+  trigger.disabled = true
   try {
     appearancePromise ??= import('./appearance-dialog.js').then(({ mountAppearanceDialog }) =>
       mountAppearanceDialog({ current: () => root.dataset.skin || 'milk', select: selectSkin, close: () => { void closeAppearance() } }))
@@ -40,8 +43,10 @@ opener.addEventListener('click', async () => {
   } catch {
     appearancePromise = undefined
     settingsOpen.title = '外観設定を開けませんでした。もう一度お試しください。'
-  } finally { opener.disabled = false }
-})
+  } finally { trigger.disabled = false }
+}
+opener.addEventListener('click', () => { void openAppearance(opener) })
+homeOpener.addEventListener('click', () => { void openAppearance(homeOpener) })
 let closing = false
 async function closeAppearance() {
   if (closing || !dialog.open) return
@@ -58,7 +63,7 @@ dialog.addEventListener('click', (event) => { if (event.target === dialog) {
   const bounds = dialog.getBoundingClientRect()
   if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) void closeAppearance()
 } })
-dialog.addEventListener('close', () => settingsOpen.focus())
+dialog.addEventListener('close', () => (lastOpener === opener ? settingsOpen : lastOpener).focus())
 /** @param {string} skin */
 function selectSkin(skin) {
   applySkin(skin)

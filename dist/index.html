@@ -16,7 +16,10 @@
   </head>
   <body data-app-mode="menu">
     <section id="mode-menu" class="mode-screen" aria-labelledby="mode-menu-title">
-      <h1 id="mode-menu-title" tabindex="-1">Ottoと音であそぼう</h1>
+      <div class="mode-home-header">
+        <h1 id="mode-menu-title" tabindex="-1">Ottoと音であそぼう</h1>
+        <div class="mode-home-actions"><button id="mode-appearance" type="button" aria-haspopup="dialog" aria-controls="appearance-dialog">外観</button><button id="mode-midi" type="button">MIDI接続</button></div>
+      </div>
       <div class="mode-choices">
         <button type="button" data-open-mode="tutorial"><strong>チュートリアルモード</strong><span>Ottoのお手本を聴いて、真似してみよう</span></button>
         <button type="button" data-open-mode="free"><strong>フリー演奏モード</strong><span>好きなスタイルで、一緒に演奏しよう</span></button>
@@ -25,7 +28,6 @@
     <section id="tutorial-menu" class="tutorial-screen" aria-label="チュートリアル" hidden>
     </section>
     <div class="shell">
-      <button type="button" class="mode-back" data-open-mode="menu">← メニュー</button>
       <header class="player-header">
         <div class="player-left"><div class="player-brand">
         <a class="logo" href="./" aria-label="Otto ホーム">
@@ -35,6 +37,7 @@
             <circle cx="32" cy="39" r="2.8" fill="var(--oto-accent)"/>
           </svg>tto
         </a>
+        <button type="button" class="mode-back" data-open-mode="menu">← メニュー</button>
         <div class="buddy-guide"><button id="oto-buddy" type="button" aria-label="Otto（オットー）にあいさつ" title="やあ。" data-mood="idle">
           <svg viewBox="0 0 28 28" aria-hidden="true" focusable="false">
             <circle class="buddy-case" cx="14" cy="14" r="11"/>

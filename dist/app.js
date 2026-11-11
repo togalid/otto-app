@@ -8,7 +8,7 @@ import { migrateSongSections } from './song-score.js'
 import { sectionControlIds, arrangementControlIds, arrangementMixIds, decodeArrangement, encodeArrangement, restoreArrangement } from './arrangement-file.js'
 import { mountBassDetail } from './bass-detail.js'
 import { mountStyleChoices, mountPresetChoices } from './arrangement-selects.js'
-import { mountBasicParts, mountReferenceControls, mountReferenceDetail, bindKnobDrag, mountPartIcons, mountSectionKnobs } from './main-controls.js'
+import { mountBasicParts, mountReferenceControls, mountReferenceDetail, bindKnobDrag, bindTempoKnob, mountPartIcons, mountSectionKnobs } from './main-controls.js'
 import { ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { drumPadSound, mountMelodyVoiceChoice, mountPartSteppers, mountTimbreSteppers } from './part-steppers.js'
 import { mountChordGrid, mountScoreContext, mountScoreSections, mountScorePaging, mountMobileScoreTools } from './chord-grid.js'
@@ -115,6 +115,7 @@ buttons.push(...mountMelodyPads({ play, release: releasePad, clickRelease: index
 
 document.addEventListener('keydown', (event) => {
   if (document.body.dataset.appMode !== 'free') return
+  if (!document.querySelector('#track-grid .track-select[data-track="melody"][aria-pressed="true"]')) return
   if (event.target instanceof Element && event.target.closest('dialog[open]')) return
   if (
     event.repeat ||
@@ -914,7 +915,8 @@ for (const input of [tempo, swing]) {
   }
   input.addEventListener('input', refresh)
   document.getElementById('genre')?.addEventListener('change', refresh)
-  bindKnobDrag(input, .5, input === tempo)
+  if(input === tempo) bindTempoKnob(input)
+  else bindKnobDrag(input, .5)
   refresh()
 }
 
@@ -1115,6 +1117,7 @@ const midiDestinations = new Map()
 document.querySelector('#track-grid')?.addEventListener('click', event => {
   const button = event.target instanceof Element ? event.target.closest('.track-select[data-track]') : null
   const part = button instanceof HTMLElement ? button.dataset.track : undefined
+  if (part && part !== 'melody') for (const index of heldPads.keys()) releasePad(index)
   if (part && ['melody','bass','drums','chord'].includes(part)) midiPart = part
 })
 const midiInput = mountMidiInput({

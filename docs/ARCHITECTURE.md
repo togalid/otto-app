@@ -11,7 +11,7 @@ The browser loads authored native ES modules from `dist/`. The transport, score,
 | Change | Read first | Focused tests |
 | --- | --- | --- |
 | Tutorial curriculum, eight-bar clock, dedicated lesson UI | `tutorial.js`, `tutorial-view.js`; mode lifecycle in `melody-view.js` | `tests/tutorial.test.mjs`, browser |
-| Drum tutorial, mirrored pads, staged eighth-note practice | `drum-tutorial.js`; category navigation in `melody-view.js` | `drum-tutorial`, browser |
+| Drum tutorial, mirrored pads, staged rhythm practice and sessions | `drum-tutorial.js`; category navigation in `melody-view.js` | `drum-tutorial`, browser |
 | Instrument and chord choice menus | `choice-menu.js`, `part-steppers.js` | browser |
 | Score grid and part pattern controls | `chord-grid.js`, `backing-detail.js`, `part-steppers.js` | browser |
 | Harmony, chord labels | `chord-harmony.js`, `music.js`, `presets.js` | `music`, `presets` |

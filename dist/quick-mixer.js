@@ -225,11 +225,11 @@ export function mountQuickMixer({
       'hide-accompaniment-detail',
       Boolean(playable && !quickAdvanced.has(playable)),
     )
-    if (quickEdit.hidden) return
     clearAccompanimentPads()
     unmountPlay()
     unmountPlay = () => {}
     quickPlay.replaceChildren()
+    if (quickEdit.hidden) return
     if (playable) {
       const part = playable
       const view = mountAccompanimentPlay(

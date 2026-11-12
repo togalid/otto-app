@@ -2296,7 +2296,7 @@ main[data-workspace-view='melody'] > #detail-melody { display:block !important; 
 
 
 #piano-keys .piano-key:is([data-held],[data-playing],[data-pc-playing]) { background:var(--oto-secondary); color:var(--oto-key); box-shadow:var(--oto-recess); }
-:root[data-skin='soda'] #piano-keys .piano-black:is([data-held],[data-playing],[data-pc-playing]) { background:var(--oto-selection); box-shadow:inset 0 0 0 2px var(--oto-accent); }
+
 
 .waveform-reticle::after { width:1px; height:28px; background:#f3cb52; opacity:1; border-radius:2px; }
 .waveform-reticle { transition:color .16s,filter .16s; }
@@ -2309,7 +2309,7 @@ main[data-workspace-view='melody'] > #detail-melody { display:block !important; 
 #piano-scroll { container-type:inline-size; scrollbar-width:none; padding-top:0; }
 #piano-keys {
   --piano-width:calc(100cqi / 15);
-  --piano-black-width:min(23px, calc(var(--piano-width) * .64));
+  --piano-black-width:calc(var(--piano-width) * .64);
 }
 #piano-keys .piano-key span { font-size:clamp(7px, 1.4cqi, 10px); }
 #piano-scroll::-webkit-scrollbar { display:none; }
@@ -2907,11 +2907,7 @@ main[data-workspace-view='mixer'][data-mixer-layout]:has(> .has-accompaniment-pl
 /* Highlight black keys in a contrasting complementary color for each skin. */
 :root { --oto-black-key-active: #df8bac; }
 :root[data-skin='toy'], :root[data-skin='soda'] { --oto-black-key-active: #efaa69; }
-:root[data-skin] #piano-keys .piano-black:is([data-held],[data-playing],[data-pc-playing]) {
-  background:var(--oto-black-key-active);
-  color:var(--oto-ink);
-  box-shadow:inset 0 0 0 2px var(--oto-ink);
-}
+
 
 #detail-melody .session-turn-display {
   align-items:end;
@@ -3128,17 +3124,38 @@ body[data-app-mode='tutorial'] > .shell,
 .tutorial-caption span { font-size:12px; color:var(--oto-muted); }
 .tutorial-demo-keys { position:relative; display:grid; grid-template-columns:repeat(8,1fr); gap:4px; }
 .tutorial-demo-keys span { text-align:center; padding:18px 0 8px; background:var(--oto-key); box-shadow:var(--oto-raised); border-radius:0 0 7px 7px; font-size:12px; }
+.tutorial-demo:not(.tutorial-demo-complete) { display:none; }
+.tutorial-demo-complete > .tutorial-caption, .tutorial-demo-complete > .tutorial-demo-keys { display:none; }
+.tutorial-demo-actions { display:flex; align-items:center; gap:8px; margin:0; }
+.tutorial-demo-actions .tutorial-next { margin-left:auto; }
 .tutorial-slide-finger {
-  position:absolute; top:3px; z-index:1; transform:translateX(-50%);
+  position:absolute; top:68%; z-index:2; transform:translate(-50%,-50%);
   font-size:24px; line-height:1; pointer-events:none; transition:left 25ms linear;
 }
+.tutorial-slide-intro { left:6.25%; animation:tutorial-slide-intro 2.4s ease-in-out infinite; }
+.tutorial-slide-intro-down { left:56.25%; animation-direction:reverse; }
+@keyframes tutorial-slide-intro { 0%,15% { left:6.25%; } 75%,100% { left:56.25%; } }
 @media (prefers-reduced-motion: reduce) {
-  .tutorial-slide-finger { display:none; }
+  .tutorial-slide-finger { transition:none; }
+  .tutorial-slide-intro { animation:none; }
 }
 .tutorial-demo-keys .active { background:var(--oto-selection); color:var(--oto-selection-ink); box-shadow:var(--oto-recess); }
-.tutorial-navigation { --tutorial-background:var(--oto-display); background:var(--tutorial-background); color:var(--oto-display-ink); border-radius:7px; padding:16px; }
+.tutorial-navigation { --tutorial-background:var(--oto-display); background:var(--tutorial-background); color:var(--oto-display-ink); border-radius:7px; padding:16px; flex:1; display:flex; flex-direction:column; min-height:190px; }
 :root[data-skin='milk'] .tutorial-navigation { --tutorial-background:var(--oto-case-low); color:var(--oto-ink); }
-.tutorial-note-lane { position:relative; height:100px; overflow:hidden; }
+.tutorial-note-lane { position:relative; flex:1; min-height:140px; overflow:hidden; }
+.tutorial-lanes { display:flex; flex:1; flex-direction:column; min-height:0; }
+.tutorial-lanes-double { gap:8px; }
+.tutorial-lanes-double .tutorial-note-lane { min-height:140px; }
+.tutorial-lanes-double .tutorial-note-lane::after {
+  content:''; position:absolute; left:0; right:0;
+  top:calc(49% - 12px * var(--tutorial-staff-scale));
+  height:calc(24px * var(--tutorial-staff-scale)); z-index:3; pointer-events:none;
+  border-left:2px solid var(--oto-ink); border-right:2px solid var(--oto-ink); opacity:.8;
+}
+.tutorial-lanes-double .tutorial-final-bar::after { border-right:4px double var(--oto-ink); }
+.tutorial-lanes-double .tutorial-note-lane:first-child::after { border-right-width:1px; }
+.tutorial-lanes-double .tutorial-note-lane:last-child::after { border-left-width:1px; }
+.tutorial-staff-line { position:absolute; left:0; right:0; border-top:1px solid var(--oto-seam); opacity:.35; pointer-events:none; }
 .tutorial-subdivision { position:absolute; top:0; bottom:0; border-left:1px dotted var(--oto-seam); opacity:.35; pointer-events:none; }
 .tutorial-subdivision-eighth { opacity:.65; }
 .tutorial-beat-grid { position:absolute; top:0; bottom:0; width:25%; border-left:1px solid var(--oto-seam); padding-left:6px; font-size:11px; opacity:.6; }
@@ -3151,11 +3168,23 @@ body[data-app-mode='tutorial'] > .shell,
 .tutorial-complete { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 4px; }
 .tutorial-screen .tutorial-complete button { min-height:44px; padding:8px 12px; font-size:13px; }
 .tutorial-user { margin-top:auto; padding-top:20px; padding-bottom:env(safe-area-inset-bottom); position:sticky; bottom:0; background:var(--oto-case); }
+.tutorial-lesson-area { position:relative; flex:1; display:flex; flex-direction:column; gap:16px; }
+.tutorial-guide-area { flex:1; display:flex; flex-direction:column; gap:16px; }
+.tutorial-lesson-area:has(.tutorial-demo-complete) { margin-top:-4px; }
+.tutorial-guide-area:has(> .tutorial-demo-complete) { gap:8px; }
+.tutorial-intro-shade::after { content:''; position:absolute; top:0; bottom:0; left:50%; width:100vw; transform:translateX(-50%); z-index:2; background:rgba(0,0,0,.55); pointer-events:none; }
+.tutorial-navigation { transition:box-shadow .2s ease; }
+.tutorial-intro-highlight { position:relative; z-index:3; box-shadow:0 0 0 3px var(--oto-selection); }
+.tutorial-user.tutorial-intro-focus { z-index:3; }
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-navigation { transition:none; }
+}
 .tutorial-keyboard { position:relative; display:grid; grid-template-columns:repeat(8,1fr); gap:4px; padding-bottom:6px; }
 .tutorial-screen .tutorial-white { height:clamp(130px,22svh,190px); border-radius:0 0 7px 7px; padding:0 0 12px; display:flex; align-items:flex-end; justify-content:center; touch-action:none; user-select:none; }
 .tutorial-screen .tutorial-black { position:absolute; top:0; transform:translateX(-50%); width:7%; height:58%; min-height:0; padding:0; background:var(--oto-ink); z-index:1; touch-action:none; }
 .tutorial-screen .tutorial-keyboard .active { background:var(--oto-selection); color:var(--oto-selection-ink); box-shadow:var(--oto-recess); }
 @media(max-width:450px) {
+ .tutorial-lesson-area, .tutorial-guide-area { gap:12px; }
  .tutorial-screen { padding:12px; gap:12px; }
  .tutorial-selector { gap:8px; font-size:13px; }
  .tutorial-selector .part-choice-steps > button { min-width:32px; }
@@ -3191,7 +3220,7 @@ body[data-app-mode='tutorial'] > .shell,
 
 /* Landscape tutorial: preserve the player's keyboard as height becomes scarce. */
 @media (orientation:landscape) and (max-height:700px) {
-  .tutorial-demo { display:none; }
+  .tutorial-demo:not(.tutorial-demo-complete) { display:none; }
   .tutorial-screen { padding:12px; gap:10px; }
   .tutorial-user { padding-top:4px; }
 }
@@ -3216,12 +3245,16 @@ body[data-app-mode='tutorial'] > .shell,
 }
 
 .tutorial-slide-track {
-  position:absolute; top:22px; left:0; height:78px;
+  position:absolute; inset:0 auto 0 0;
   background:var(--oto-key);
-  clip-path:polygon(0 4px,4px 0,calc(100% - 4px) 36%,100% calc(36% + 4px),100% calc(100% - 4px),calc(100% - 4px) 100%,4px 64%,0 calc(64% - 4px));
-}
-.tutorial-slide-track[data-up='true'] {
-  clip-path:polygon(0 calc(36% + 4px),4px 36%,calc(100% - 4px) 0,100% 4px,100% calc(64% - 4px),calc(100% - 4px) 64%,4px 100%,0 calc(100% - 4px));
+  clip-path:polygon(
+    0 calc(var(--slide-start) - var(--tutorial-pitch-half-height)),
+    var(--slide-end-beat) calc(var(--slide-end) - var(--tutorial-pitch-half-height)),
+    100% calc(var(--slide-end) - var(--tutorial-pitch-half-height)),
+    100% calc(var(--slide-end) + var(--tutorial-pitch-half-height)),
+    var(--slide-end-beat) calc(var(--slide-end) + var(--tutorial-pitch-half-height)),
+    0 calc(var(--slide-start) + var(--tutorial-pitch-half-height))
+  );
 }
 .tutorial-slide-fill { height:100%; background:#f4d75d; box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--oto-ink) 25%, transparent); }
 .tutorial-note.tutorial-slide-note {
@@ -3265,16 +3298,53 @@ body[data-app-mode='tutorial'] > .shell,
 .tutorial-slide-symbol { position:relative; z-index:1; display:flex; align-items:center; height:17px; font-size:15px; }
 .tutorial-slide-symbol .tutorial-note-symbol { width:10px; height:16px; }
 
+.tutorial-pitch-lane {
+  --tutorial-staff-scale:1.5;
+  --tutorial-pitch-half-height:calc(14px * var(--tutorial-staff-scale));
+  --tutorial-stem-x:calc(8px + 6.6px * var(--tutorial-staff-scale));
+  --tutorial-stem-rise:calc(12.75px * var(--tutorial-staff-scale));
+  --tutorial-notehead-offset:calc(14.25px * var(--tutorial-staff-scale));
+}
+.tutorial-slide-beam {
+  position:absolute; inset-block:0; z-index:2; pointer-events:none;
+  background:var(--oto-ink);
+  clip-path:polygon(
+    0 calc(var(--beam-start) - var(--tutorial-stem-rise)),
+    100% calc(var(--beam-end) - var(--tutorial-stem-rise)),
+    100% calc(var(--beam-end) - var(--tutorial-stem-rise) + 3px),
+    0 calc(var(--beam-start) - var(--tutorial-stem-rise) + 3px)
+  );
+}
 .tutorial-note.tutorial-pitch-note {
-  min-height:36px; display:flex; flex-direction:column;
-  align-items:flex-start; justify-content:center; padding:2px 5px; line-height:1;
+  height:calc(2 * var(--tutorial-pitch-half-height)); min-height:0;
+  margin-top:calc(-1 * var(--tutorial-pitch-half-height)); overflow:visible; transform:none;
 }
-
-/* Align the note glyph and pitch name around one shared center. */
+.tutorial-pitch-note .tutorial-slide-symbol {
+  position:absolute; top:calc(50% - var(--tutorial-notehead-offset)); left:8px; z-index:2;
+}
 .tutorial-pitch-note .tutorial-slide-symbol,
-.tutorial-pitch-note .tutorial-note-label {
-  width:1.4em; min-width:1.4em; text-align:center; justify-content:center;
+.tutorial-pitch-note .tutorial-note-symbol {
+  width:calc(12px * var(--tutorial-staff-scale));
+  height:calc(18px * var(--tutorial-staff-scale));
 }
+.tutorial-pitch-note [data-ledger]::after {
+  content:''; position:absolute; top:var(--tutorial-notehead-offset);
+  left:calc(-3px * var(--tutorial-staff-scale));
+  width:calc(15px * var(--tutorial-staff-scale)); transform:translateY(-50%);
+  border-top:1px solid currentColor;
+}
+.tutorial-pitch-note .tutorial-note-symbol { position:relative; overflow:visible; }
+.tutorial-pitch-note .tutorial-note-label {
+  position:absolute; top:calc(100% + 3px); left:5px; min-width:1.4em;
+  text-align:center; line-height:1; font-size:calc(12px * var(--tutorial-staff-scale));
+}
+.tutorial-staff-overlay {
+  position:absolute; inset:0; z-index:3; pointer-events:none;
+}
+.tutorial-staff-overlay .tutorial-staff-line {
+  border-color:var(--oto-ink); opacity:.8; transform:translateY(-50%);
+}
+.tutorial-pitch-lane .tutorial-playhead { z-index:4; }
 
 .tutorial-navigation-header .tutorial-session-ring + .tutorial-score { margin-left:8px; }
 
@@ -3358,20 +3428,46 @@ body[data-app-mode='tutorial'] > .shell,
     rgb(255 255 255 / .72) 0%, rgb(255 211 209 / .62) 22%,
     rgb(255 145 142 / .30) 52%, rgb(255 145 142 / 0) 100%);
 }
-.tutorial-demo-keys .active,
-.tutorial-screen .tutorial-keyboard .active,
-:is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad:is([data-lit], [data-placement], :active),
-:root[data-skin] #piano-keys .piano-key:is([data-held], [data-playing], [data-pc-playing]) {
-  background: var(--oto-note-glow), var(--oto-key);
-  color: var(--oto-ink);
+:is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad:is([data-lit], [data-placement], :active) {
+  background:var(--oto-note-glow), var(--oto-key);
+  color:var(--oto-ink);
 }
-.tutorial-screen .tutorial-keyboard .tutorial-black.active,
-:root[data-skin] #piano-keys .piano-black:is([data-held], [data-playing], [data-pc-playing]) {
-  background: var(--oto-note-glow), var(--oto-ink);
-  color: var(--oto-key);
+.tutorial-keyboard { gap:2px; }
+#piano-keys .piano-key span { font-size:13px; }
+/* Shared keyboard surface and sounding state across all performance modes. */
+:root {
+  --oto-key-height:clamp(130px,22svh,190px);
+  --oto-key-press:linear-gradient(to bottom, rgb(255 112 119 / .9), transparent);
 }
-:root[data-skin] #piano-keys .piano-key:is([data-held], [data-playing], [data-pc-playing]) {
-  box-shadow: var(--oto-recess);
+#piano-keys { height:calc(var(--oto-key-height) + 6px); }
+:root :is(#piano-keys .piano-white, .tutorial-screen .tutorial-keyboard .tutorial-white) {
+  height:var(--oto-key-height);
+}
+:root :is(#piano-keys .piano-black, .tutorial-screen .tutorial-keyboard .tutorial-black) {
+  height:calc(var(--oto-key-height) * .58);
+  width:var(--piano-black-width, 8%);
+}
+:root :is(#piano-keys .piano-key, .tutorial-screen .tutorial-keyboard button) {
+  --keyboard-surface:var(--oto-key);
+  --keyboard-ink:var(--oto-ink);
+  border-radius:0 0 7px 7px;
+  background:var(--keyboard-surface);
+  color:var(--keyboard-ink);
+  box-shadow:var(--oto-raised);
+  touch-action:none;
+}
+:root :is(#piano-keys .piano-black, .tutorial-screen .tutorial-keyboard .tutorial-black) {
+  --keyboard-surface:var(--oto-ink);
+  --keyboard-ink:var(--oto-key);
+}
+:root :is(#piano-keys .piano-key, .tutorial-screen .tutorial-keyboard button):is(.active,[data-held],[data-playing],[data-pc-playing]),
+.tutorial-screen .tutorial-demo-keys .active {
+  background:var(--oto-key-press), var(--keyboard-surface, var(--oto-key));
+  color:var(--keyboard-ink, var(--oto-ink));
+  box-shadow:var(--oto-raised);
+}
+@media (max-height:650px) {
+  :root { --oto-key-height:clamp(90px,25svh,130px); }
 }
 :root #detail-melody .pad:is(:active, .playing, [data-playing], [data-pc-playing]),
 :root .accompaniment-pads .pad:active {
@@ -3561,12 +3657,20 @@ main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody { m
 .song-session-parts button span { display:block; }
 .song-session-parts button[aria-pressed='true'] { background:var(--oto-secondary); color:var(--oto-key); box-shadow:var(--oto-recess); }
 .song-session-score-status { margin:0 0 8px; font-size:13px; }
-.song-session-keys { gap:0; }
-.song-session-prototype .song-session-keys .tutorial-black { width:7%; }
-.song-session-keys button:active { background:var(--oto-selection); color:var(--oto-selection-ink); }
+
 .song-session-note { top:48%; overflow:hidden; white-space:nowrap; }
 .song-session-note.song-session-hit { background:#f4d75d; color:var(--oto-ink); }
 
 .song-session-prototype .song-session-octave { justify-self:start; }
 .song-session-prototype .song-session-octave .style-stepper > button { width:44px; min-width:44px; min-height:44px; padding:0; box-shadow:none; }
 .song-session-prototype .song-session-octave output { min-width:4ch; }
+
+.tutorial-companion { flex-wrap:wrap; }
+.tutorial-companion .tutorial-complete { flex:1 0 100%; margin:0; }
+.tutorial-screen .tutorial-message { overflow:hidden; }
+.tutorial-score .tutorial-stamp { display:block; }
+.tutorial-navigation-status:has(strong:empty) { display:none; }
+
+.tutorial-companion .tutorial-complete { align-items:center; gap:8px; }
+.tutorial-screen .tutorial-complete > button { min-height:44px; padding:6px 10px; font-size:12px; }
+.tutorial-complete .tutorial-tempo { margin:0; }

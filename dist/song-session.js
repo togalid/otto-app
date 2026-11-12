@@ -1,6 +1,6 @@
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { Instrument } from './audio.js'
-import { pianoKey, pianoNotes } from './keyboard.js'
+import { capturePianoPointer, pianoKey, pianoKeyAtPointer, pianoNotes, pianoWhiteLabel } from './keyboard.js'
 import { DrumSynth } from './rhythm.js'
 
 // Bass MIDI transcription: [start tick, duration in ticks, MIDI pitch].
@@ -60,7 +60,21 @@ export function mountSongSession(host, connectMidi) {
   const position = ref(0)
   const hits = ref(new Set())
   const midiHeld = ref(new Set())
+  const heldKey = ref(/** @type {number|null} */ (null))
+  let pointer = -1
+  let keyRevision = 0
+  let soundingKey = /** @type {number|null} */ (null)
   let frame = 0
+
+  /** @param {number} midi */
+  const instrumentPitch = midi => part.value === 'bass' ? midi + 12 : midi
+
+  function releaseKey() {
+    keyRevision++
+    if (soundingKey !== null) voice.release(instrumentPitch(soundingKey))
+    soundingKey = null
+    heldKey.value = null
+  }
 
   function updateScore() {
     const tick = Math.min(loopTicks - 0.001, audio.currentTime * bpm / 60 * ticksPerBeat)
@@ -88,6 +102,8 @@ export function mountSongSession(host, connectMidi) {
 
   function stop() {
     generation++
+    releaseKey()
+    pointer = -1
     clearTimeout(countTimer)
     counting.value = 0
     for (const node of countNodes) { try { node.stop() } catch {} }
@@ -159,8 +175,8 @@ export function mountSongSession(host, connectMidi) {
     error.value = '曲を読み込めませんでした。'
   })
 
-  /** @param {number|string} note */
-  async function playNote(note) {
+  /** @param {number|string} note @param {(() => boolean)|undefined} stillHeld */
+  async function playNote(note, stillHeld = undefined, glide = false) {
     const request = generation
     const selected = part.value
     if (selected === 'bass' && playing.value && typeof note === 'number') {
@@ -186,11 +202,42 @@ export function mountSongSession(host, connectMidi) {
         drums.hitAt(note, time)
       } else {
         voice.setTimbre(selected === 'bass' ? 'lead-bass-round' : 'lead-round')
-        voice.playAt([selected === 'bass' ? note + 12 : note], time, 0.35)
+        const pitch = instrumentPitch(note)
+        if (stillHeld) {
+          if (stillHeld()) voice.attack(pitch, glide)
+        } else voice.playAt([pitch], time, 0.35)
       }
     } catch {
       if (request === generation) error.value = '楽器の音を準備できませんでした。'
     }
+  }
+
+  /** @param {number} midi */
+  function holdKey(midi, glide = false) {
+    const previous = heldKey.value
+    if (previous === midi) return
+    const revision = ++keyRevision
+    heldKey.value = midi
+    void playNote(midi, () => {
+      if (revision !== keyRevision) return false
+      if (soundingKey !== null) voice.release(instrumentPitch(soundingKey))
+      soundingKey = midi
+      return true
+    }, glide)
+  }
+
+  /** @param {PointerEvent} event */
+  function liftPointer(event) {
+    if (pointer !== event.pointerId) return
+    pointer = -1
+    releaseKey()
+  }
+
+  /** @param {number} delta */
+  function shiftOctave(delta) {
+    releaseKey()
+    pointer = -1
+    octave.value += delta
   }
 
   createApp({ render: () => {
@@ -211,7 +258,7 @@ export function mountSongSession(host, connectMidi) {
     h('div', { class: 'song-session-parts', role: 'group', 'aria-label': '演奏パート' }, parts.map(item =>
       h('button', {
         type: 'button', 'aria-pressed': part.value === item.id,
-        onClick: () => { voice.silence(); midiHeld.value.clear(); part.value = item.id },
+        onClick: () => { releaseKey(); pointer = -1; voice.silence(); midiHeld.value.clear(); part.value = item.id },
       }, [h('span', { 'aria-hidden': 'true' }, item.icon), item.label]),
     )),
     h('section', { class: 'tutorial-navigation', 'aria-label': '譜面' }, [
@@ -243,17 +290,37 @@ export function mountSongSession(host, connectMidi) {
         class: 'tutorial-keyboard song-session-keys', role: 'group', 'aria-label': `C${3 + octave.value}からC${4 + octave.value}の鍵盤`,
         style: { gridTemplateColumns: `repeat(${whiteCount}, minmax(0, 1fr))` },
       }, keys.map((key, i) => h('button', {
-        type: 'button', class: [key.black ? 'tutorial-black' : 'tutorial-white', { active: midiHeld.value.has(key.midi + octave.value * 12) }],
+        type: 'button', class: [key.black ? 'tutorial-black' : 'tutorial-white', { active: heldKey.value === key.midi + octave.value * 12 || midiHeld.value.has(key.midi + octave.value * 12) }],
         'aria-label': `${key.label.replace(/\d+$/, String(Math.floor((key.midi + octave.value * 12) / 12) - 1))}を鳴らす`,
         style: key.black ? { left: `${positions[i] * 100 / whiteCount}%` } : undefined,
-        onClick: () => void playNote(key.midi + octave.value * 12),
-      }, !key.black && key.midi % 12 === 0 ? `C${Math.floor((key.midi + octave.value * 12) / 12) - 1}` : ''))),
+        'data-midi':key.midi + octave.value * 12,
+        onPointerdown:(/** @type {PointerEvent} */ event)=>{
+          if (pointer !== -1 || !capturePianoPointer(event, /** @type {HTMLElement} */ (event.currentTarget))) return
+          pointer = event.pointerId
+          holdKey(key.midi + octave.value * 12)
+        },
+        onPointermove:(/** @type {PointerEvent} */ event)=>{
+          if (pointer !== event.pointerId) return
+          const board = /** @type {HTMLElement} */ (event.currentTarget).parentElement
+          const midi = board ? pianoKeyAtPointer(event, board) : undefined
+          if (midi !== undefined) holdKey(midi, true)
+        },
+        onPointerup:liftPointer,onPointercancel:liftPointer,onLostpointercapture:liftPointer,
+        onKeydown:(/** @type {KeyboardEvent} */ event)=>{
+          if (![' ', 'Enter'].includes(event.key) || event.repeat) return
+          event.preventDefault()
+          holdKey(key.midi + octave.value * 12)
+        },
+        onKeyup:(/** @type {KeyboardEvent} */ event)=>{ if ([' ', 'Enter'].includes(event.key)) { event.preventDefault(); releaseKey() } },
+        onBlur:()=>{ if (pointer === -1) releaseKey() },
+        onClick:(/** @type {MouseEvent} */ event)=>{ if (event.detail === 0 && heldKey.value === null) void playNote(key.midi + octave.value * 12) },
+      }, key.black ? '' : pianoWhiteLabel(key.midi)))),
     part.value !== 'drums' ? h('div', { class: 'keyboard-octave song-session-octave', role: 'group', 'aria-label': '鍵盤のオクターブ' }, [
       h('span', 'Oct'),
       h('div', { class: 'style-stepper' }, [
-      h('button', { type:'button', 'aria-label':'オクターブを下げる', disabled:octave.value <= -2, onClick:()=>{octave.value--} }, '−'),
+      h('button', { type:'button', 'aria-label':'オクターブを下げる', disabled:octave.value <= -2, onClick:()=>shiftOctave(-1) }, '−'),
       h('output', `${octave.value > 0 ? '+' : ''}${octave.value}`),
-      h('button', { type:'button', 'aria-label':'オクターブを上げる', disabled:octave.value >= 2, onClick:()=>{octave.value++} }, '＋'),
+      h('button', { type:'button', 'aria-label':'オクターブを上げる', disabled:octave.value >= 2, onClick:()=>shiftOctave(1) }, '＋'),
       ]),
     ]) : null,
     error.value ? h('p', { role: 'alert' }, error.value) : null,
@@ -264,7 +331,7 @@ export function mountSongSession(host, connectMidi) {
     stop,
     togglePlayback,
     /** @param {number} midi */
-    midiRelease(midi) { midiHeld.value.delete(midi) },
+    midiRelease(midi) { if (midiHeld.value.delete(midi)) voice.release(instrumentPitch(midi)) },
     /** @param {number} midi */
     midiAttack(midi) {
       if (part.value === 'drums') {
@@ -273,7 +340,7 @@ export function mountSongSession(host, connectMidi) {
         if (sound) void playNote(sound)
       } else {
         midiHeld.value.add(midi)
-        void playNote(midi)
+        void playNote(midi, () => midiHeld.value.has(midi))
       }
     },
   }

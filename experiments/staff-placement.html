@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>F3–C5 音符の配置テスト</title>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; background:#dbe8fa; color:#213b57; font:16px system-ui,sans-serif; }
+  main { max-width:800px; margin:auto; padding:24px 16px; }
+  h1 { font-size:1.25rem; margin:0 0 14px; }
+  figure { margin:0 0 12px; overflow-x:auto; background:#d2e1f5; border-radius:8px; }
+  svg { display:block; width:100%; min-width:620px; fill:currentColor; }
+  path { fill:none; stroke:currentColor; stroke-width:1.3; }
+  .beat { opacity:.22; stroke-dasharray:2 2; }
+  .bar { fill:#fff; width:27px; }
+  .duration-switch { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center;
+    margin:0 0 14px; padding:8px 12px; border:1px solid #9eb4cf; border-radius:8px; }
+  .duration-switch label { display:inline-flex; align-items:center; gap:6px; min-height:36px; cursor:pointer; }
+  .flag { display:none; }
+  main:has(#sixteenth:checked) .bar { width:6.75px; transform:translateX(9.625px); }
+  main:has(#eighth:checked) .bar { width:13.5px; transform:translateX(6.25px); }
+  main:has(#half:checked) .bar { width:54px; }
+  main:has(#half:checked) ellipse { fill:none; stroke:currentColor; stroke-width:1.4; }
+  main:has(#sixteenth:checked, #eighth:checked) .flag-first,
+  main:has(#sixteenth:checked) .flag-second { display:inline; }
+  .staff { opacity:.8; }
+  .name { font-size:13px; text-anchor:middle; }
+  .accidental { font-size:17px; text-anchor:end; }
+</style>
+<main>
+  <h1>F3–C5 音符の配置テスト</h1>
+  <fieldset class="duration-switch">
+    <legend>音符の長さ</legend>
+    <label><input id="sixteenth" type="radio" name="duration">16分音符</label>
+    <label><input id="eighth" type="radio" name="duration">8分音符</label>
+    <label><input id="quarter" type="radio" name="duration" checked>4分音符</label>
+    <label><input id="half" type="radio" name="duration">2分音符</label>
+  </fieldset>
+  <figure aria-label="F3からD4まで"><svg viewBox="0 0 672 230" role="img" aria-label="MIDI 53から62の音符">
+<path class="beat" d="M16 18V202"/>
+<path class="beat" d="M80 18V202"/>
+<path class="beat" d="M144 18V202"/>
+<path class="beat" d="M208 18V202"/>
+<path class="beat" d="M272 18V202"/>
+<path class="beat" d="M336 18V202"/>
+<path class="beat" d="M400 18V202"/>
+<path class="beat" d="M464 18V202"/>
+<path class="beat" d="M528 18V202"/>
+<path class="beat" d="M592 18V202"/>
+<path class="beat" d="M656 18V202"/>
+<rect class="bar" x="21" y="156" width="54" height="22" rx="5"/>
+<rect class="bar" x="85" y="156" width="54" height="22" rx="5"/>
+<rect class="bar" x="149" y="151.5" width="54" height="22" rx="5"/>
+<rect class="bar" x="213" y="151.5" width="54" height="22" rx="5"/>
+<rect class="bar" x="277" y="147" width="54" height="22" rx="5"/>
+<rect class="bar" x="341" y="147" width="54" height="22" rx="5"/>
+<rect class="bar" x="405" y="142.5" width="54" height="22" rx="5"/>
+<rect class="bar" x="469" y="138" width="54" height="22" rx="5"/>
+<rect class="bar" x="533" y="138" width="54" height="22" rx="5"/>
+<rect class="bar" x="597" y="133.5" width="54" height="22" rx="5"/>
+<path class="staff" d="M16 140H656"/>
+<path class="staff" d="M16 131H656"/>
+<path class="staff" d="M16 122H656"/>
+<path class="staff" d="M16 113H656"/>
+<path class="staff" d="M16 104H656"/>
+<ellipse cx="34" cy="167" rx="5.5" ry="4" transform="rotate(-18 34 167)"/>
+<path d="M39 167V139"/>
+<path class="flag flag-first" d="M39 139c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M39 145c0 4 9 5 7 12"/>
+<path d="M25 149h18"/>
+<path d="M25 158h18"/>
+<path d="M25 167h18"/>
+<text class="name" x="39" y="220">F3</text>
+<ellipse cx="98" cy="167" rx="5.5" ry="4" transform="rotate(-18 98 167)"/>
+<path d="M103 167V139"/>
+<path class="flag flag-first" d="M103 139c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M103 145c0 4 9 5 7 12"/>
+<path d="M89 149h18"/>
+<path d="M89 158h18"/>
+<path d="M89 167h18"/>
+<text class="accidental" x="86" y="171">♯</text>
+<text class="name" x="103" y="220">F♯3</text>
+<ellipse cx="162" cy="162.5" rx="5.5" ry="4" transform="rotate(-18 162 162.5)"/>
+<path d="M167 162.5V134.5"/>
+<path class="flag flag-first" d="M167 134.5c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M167 140.5c0 4 9 5 7 12"/>
+<path d="M153 149h18"/>
+<path d="M153 158h18"/>
+<text class="name" x="167" y="220">G3</text>
+<ellipse cx="226" cy="162.5" rx="5.5" ry="4" transform="rotate(-18 226 162.5)"/>
+<path d="M231 162.5V134.5"/>
+<path class="flag flag-first" d="M231 134.5c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M231 140.5c0 4 9 5 7 12"/>
+<path d="M217 149h18"/>
+<path d="M217 158h18"/>
+<text class="accidental" x="214" y="166.5">♯</text>
+<text class="name" x="231" y="220">G♯3</text>
+<ellipse cx="290" cy="158" rx="5.5" ry="4" transform="rotate(-18 290 158)"/>
+<path d="M295 158V130"/>
+<path class="flag flag-first" d="M295 130c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M295 136c0 4 9 5 7 12"/>
+<path d="M281 149h18"/>
+<path d="M281 158h18"/>
+<text class="name" x="295" y="220">A3</text>
+<ellipse cx="354" cy="158" rx="5.5" ry="4" transform="rotate(-18 354 158)"/>
+<path d="M359 158V130"/>
+<path class="flag flag-first" d="M359 130c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M359 136c0 4 9 5 7 12"/>
+<path d="M345 149h18"/>
+<path d="M345 158h18"/>
+<text class="accidental" x="342" y="162">♯</text>
+<text class="name" x="359" y="220">A♯3</text>
+<ellipse cx="418" cy="153.5" rx="5.5" ry="4" transform="rotate(-18 418 153.5)"/>
+<path d="M423 153.5V125.5"/>
+<path class="flag flag-first" d="M423 125.5c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M423 131.5c0 4 9 5 7 12"/>
+<path d="M409 149h18"/>
+<text class="name" x="423" y="220">B3</text>
+<ellipse cx="482" cy="149" rx="5.5" ry="4" transform="rotate(-18 482 149)"/>
+<path d="M487 149V121"/>
+<path class="flag flag-first" d="M487 121c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M487 127c0 4 9 5 7 12"/>
+<path d="M473 149h18"/>
+<text class="name" x="487" y="220">C4</text>
+<ellipse cx="546" cy="149" rx="5.5" ry="4" transform="rotate(-18 546 149)"/>
+<path d="M551 149V121"/>
+<path class="flag flag-first" d="M551 121c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M551 127c0 4 9 5 7 12"/>
+<path d="M537 149h18"/>
+<text class="accidental" x="534" y="153">♯</text>
+<text class="name" x="551" y="220">C♯4</text>
+<ellipse cx="610" cy="144.5" rx="5.5" ry="4" transform="rotate(-28 610 144.5)"/>
+<path d="M615 144.5V116.5"/>
+<path class="flag flag-first" d="M615 116.5c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M615 122.5c0 4 9 5 7 12"/>
+<text class="name" x="615" y="220">D4</text>
+</svg></figure>
+  <figure aria-label="D♯4からC5まで"><svg viewBox="0 0 672 230" role="img" aria-label="MIDI 63から72の音符">
+<path class="beat" d="M16 18V202"/>
+<path class="beat" d="M80 18V202"/>
+<path class="beat" d="M144 18V202"/>
+<path class="beat" d="M208 18V202"/>
+<path class="beat" d="M272 18V202"/>
+<path class="beat" d="M336 18V202"/>
+<path class="beat" d="M400 18V202"/>
+<path class="beat" d="M464 18V202"/>
+<path class="beat" d="M528 18V202"/>
+<path class="beat" d="M592 18V202"/>
+<path class="beat" d="M656 18V202"/>
+<rect class="bar" x="21" y="133.5" width="54" height="22" rx="5"/>
+<rect class="bar" x="85" y="129" width="54" height="22" rx="5"/>
+<rect class="bar" x="149" y="124.5" width="54" height="22" rx="5"/>
+<rect class="bar" x="213" y="124.5" width="54" height="22" rx="5"/>
+<rect class="bar" x="277" y="120" width="54" height="22" rx="5"/>
+<rect class="bar" x="341" y="120" width="54" height="22" rx="5"/>
+<rect class="bar" x="405" y="115.5" width="54" height="22" rx="5"/>
+<rect class="bar" x="469" y="115.5" width="54" height="22" rx="5"/>
+<rect class="bar" x="533" y="111" width="54" height="22" rx="5"/>
+<rect class="bar" x="597" y="106.5" width="54" height="22" rx="5"/>
+<path class="staff" d="M16 140H656"/>
+<path class="staff" d="M16 131H656"/>
+<path class="staff" d="M16 122H656"/>
+<path class="staff" d="M16 113H656"/>
+<path class="staff" d="M16 104H656"/>
+<ellipse cx="34" cy="144.5" rx="5.5" ry="4" transform="rotate(-28 34 144.5)"/>
+<path d="M39 144.5V116.5"/>
+<path class="flag flag-first" d="M39 116.5c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M39 122.5c0 4 9 5 7 12"/>
+<text class="accidental" x="22" y="148.5">♯</text>
+<text class="name" x="39" y="220">D♯4</text>
+<ellipse cx="98" cy="140" rx="5.5" ry="4" transform="rotate(-28 98 140)"/>
+<path d="M103 140V112"/>
+<path class="flag flag-first" d="M103 112c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M103 118c0 4 9 5 7 12"/>
+<text class="name" x="103" y="220">E4</text>
+<ellipse cx="162" cy="135.5" rx="5.5" ry="4" transform="rotate(-28 162 135.5)"/>
+<path d="M167 135.5V107.5"/>
+<path class="flag flag-first" d="M167 107.5c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M167 113.5c0 4 9 5 7 12"/>
+<text class="name" x="167" y="220">F4</text>
+<ellipse cx="226" cy="135.5" rx="5.5" ry="4" transform="rotate(-28 226 135.5)"/>
+<path d="M231 135.5V107.5"/>
+<path class="flag flag-first" d="M231 107.5c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M231 113.5c0 4 9 5 7 12"/>
+<text class="accidental" x="214" y="139.5">♯</text>
+<text class="name" x="231" y="220">F♯4</text>
+<ellipse cx="290" cy="131" rx="5.5" ry="4" transform="rotate(-28 290 131)"/>
+<path d="M295 131V103"/>
+<path class="flag flag-first" d="M295 103c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M295 109c0 4 9 5 7 12"/>
+<text class="name" x="295" y="220">G4</text>
+<ellipse cx="354" cy="131" rx="5.5" ry="4" transform="rotate(-28 354 131)"/>
+<path d="M359 131V103"/>
+<path class="flag flag-first" d="M359 103c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M359 109c0 4 9 5 7 12"/>
+<text class="accidental" x="342" y="135">♯</text>
+<text class="name" x="359" y="220">G♯4</text>
+<ellipse cx="418" cy="126.5" rx="5.5" ry="4" transform="rotate(-28 418 126.5)"/>
+<path d="M423 126.5V98.5"/>
+<path class="flag flag-first" d="M423 98.5c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M423 104.5c0 4 9 5 7 12"/>
+<text class="name" x="423" y="220">A4</text>
+<ellipse cx="482" cy="126.5" rx="5.5" ry="4" transform="rotate(-28 482 126.5)"/>
+<path d="M487 126.5V98.5"/>
+<path class="flag flag-first" d="M487 98.5c0 4 9 5 7 12"/>
+<path class="flag flag-second" d="M487 104.5c0 4 9 5 7 12"/>
+<text class="accidental" x="470" y="130.5">♯</text>
+<text class="name" x="487" y="220">A♯4</text>
+<ellipse cx="546" cy="122" rx="5.5" ry="4" transform="rotate(-28 546 122)"/>
+<path d="M541 122V150"/>
+<path class="flag flag-first" d="M541 150c0 -4 9 -5 7 -12"/>
+<path class="flag flag-second" d="M541 144c0 -4 9 -5 7 -12"/>
+<text class="name" x="551" y="220">B4</text>
+<ellipse cx="610" cy="117.5" rx="5.5" ry="4" transform="rotate(-28 610 117.5)"/>
+<path d="M605 117.5V145.5"/>
+<path class="flag flag-first" d="M605 145.5c0 -4 9 -5 7 -12"/>
+<path class="flag flag-second" d="M605 139.5c0 -4 9 -5 7 -12"/>
+<text class="name" x="615" y="220">C5</text>
+</svg></figure>
+</main>
+</html>

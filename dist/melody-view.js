@@ -1,6 +1,7 @@
 import { mountSongSession } from './song-session.js'
 import { mountDrumTutorial } from './drum-tutorial.js'
-import { mountTutorial, developmentTutorial } from './tutorial-view.js'
+import { mountTutorial } from './tutorial-view.js'
+import { readDevelopmentScreen, saveDevelopmentScreen } from './tutorial.js'
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { genres } from './groove.js'
 import { presets, notes, melodyPalette, melodyRole, displayChordParts } from './music.js'
@@ -492,7 +493,7 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
   categories.querySelector('[data-category-back]')?.addEventListener('click', () => open('menu'))
 
   /** @param {string} mode */
-  function open(mode) {
+  function open(mode, restore = false) {
     stopPlayback()
     if (!songPrototype.hidden) songSession.stop()
     tutorialView.close()
@@ -500,12 +501,13 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
     categories.hidden = mode !== 'categories'
     drumRoot.hidden = mode !== 'drum-tutorial'
     songPrototype.hidden = mode !== 'song-session'
-    if (mode === 'drum-tutorial') drumView.open()
+    if (mode === 'drum-tutorial') drumView.open(restore)
     document.body.dataset.appMode = mode
+    saveDevelopmentScreen('mode', mode)
     free.hidden = mode !== 'free'
     menu.hidden = mode !== 'menu'
     tutorial.hidden = mode !== 'tutorial'
-    if (mode === 'tutorial') tutorialView.open()
+    if (mode === 'tutorial') tutorialView.open(restore)
     const target = mode === 'free' ? free.querySelector('.mode-back')
       : mode === 'song-session' ? songPrototype.querySelector('h1') : mode === 'menu' ? document.querySelector('#mode-menu-title') : mode === 'categories' ? categories.querySelector('h1') : null
     if (target instanceof HTMLElement) target.focus()
@@ -541,6 +543,7 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
   logo?.addEventListener('click', event => { event.preventDefault(); open('menu') })
   for (const type of ['keydown', 'keyup']) {
     document.addEventListener(type, event => {
+      if (event.target instanceof Element && event.target.closest('.tutorial-keyboard button[data-midi]')) return
       if (document.body.dataset.appMode === 'song-session' && event instanceof KeyboardEvent && event.key === ' ') {
         event.preventDefault()
         event.stopImmediatePropagation()
@@ -563,6 +566,7 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
     }, true)
   }
   free.hidden = true
-  open(developmentTutorial ? 'song-session' : 'menu')
+  const previousMode = readDevelopmentScreen('mode')
+  open(previousMode && ['menu','categories','free','tutorial','drum-tutorial','song-session'].includes(previousMode) ? previousMode : 'menu', true)
   return Object.assign(tutorialView, { songMidiAttack: songSession.midiAttack, songMidiRelease: songSession.midiRelease })
 }

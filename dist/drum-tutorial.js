@@ -2,6 +2,7 @@ import { TutorialCompanion, TutorialSelector, TutorialTempo, playTutorialSuccess
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { audioContext, Instrument } from './audio.js'
 import { BassSynth, swungBassBeat } from './groove.js'
+import { readDevelopmentScreen, saveDevelopmentScreen } from './tutorial.js'
 
 export const drumPads = Object.freeze([
   {name:'ハイハット',sound:'hat',hand:'左',finger:'薬指',key:'a',pan:-.24,level:.72},
@@ -313,6 +314,7 @@ export function mountDrumTutorial(host,onBack) {
   function selectStage(/** @type {number} */ stage) {
     cancel()
     state.stage = stage
+    saveDevelopmentScreen('drum-lesson', String(stage))
     state.exercise = 0
     state.tempo = defaultTempo()
     state.introStep = 0
@@ -380,7 +382,7 @@ export function mountDrumTutorial(host,onBack) {
       h('span',{class:'drum-pad-name'},[padIcon(pad.sound),h('strong',pad.name)]),h('kbd',pad.key.toUpperCase())]))),
   ])}}).mount(host)
   return {
-    open(){visible=true;state.stage=0;state.exercise=0;state.tempo=DRUM_LESSON_BPM;state.introStep=0;state.phase='intro';state.message=stages[0].message;state.score=0;state.error='';state.matched=[];document.addEventListener('keydown',onKey)},
+    open(restore = false){visible=true;const saved=readDevelopmentScreen('drum-lesson');const index=saved === null ? 0 : Number(saved);const stage=restore && Number.isInteger(index) && index>=0 && index<stages.length ? index : 0;selectStage(stage);document.addEventListener('keydown',onKey)},
     close(){visible=false;cancel();document.removeEventListener('keydown',onKey);master?.disconnect();master=undefined},
     advanceMessage,
   }

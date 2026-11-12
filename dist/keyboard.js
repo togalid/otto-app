@@ -8,6 +8,23 @@ export function pianoKey(midi) {
   const pitch=midi%12
   return {midi,black:[1,3,6,8,10].includes(pitch),label:['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'][pitch]+(Math.floor(midi/12)-1)}
 }
+/** @param {number} midi */
+export const pianoWhiteLabel = midi => ['ド','','レ','','ミ','ファ','','ソ','','ラ','','シ'][midi % 12]
+
+/** @param {PointerEvent} event @param {Element} board */
+export function pianoKeyAtPointer(event, board) {
+  const key = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-midi]')
+  return key instanceof HTMLElement && board.contains(key) ? Number(key.dataset.midi) : undefined
+}
+
+/** @param {PointerEvent} event @param {HTMLElement} captureTarget */
+export function capturePianoPointer(event, captureTarget) {
+  if (event.button !== 0) return false
+  event.preventDefault()
+  captureTarget.setPointerCapture(event.pointerId)
+  return true
+}
+
 /** @param {{ready:()=>Promise<void>,attack:(midi:number,glide:boolean)=>void,release:(midi:number)=>void,stop:()=>void,key?:()=>number,bass?:()=>boolean,bpm?:()=>number,resolve?:(midi:number)=>number,onError:(error:unknown)=>void}} source */
 export function mountKeyboard(source) {
   const original=source
@@ -32,7 +49,7 @@ export function mountKeyboard(source) {
       type: 'button', class: key.black ? 'piano-key piano-black' : 'piano-key piano-white',
       'data-midi': key.midi, 'aria-label': key.label + 'を鳴らす',
       tabindex: key.midi === 60 ? 0 : -1, style: { left: key.left },
-    }, key.black ? [] : [h('span', {'aria-hidden':'true', class: key.midi % 12 === 0 ? '' : 'mobile-key-label'}, key.midi % 12 === 0 ? key.label : ({2:'レ',4:'ミ',5:'ファ',7:'ソ',9:'ラ',11:'シ'})[key.midi % 12])])),
+    }, key.black ? [] : [h('span', {'aria-hidden':'true'}, pianoWhiteLabel(key.midi))])),
   }).mount(board)
   for (const button of Array.from(board.querySelectorAll('button'))) {
     buttons.set(Number(button.dataset.midi), button)
@@ -68,7 +85,7 @@ export function mountKeyboard(source) {
     if(event.button!==0 || gesture) return
     const button=event.target instanceof Element?event.target.closest('[data-midi]'):null
     if(!button) return
-    event.preventDefault();board.setPointerCapture(event.pointerId)
+    if (!capturePianoPointer(event, board)) return
     const current={pointer:event.pointerId,midi:Number(/** @type {HTMLElement} */(button).dataset.midi),ready:false,token:++token}
     gesture=current;move(current.midi,false)
     try {await source.ready();if(gesture!==current || current.token!==token)return;current.ready=true;source.attack(current.midi,false)}
@@ -76,8 +93,8 @@ export function mountKeyboard(source) {
   })
   board.addEventListener('pointermove',event=>{
     if(!gesture || gesture.pointer!==event.pointerId)return
-    const hit=document.elementFromPoint(event.clientX,event.clientY)?.closest('#piano-keys [data-midi]')
-    if(hit) move(Number(/** @type {HTMLElement} */(hit).dataset.midi),true)
+    const midi=pianoKeyAtPointer(event,board)
+    if(midi!==undefined) move(midi,true)
   })
   for(const type of ['pointerup','pointercancel','lostpointercapture'])board.addEventListener(type,event=>{
     if(event instanceof PointerEvent && gesture && event.pointerId!==gesture.pointer)return
@@ -114,8 +131,6 @@ export function mountKeyboard(source) {
     buttons.forEach((button,midi)=>{
       const label = pianoKey(midi).label.replace(/\d+$/, String(Math.floor(midi / 12) - 1 + offset))
       button.setAttribute('aria-label', label+'を鳴らす')
-      const text = button.querySelector('span')
-      if (text && !text.classList.contains('mobile-key-label')) text.textContent = label
     })
   }
   const octaveOutput = document.querySelector('#keyboard-octave')

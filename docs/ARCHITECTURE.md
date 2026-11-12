@@ -102,7 +102,9 @@ The Demucs child process defaults OMP/MKL thread counts to at most four, respect
 
 The `楽器ミキサー` / `コード進行` segmented switch changes presentation only; the transport and audio components remain mounted. The mixer edits the selected range's style, absolute key, meter and BPM. Baseline version-1 controls remain mounted but hidden, so reference analysis and old arrangement files retain their fallback values. Section knobs write range metadata rather than changing those fallbacks. Changing a range's style preserves the shared song score; choosing a score preset remains an explicit score operation.
 
-The score header follows the audible playback section, falling back to the selected editing section while stopped. `Section.key` and `Section.style` are optional version-1 fields; missing keys inherit the song key. Key lookup and voicing cache signatures include the section key, so previews and scheduled accompaniment agree across range boundaries.
+Studio shows a continuous score with numbered bars and starts new arrangements with one range. Version-1 files can still carry multiple ranges, whose settings take effect during playback. `Section.key` and `Section.style` are optional version-1 fields; missing keys inherit the song key. Key lookup and voicing cache signatures include the section key, so previews and scheduled accompaniment agree across range boundaries.
+
+Studio chord headings edit optional per-bar BPM, meter changes and absolute key overrides. Meter and BPM changes carry forward until the next explicit change. Version-1 JSON stores them in the top-level `barSettings` object, keyed by zero-based bar number. Playback and seeks resolve overrides before the inherited range and song settings.
 
 ### Progressive reference import
 

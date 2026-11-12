@@ -37,3 +37,12 @@
  .selection-bpm strong { font-size:18px; }
  .selection-confirm,.selection-error { grid-column:1 / -1; }
 }
+
+.custom-style-registration > summary { cursor:pointer; width:fit-content; }
+.custom-style-registration .selection-family { flex-wrap:wrap; }
+.custom-style-registration input {
+  display:block; width:min(100%, 24ch); margin-top:4px; padding:8px 10px;
+  color:var(--oto-ink); background:var(--oto-key); border:1px solid var(--oto-seam);
+  border-radius:7px; font:inherit;
+}
+.custom-style-registration p:empty { display:none; }

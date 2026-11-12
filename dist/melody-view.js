@@ -107,6 +107,26 @@ if (melodyModeField) melodyTopRow.append(melodyModeField)
 const melodyChoices = document.createElement('div')
 melodyChoices.className = 'melody-choice-row'
 melodyChoices.append(melodyVoiceLabel)
+const notation = document.querySelector('#notation')
+if (notation) {
+  const melodyNotation = /** @type {HTMLFieldSetElement} */ (notation.cloneNode(true))
+  melodyNotation.removeAttribute('id')
+  melodyNotation.classList.add('melody-notation')
+  melodyNotation.querySelectorAll('input').forEach(input => { input.name = 'melody-notation' })
+  const sync = () => {
+    const selected = /** @type {HTMLInputElement | null} */ (notation.querySelector('input:checked'))?.value
+    melodyNotation.querySelectorAll('input').forEach(input => { input.checked = input.value === selected })
+  }
+  melodyNotation.addEventListener('change', event => {
+    const target = event.target
+    if (!(target instanceof HTMLInputElement)) return
+    const matching = Array.from(notation.querySelectorAll('input')).find(input => input.value === target.value)
+    if (matching) { matching.checked = true; notation.dispatchEvent(new Event('change', {bubbles:true})) }
+  })
+  notation.addEventListener('change', sync)
+  sync()
+  melodyChoices.append(melodyNotation)
+}
 const melodyStyleField = melodyLabHost?.querySelector('.otto-style-choice')
 if (melodyStyleField) melodyChoices.append(melodyStyleField)
 for (const [field, kind] of /** @type {const} */ ([[melodyVoiceLabel, 'tone'], [melodyStyleField, 'advanced']])) {
@@ -284,7 +304,7 @@ export function mountMobileLayout() {
       </div>
     </div>
     <button type="button" class="mobile-control-row mobile-mixer-toggle" aria-expanded="false" aria-controls="mobile-performance-mixer">
-      <span>キー / テンポ</span><strong class="mobile-key-tempo"></strong><span>ミキサー</span>
+      <span>テンポ / キー</span><strong class="mobile-key-tempo"></strong><span>ミキサー</span>
     </button>
     <div class="mobile-control-row mobile-play-row"></div>`
   mixer.id ||= 'mobile-performance-mixer'
@@ -304,9 +324,9 @@ export function mountMobileLayout() {
   function refresh() {
     const index = selected()
     partName.textContent = index < 0 ? '選択なし' : parts[index]
-    const key = document.querySelector('output[for="section-mixer-key"]')?.textContent
+    const key = document.querySelector('#section-key-value')?.textContent
     const tempo = /** @type {HTMLInputElement|null} */ (document.querySelector('#section-tempo-value'))
-    keyTempo.textContent = [key, tempo?.value].filter(Boolean).join(' / ')
+    keyTempo.textContent = [tempo?.value, key].filter(Boolean).join(' / ')
   }
   panel.querySelectorAll('.style-stepper button').forEach((button, index) => {
     button.addEventListener('click', () => {

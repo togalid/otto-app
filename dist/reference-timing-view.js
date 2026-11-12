@@ -740,7 +740,7 @@ export function mountReferenceTiming(host, options) {
         event
       ).detail
     view.playback = JSON.stringify(detail)
-    view.playbackTitle = `直近の再生：${'ABCD'[detail.section]} / 調整 ${detail.adjustment.toFixed(2)} 秒 / 原曲 ${detail.sourceOffset.toFixed(3)} 秒`
+    view.playbackTitle = `直近の再生：調整 ${detail.adjustment.toFixed(2)} 秒 / 原曲 ${detail.sourceOffset.toFixed(3)} 秒`
   }, {signal: listeners.signal})
   document.addEventListener('reference-timing-refresh', () => {
     updateTimingPreview()

@@ -1,6 +1,20 @@
 import { h } from './vendor/vue.runtime.esm-browser.prod.js'
 import { pianoKey } from './keyboard.js'
 
+/** @param {{page:number, pageSize:number, totalBars:number, label:string, onPageChange:(page:number)=>void, maxBars?:number, leadingLabel?:string}} options */
+export function scorePagination({page, pageSize, totalBars, label, onPageChange, maxBars = totalBars, leadingLabel}) {
+  const first = page * pageSize + 1
+  const last = Math.min(totalBars, (page + 1) * pageSize)
+  return h('div', {class:'tutorial-score-pagination', role:'group', 'aria-label':label}, [
+    leadingLabel ? h('span', {class:'score-page-label', 'aria-hidden':'true'}, leadingLabel) : null,
+    h('div', {class:'style-stepper part-choice-steps'}, [
+      h('button', {type:'button', 'aria-label':`前の${pageSize}小節`, disabled:page === 0, onClick:()=>onPageChange(page - 1)}, '←'),
+      h('button', {type:'button', 'aria-label':`次の${pageSize}小節`, disabled:last >= totalBars && last >= maxBars, onClick:()=>onPageChange(page + 1)}, '→'),
+    ]),
+    h('span', {class:leadingLabel ? 'sr-only' : undefined, 'aria-live':'polite'}, `${first}-${last}`),
+  ])
+}
+
 const pitches = [60,62,64,65,67,69,71,72]
 
 /**
@@ -68,18 +82,23 @@ export function scoreStaffStep(midi) {
   return (Math.floor(natural / 12) - 5) * 7 + pitchClasses.indexOf(natural % 12)
 }
 
-/** @param {number} midi */
-export function scoreTrebleTop(midi) {
-  return tutorialStaffTop(3 - scoreStaffStep(midi) / 2)
+/** @param {number} midi @param {number} [stepOffset] */
+export function scoreTrebleTop(midi, stepOffset = 0) {
+  return tutorialStaffTop(3 - (scoreStaffStep(midi) + stepOffset) / 2)
 }
 
-/** @param {number} midi */
-export function scoreLedgerOffsets(midi) {
-  const step = scoreStaffStep(midi)
+/** @param {number} midi @param {number} [stepOffset] */
+export function scoreLedgerOffsets(midi, stepOffset = 0) {
+  const step = scoreStaffStep(midi) + stepOffset
   const lines = []
   for (let line = 0; line >= step; line -= 2) lines.push(step - line)
   for (let line = 12; line <= step; line += 2) lines.push(step - line)
   return lines
+}
+
+export function scoreTrebleClefGlyph() {
+  // Scale uniformly around the G-line anchor at y=39.
+  return h('text', {x:2, y:47, 'font-size':46, transform:'translate(2 39) scale(1.55) translate(-2 -39)'}, '𝄞')
 }
 
 export function tutorialStaffLines() {
@@ -107,9 +126,60 @@ export function scoreAccidentalForNote(notes, index) {
   return previous?.midi === altered ? '♮' : ''
 }
 
+/** @param {number} fifths */
+export function scoreKeySignature(fifths) {
+  const pitches = fifths < 0 ? [71,76,69,74,67,72,65] : [77,72,79,74,69,76,71]
+  return pitches.slice(0, Math.abs(fifths)).map(midi => ({midi, sign:fifths < 0 ? '♭' : '♯'}))
+}
+
+/** @param {number} key */
+export function scoreKeyFifths(key) {
+  return [0,-5,2,-3,4,-1,6,1,-4,3,-2,5][key] ?? 0
+}
+
+/** @param {{beat:number,midi:number}[]} notes @param {(bar:number)=>number} keyForBar */
+export function scoreKeyedNotes(notes, keyForBar) {
+  /** @type {Map<number, Map<number, number>>} */
+  const alterations = new Map()
+  const notation = notes.map(() => ({staffMidi:0, sign:''}))
+  const ordered = notes.map((note, index) => ({...note, index})).sort((a,b) => a.beat - b.beat)
+  for (const {beat, midi, index} of ordered) {
+    const bar = Math.floor(beat / 4)
+    const fifths = scoreKeyFifths(keyForBar(Math.max(0, bar)))
+    const signature = scoreKeySignature(fifths)
+    const delta = Math.sign(fifths)
+    const inKey = signature.some(entry => (entry.midi + delta) % 12 === midi % 12)
+    const altered = inKey ? delta : !pianoKey(midi).black ? 0 : [3,10].includes(midi % 12) ? -1 : 1
+    const staffMidi = midi - altered
+    const keyDefault = signature.some(entry => entry.midi % 12 === staffMidi % 12) ? delta : 0
+    let measure = alterations.get(bar)
+    if (!measure) {
+      measure = new Map()
+      alterations.set(bar, measure)
+    }
+    const previous = measure.get(staffMidi) ?? keyDefault
+    measure.set(staffMidi, altered)
+    notation[index] = {staffMidi, sign:previous === altered ? '' : altered === 0 ? '♮' : altered > 0 ? '♯' : '♭'}
+  }
+  return notation
+}
+
+const accidentalPaths = {
+  '♯': 'M1.8 -7h1.15V8H1.8z M5.05 -8h1.15V7H5.05z M0 -2.5l8 -2v2.8L0 .3z M0 1.5l8 -2v2.8L0 4.3z',
+  '♭': 'M1 -9h1.2v7C4 -4 7 -4 7 0c0 2.3-3.1 4-6 5V-9zm1.2 7v5C4 2 5.4.8 5.4-.7 5.4-2.3 3.7-2.8 2.2-2z',
+  '♮': 'M1 -8h1.2v6L6 -3v-1h1.2V8H6V3L1 4zm1.2 7v3L6 1v-3z',
+}
+
+/** @param {string} sign */
+export function scoreAccidentalGlyph(sign) {
+  const path = accidentalPaths[/** @type {keyof typeof accidentalPaths} */ (sign)]
+  return path ? h('svg', {class:'score-accidental-glyph',viewBox:'0 -9 8 18','aria-hidden':'true'},
+    [h('path', {d:path,fill:'currentColor','fill-rule':sign === '♯' ? 'nonzero' : 'evenodd'})]) : sign
+}
+
 /** @param {string} sign */
 export function scoreAccidental(sign) {
-  return sign ? h('span',{class:'tutorial-accidental','aria-hidden':'true'},sign) : null
+  return sign ? h('span',{class:'tutorial-accidental','aria-hidden':'true'},[scoreAccidentalGlyph(sign)]) : null
 }
 
 /** @param {number} midi */
@@ -122,18 +192,18 @@ export function scoreBeamConnects(notes, index, breaks = []) {
 
 /** Determine one stem direction for a beam from the note farthest from B4.
  * If both extremes are equally distant, choose down.
- * @param {readonly {midi:number}[]} notes */
-export function scoreBeamStemDown(notes) {
-  const steps = notes.map(note => scoreStaffStep(note.midi) - 6)
+ * @param {readonly {midi:number}[]} notes @param {number} [stepOffset] */
+export function scoreBeamStemDown(notes, stepOffset = 0) {
+  const steps = notes.map(note => scoreStaffStep(note.midi) + stepOffset - 6)
   const lowest = Math.min(...steps)
   const highest = Math.max(...steps)
   return highest >= -lowest
 }
 
 /** Horizontal beam position and stem lengths, in the note symbol's SVG units.
- * @param {readonly {midi:number}[]} notes */
-export function scoreBeamLayout(notes) {
-  const down = scoreBeamStemDown(notes)
+ * @param {readonly {midi:number}[]} notes @param {number} [stepOffset] */
+export function scoreBeamLayout(notes, stepOffset = 0) {
+  const down = scoreBeamStemDown(notes, stepOffset)
   const steps = notes.map(note => scoreStaffStep(note.midi))
   const extreme = down ? Math.min(...steps) : Math.max(...steps)
   return {down, referenceIndex:steps.indexOf(extreme), stemLengths:steps.map(step => 17 + 4 * Math.abs(step - extreme))}
@@ -165,6 +235,24 @@ export function scoreEighthGroups(notes) {
       groups.push([index,index + 1])
       index += 2
     } else index++
+  }
+  return groups
+}
+
+/** @param {readonly {beat:number, length:number, midi:number}[]} notes */
+export function scoreRhythmGroups(notes) {
+  const groups = scoreEighthGroups(notes)
+  for (let index = 0; index < notes.length;) {
+    const first = notes[index]
+    if (first.length !== .25 && first.length !== .5) { index++; continue }
+    const group = [index++]
+    const beatEnd = Math.floor(first.beat) + 1
+    while (index < notes.length && (notes[index].length === .25 || notes[index].length === .5) &&
+           notes[index].beat + notes[index].length <= beatEnd &&
+           notes[index].beat === notes[index - 1].beat + notes[index - 1].length) {
+      group.push(index++)
+    }
+    if (group.length > 1 && group.some(i => notes[i].length === .25)) groups.push(group)
   }
   return groups
 }

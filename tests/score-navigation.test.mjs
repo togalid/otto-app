@@ -7,7 +7,7 @@ for (const name of ['window', 'document', 'Element', 'HTMLElement', 'SVGElement'
   globalThis[name] = name === 'window' ? dom.window : name === 'document' ? dom.window.document : dom.window[name]
 }
 const { createApp, h, ref, nextTick } = await import('../dist/vendor/vue.runtime.esm-browser.prod.js')
-const { scoreNavigation, scoreNote, scoreAccidentalForNote, scoreStaffStep, scoreTrebleTop, scoreLedgerOffsets, scoreStemDown, scoreBeamConnects, scoreBeamStemDown, scoreBeamLayout, scoreBeamGroupStemDown, scoreEighthGroups, tutorialPitchSymbol } = await import('../dist/score-navigation.js')
+const { scoreNavigation, scoreNote, scoreAccidentalForNote, scoreStaffStep, scoreTrebleTop, scoreLedgerOffsets, scoreStemDown, scoreBeamConnects, scoreBeamStemDown, scoreBeamLayout, scoreBeamGroupStemDown, scoreEighthGroups, scoreRhythmGroups, tutorialPitchSymbol } = await import('../dist/score-navigation.js')
 
 test('navigation renders changing lanes and notes and preserves editing callbacks', async () => {
   const host = document.createElement('div')
@@ -133,4 +133,15 @@ test('four-note beams use one shared direction and stems reach a common height',
   assert.equal(down.down, true)
   assert.equal(down.referenceIndex, 0)
   assert.deepEqual(down.stemLengths, [17,21,25,29])
+})
+
+test('sixteenth notes beam within a beat and stop at gaps or the next beat', () => {
+  const notes = [0,.25,.5,.75,1,1.25,1.75,2,2.25].map(beat => ({beat,length:.25,midi:64}))
+  assert.deepEqual(scoreRhythmGroups(notes), [[0,1,2,3],[4,5],[7,8]])
+})
+
+test('mixed eighths and sixteenths share a beam only within the same beat', () => {
+  const notes = [[0,.5],[.5,.25],[.75,.25],[1,.25],[1.25,.5],[1.75,.25],[2,.5],[2.75,.25]]
+    .map(([beat,length]) => ({beat,length,midi:64}))
+  assert.deepEqual(scoreRhythmGroups(notes), [[0,1,2],[3,4,5]])
 })

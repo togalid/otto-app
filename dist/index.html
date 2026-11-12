@@ -98,13 +98,13 @@
               <label><input type="radio" name="mixer-layout" value="simple" checked><span>簡易</span></label>
               <label><input type="radio" name="mixer-layout" value="detail"><span>詳細</span></label>
             </fieldset>
+            <div id="score-length-host"></div>
           </div>
           <div class="mixer-watermark" aria-hidden="true"><span>Arrange Mixer</span></div>
           <div class="genre-row" role="group" aria-label="ジャンルを選択">
             <label class="groove-field">ジャンル<select id="genre-group" aria-label="ジャンルの大分類"></select></label>
             <select id="genre" aria-label="ジャンルのスタイル" hidden></select>
           </div>
-          <div class="mixer-sections"><span class="mixer-sections-label">セクション</span><div id="song-sections" class="song-sections" role="group" aria-label="曲のセクション"></div></div>
           <div class="groove-settings">
             <div class="mixer-key"><label for="mixer-key">キー</label>
               <span class="volume-knob key-knob"><input id="mixer-key" type="range" min="-12" max="12" step="1" value="0" aria-label="キーを半音ずつ変更" /><span aria-hidden="true"></span></span>
@@ -170,6 +170,7 @@
             >
               <div class="chord-heading"><div id="section-bar-count" hidden></div><div class="backing-display"><div id="backing-monitor" role="img" aria-label="バッキングの鍵盤表示"></div></div></div>
               <div class="chord-settings">
+                <div id="score-pagination"></div>
                 <div class="chord-field chord-start" hidden><label for="preset-group">開始度数</label><select id="preset-group" aria-label="プリセットの開始度数" aria-controls="preset"></select></div>
                 <div class="chord-field chord-preset"><label for="preset">コード進行</label><div class="preset-picker part-choice-picker"><select id="preset" aria-label="コード進行プリセット"></select><div class="style-stepper part-choice-steps" role="group" aria-label="コード進行を切り替え"><button id="preset-prev" type="button" aria-label="前のコード進行">▲</button><button id="preset-next" type="button" aria-label="次のコード進行">▼</button></div></div></div>
                 <div class="chord-field" hidden><label for="chord-rate">進行の速さ</label><select id="chord-rate"><option value="0.5">½ ハーフ</option><option value="1" selected>1 通常</option><option value="2">2 ダブル</option></select></div>
@@ -181,7 +182,7 @@
                   </div>
                 </div>
                 </div>
-                <div class="chord-field chord-notation"><span class="chord-field-label">表示</span><fieldset id="notation" class="segmented-control">
+                <div class="chord-field chord-notation"><fieldset id="notation" class="segmented-control">
                   <legend class="sr-only">コードの表示形式</legend>
                   <label
                     ><input

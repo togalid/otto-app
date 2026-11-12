@@ -118,7 +118,7 @@ export function mountReferencePlayer(state, applyArrangement, _getSectionBars = 
     const originalSection = sections[sectionIndex]
     const shift = timingOffsets[sectionIndex] ?? 0
     const section = originalSection && {...originalSection, start:originalSection.start + shift, end:Math.min(buffer?.duration ?? originalSection.end, originalSection.end + shift)}
-    if (!section) { state.message = `セクション${'ABCD'[sectionIndex]}に原曲の区間が割り当てられていません。`; return }
+    if (!section) { state.message = 'この再生位置に対応する原曲の区間がありません。'; return }
     if (!context || !buffer || !gain) return
     const request = ++playRequest
     state.playing = true

@@ -73,15 +73,14 @@ test('section lengths round trip independently while retaining hidden chords', (
 })
 
 test('variable song sections preserve identities, custom backing and reject invalid steps',async()=>{
-  const {migrateSongSections,splitSongSection}=await import('../dist/song-score.js')
+  const {migrateSongSections}=await import('../dist/song-score.js')
   const f=fixture(),sections=migrateSongSections(f.sections)
-  splitSongSection(sections,0)
   sections[1].name='サビ'
   sections[1].backingSteps=Array.from({length:16},()=>({enabled:true,duration:.5,level:.7}))
   sections[1].bpm=132;sections[1].meter=4
   const score={...f.score,slots:sections[0].slots,beatSlots:sections[0].beatSlots,modulation:sections[0].modulation}
   const decoded=decodeArrangement(encodeArrangement(f.controls,f.mix,score,sections),f.rules)
-  assert.equal(decoded.sections.length,5)
+  assert.equal(decoded.sections.length,4)
   assert.equal(decoded.sections[1].name,'サビ')
   assert.deepEqual(decoded.sections[1].backingSteps,sections[1].backingSteps)
   sections[1].backingSteps[0].level=2

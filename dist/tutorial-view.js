@@ -1,9 +1,9 @@
-import { scoreNavigation, scoreNote, scoreAccidental, scoreStemDown, scoreBeamConnects, scoreBeamGroupStemDown, tutorialPitchTop, tutorialStaffLines, tutorialSubdivisions, tutorialPitchSymbol } from './score-navigation.js'
+import { scoreNavigation, scoreNote, scoreTrebleClefGlyph, scoreTrebleTop, scoreAccidental, scoreStemDown, scoreBeamConnects, scoreBeamGroupStemDown, tutorialPitchTop, tutorialStaffLines, tutorialSubdivisions, tutorialPitchSymbol } from './score-navigation.js'
 import { capturePianoPointer, pianoKeyAtPointer, pianoWhiteLabel } from './keyboard.js'
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { Instrument } from './audio.js'
 import { bindTempoKnob } from './main-controls.js'
-import { lessons, createTutorialPlayer, displayedResponseStart, displayedResponseEnd, mergePlayedSegments, responseComplete, recordTutorialSuccess, shortNoteTarget, tutorialNotes, isTutorialFreePitch, matchSlideNote, isSessionSlide } from './tutorial.js'
+import { lessons, createTutorialPlayer, displayedResponseStart, displayedResponseEnd, mergePlayedSegments, responseComplete, recordTutorialSuccess, shortNoteTarget, tutorialNotes, isTutorialFreePitch, isSessionSlide } from './tutorial.js'
 import { genres, BassSynth } from './groove.js'
 import { DrumSynth } from './rhythm.js'
 import { readDevelopmentScreen, saveDevelopmentScreen } from './tutorial.js'
@@ -154,7 +154,6 @@ export function mountTutorial(root, navigate) {
   let pointerReady = false
   let slideBar = -1
   const slideProgress = ref(0)
-  let slideMatched = 0
   let slideResultBar = -1
   const currentLesson = () => lessons[selected.value]
   const isSlide = () => Boolean(lessons[selected.value].patterns)
@@ -182,7 +181,7 @@ export function mountTutorial(root, navigate) {
   }})
   function release(preserveSlide = false) {
     clearTimeout(clickTimer); pointer = undefined; pointerReady = false; revision++
-    if (!preserveSlide) { slideBar = -1; slideMatched = 0 }
+    if (!preserveSlide) slideBar = -1
     if (held.value >= 0) userVoice.release(held.value)
     held.value = -1
   }
@@ -213,7 +212,8 @@ export function mountTutorial(root, navigate) {
   }
   /** @param {number} midi */
   function markEighthNote(midi) {
-    if (isSlide()) return
+    const octaveSlide = currentLesson().settings?.slide === 'octave'
+    if (isSlide() && !octaveSlide) return
     const beat = player.currentBeat()
     if (beat === undefined) return
     const lesson = lessons[selected.value]
@@ -225,6 +225,7 @@ export function mountTutorial(root, navigate) {
     }).find(Boolean)
     if (!target) return
     const {note,bar} = target
+    if (octaveSlide && played.some(segment => segment.bar === bar && segment.start === note.beat)) return
     played.push({bar,midi:note.midi,start:note.beat,end:note.beat+note.duration})
     playedRevision.value++
     if (responseComplete(responseNotes(bar),played,bar)) {
@@ -253,15 +254,14 @@ export function mountTutorial(root, navigate) {
   const midiHeld = new Set()
   /** @param {number} midi */
   function beginSlide(midi) {
+        if (currentLesson().settings?.slide !== 'fifth') return
         const beat = player.currentBeat()
         const currentBar = beat === undefined ? -1 : Math.floor(beat / 4)
         const bar = beat !== undefined && currentBar % 4 < 2 ? Math.floor((beat + .35) / 4) : currentBar
         if (isSlide() && bar >= 0 && bar <= 7 && bar % 4 >= 2 && beat !== undefined) {
           const notes = responseNotes(bar)
-          const matched = currentLesson().settings?.slide === 'octave' ? matchSlideNote(notes, 0, midi, beat - bar * 4) : Number(notes[0]?.midi === midi)
-          if (matched) {
+          if (notes[0]?.midi === midi) {
             slideBar = bar
-            slideMatched = matched
             slideResultBar = bar
             slideProgress.value = notes[0].duration / (notes[notes.length - 1].beat + notes[notes.length - 1].duration)
           }
@@ -275,18 +275,8 @@ export function mountTutorial(root, navigate) {
           const first = notes[0].midi
           const last = notes[notes.length - 1].midi
           if (beat !== undefined && beat >= slideBar * 4 - .35 && beat < (slideBar + 1) * 4 + (currentLesson().settings?.slide === 'fifth' ? .35 : 0)) {
-            if (currentLesson().settings?.slide === 'octave') {
-              const matched = matchSlideNote(notes, slideMatched, next, beat - slideBar * 4)
-              if (matched > slideMatched) {
-                slideMatched = matched
-                const note = notes[matched - 1]
-                slideProgress.value = matched === notes.length ? 1 : (note.beat + note.duration) / (notes[notes.length - 1].beat + notes[notes.length - 1].duration)
-              }
-            } else {
-              slideProgress.value = Math.max(slideProgress.value, Math.min(1, (next - first) / (last - first)))
-            }
-            const complete = currentLesson().settings?.slide === 'octave' ? slideMatched === notes.length : next === last
-            if (complete && recordTutorialSuccess(successes,slideBar,true,8,true)) {
+            slideProgress.value = Math.max(slideProgress.value, Math.min(1, (next - first) / (last - first)))
+            if (next === last && recordTutorialSuccess(successes,slideBar,true,8,true)) {
               feedback.value = 'バッチリ！'
               score.value = successes.size
               playSuccess()
@@ -303,6 +293,7 @@ export function mountTutorial(root, navigate) {
         const finalKey = board ? pianoKeyAtPointer(event, board) : undefined
         if (finalKey !== undefined) {
           if (slideBar < 0) beginSlide(held.value)
+          if (finalKey !== held.value) markEighthNote(finalKey)
           moveSlide(finalKey)
         }
       }
@@ -321,7 +312,6 @@ export function mountTutorial(root, navigate) {
         const next = board ? pianoKeyAtPointer(event, board) : undefined
         if (next === undefined) {
           slideBar = -1
-          slideMatched = 0
           return
         }
         const previousMidi = held.value
@@ -491,9 +481,13 @@ export function mountTutorial(root, navigate) {
         const connectedRhythm = (lesson.session && isSessionSlide(laneBar)) || lesson.settings?.connectedNotation
         const rhythmLane = lesson.freePitch && !connectedRhythm
         const visibleRows = [...new Set(notes.map(note => durationRow(note.duration)))].sort((a,b) => a-b)
-        return {attrs:{class:{'tutorial-rhythm-lane':rhythmLane,'tutorial-pitch-lane':!rhythmLane,'tutorial-final-bar':advanced ? measure(laneBar,1) === 8 : laneBar === totalBars - 1},'aria-hidden':'true'}, before:[
+        return {attrs:{class:{'tutorial-rhythm-lane':rhythmLane,'tutorial-pitch-lane':!rhythmLane,'tutorial-clef-lane':!rhythmLane,'tutorial-final-bar':advanced ? measure(laneBar,1) === 8 : laneBar === totalBars - 1},'aria-hidden':'true'}, before:[
           advanced && lesson.keySignature ? h('span',{class:'tutorial-key-signature'},lesson.keySignature) : null,
-          !rhythmLane ? tutorialStaffLines() : null,
+          ...(!rhythmLane ? [
+            tutorialStaffLines(),
+            h('svg', {class:'tutorial-treble-clef', viewBox:'0 0 28 84',
+              style:{top:scoreTrebleTop(67)}, 'aria-hidden':'true'}, [scoreTrebleClefGlyph()]),
+          ] : []),
           ...Array.from({length:gridBeats},(_,b)=>{
             const beatsPerMeasure = gridBeats / 2
             const measureOffset = b - pickupBeats
@@ -513,9 +507,18 @@ export function mountTutorial(root, navigate) {
               '--slide-end':pitchTop(lastNote.midi),
               '--slide-end-beat':`${lastNote.beat / (lastNote.beat + lastNote.duration)*100}%`,
             },
-          },h('div',{class:'tutorial-slide-fill',style:{
-            width:`${(successes.has(laneBar) ? 1 : slideResultBar === laneBar ? slideProgress.value : 0)*100}%`,
-          }}))] : []),
+          },currentLesson().settings?.slide === 'octave'
+            ? mergePlayedSegments(played.filter(segment => segment.bar === laneBar)).map(segment => {
+              const span = lastNote.beat + lastNote.duration
+              return h('div',{class:'tutorial-slide-fill',style:{
+                position:'absolute', top:0,
+                left:`${segment.start / span * 100}%`,
+                width:`${(segment.end - segment.start) / span * 100}%`,
+              }})
+            })
+            : h('div',{class:'tutorial-slide-fill',style:{
+              width:`${(successes.has(laneBar) ? 1 : slideResultBar === laneBar ? slideProgress.value : 0)*100}%`,
+            }}))] : []),
           ...(beamSlide ? notes.flatMap((note,index)=>{
             if (!scoreBeamConnects(notes,index,beamBreaks)) return []
             const previousNote = notes[index-1]
@@ -545,7 +548,7 @@ export function mountTutorial(root, navigate) {
             const showSign = sign && !notes.slice(0,index).some(previous =>
               previous.midi === n.midi && Math.floor((Math.round(previous.beat * notationScale * 4) / 4 - pickupBeats) / (lesson.meter ?? 4)) === measureIndex)
             return scoreNote('span',{class:[{'tutorial-slide-note':isSlide(), 'tutorial-pitch-note':!lesson.freePitch, 'tutorial-accidental-note':!!accidental(n.midi), 'tutorial-connected-note':connectedRhythm, 'tutorial-connected-first':connectedRhythm && (index === 0 || notes[index-1].beat + notes[index-1].duration < n.beat - .001), 'tutorial-connected-last':connectedRhythm && (index === notes.length - 1 || n.beat + n.duration < notes[index+1].beat - .001)}]},[
-            ...mergePlayedSegments(played.filter(p=>p.bar===laneBar && p.midi===n.midi && p.end>n.beat && p.start<n.beat+n.duration)).map(p=>{const start=Math.max(displayedResponseStart(p.start,n.beat),n.beat);return h('i',{class:'tutorial-played',style:{left:`${(start-n.beat)/n.duration*100}%`,width:`${Math.max(0,(Math.min(displayedResponseEnd(p.end,n.beat+n.duration,n.duration),n.beat+n.duration)-start)/n.duration)*100}%`}})}),
+            ...(currentLesson().settings?.slide === 'octave' ? [] : mergePlayedSegments(played.filter(p=>p.bar===laneBar && p.midi===n.midi && p.end>n.beat && p.start<n.beat+n.duration)).map(p=>{const start=Math.max(displayedResponseStart(p.start,n.beat),n.beat);return h('i',{class:'tutorial-played',style:{left:`${(start-n.beat)/n.duration*100}%`,width:`${Math.max(0,(Math.min(displayedResponseEnd(p.end,n.beat+n.duration,n.duration),n.beat+n.duration)-start)/n.duration)*100}%`}})})),
             scoreAccidental(showSign ? sign : ''),
             (isSlide() || !lesson.freePitch) ? tutorialPitchSymbol({midi:n.midi,duration:notationDuration,beam:!!hasBeam,stemDown:beamSlide && hasBeam ? scoreBeamGroupStemDown(notes,index,beamBreaks) : undefined,staccato:n.staccato,dotY}) : null,
             rhythmOnlyGuide || (advanced && (beatInMeasure < 0 ? index > 0 : beatInMeasure % (lesson.meter ?? 4) >= 1)) ? null : h('span',{class:['tutorial-note-label',{'tutorial-note-label-fa':!lesson.freePitch && n.midi % 12 === 5}]},lesson.freePitch && (n.duration >= 2 || n.duration < .5)

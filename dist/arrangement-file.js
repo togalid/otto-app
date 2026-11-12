@@ -1,3 +1,4 @@
+import { barMeters, maxChordBeats } from './progression.js'
 import { chordConfig } from './music.js'
 import { genres } from './groove.js'
 
@@ -22,7 +23,7 @@ export const arrangementMixIds = partControls.flatMap(([id]) => [`${id}-mute`, `
 
 /** @typedef {{id:string, value:string, checked:boolean}} Control */
 /** @typedef {{id:string, pressed:boolean}} Mix */
-/** @typedef {Pick<import('./progression.js').Progression, 'slots'|'beatSlots'|'modulation'|'bassFeel'|'bassTones'|'drumSteps'> & Partial<Pick<import('./progression.js').Progression, 'drumAccents'|'drumPitch'|'beatsPerBar'|'drumRate'>>} Score */
+/** @typedef {Pick<import('./progression.js').Progression, 'slots'|'beatSlots'|'modulation'|'bassFeel'|'bassTones'|'drumSteps'> & Partial<Pick<import('./progression.js').Progression, 'drumAccents'|'drumPitch'|'beatsPerBar'|'drumRate'|'barSettings'>>} Score */
 /** @typedef {{id:string, options?:string[], range?:[number,number]}} ControlRule */
 
 /** @typedef {import('./progression.js').Progression['sections'][number]} Section */
@@ -63,7 +64,7 @@ function validSection(data) {
       (data?.performance === undefined || validPerformance(data.performance)) &&
       Array.isArray(data?.slots) && data.slots.length >= 8 && data.slots.length <= 1024 && data.slots.length % 2 === 0 && data.slots.every(chord) &&
       Array.isArray(data.beatSlots) && data.beatSlots.length === data.slots.length &&
-      data.beatSlots.every((/** @type {unknown} */ row) => Array.isArray(row) && [4, 5].includes(row.length) && row.every(value => value === null || chord(value))) &&
+      data.beatSlots.every((/** @type {unknown} */ row) => Array.isArray(row) && row.length >= 4 && row.length <= maxChordBeats && row.every(value => value === null || chord(value))) &&
       Array.isArray(data.modulation) && data.modulation.length === data.slots.length / 2 &&
       data.modulation.every((/** @type {number} */ value) => Number.isInteger(value) && Math.abs(value) <= 120)
 }
@@ -97,7 +98,7 @@ export function decodeArrangement(text, rules) {
     if (typeof item?.pressed !== 'boolean') throw new Error('Invalid mix')
     return {id, pressed: item.pressed}
   })
-  const {slots, beatSlots, modulation, bassFeel, bassTones, drumSteps, drumAccents, drumPitch, beatsPerBar = 4, drumRate = 1} = data
+  const {slots, beatSlots, modulation, bassFeel, bassTones, drumSteps, drumAccents, drumPitch, beatsPerBar = 4, drumRate = 1, barSettings} = data
   if (![0.5, 1, 2].includes(drumRate)) throw new Error('Invalid drum rate')
   if (![3, 4, 5].includes(beatsPerBar)) throw new Error('Invalid meter')
   if (typeof bassFeel !== 'string' ||
@@ -161,12 +162,25 @@ export function decodeArrangement(text, rules) {
     }))
   }
 
+  if (barSettings !== undefined) {
+    const count = slots.length
+    if (!barSettings || typeof barSettings !== 'object' || Array.isArray(barSettings) ||
+        !Object.entries(barSettings).every(([bar, settings]) =>
+          /^(0|[1-9]\d*)$/.test(bar) && Number(bar) < count && settings &&
+          typeof settings === 'object' && !Array.isArray(settings) &&
+          Object.entries(settings).every(([field, value]) =>
+            field === 'bpm' ? typeof value === 'number' && value >= 40 && value <= 200 :
+            field === 'meter' ? barMeters.some(meter => meter === value) :
+            field === 'key' && typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < 12)))
+      throw new Error('Invalid bar settings')
+  }
+
   return {
     style: /** @type {string} */ (style),
     controls: [...controls.values()].filter(item => item.id !== 'genre' && item.id !== 'genre-group'),
     mix,
     sections,
-    score: /** @type {Score} */ ({slots, beatSlots, modulation, bassFeel, bassTones, drumSteps, drumAccents, drumPitch, beatsPerBar, drumRate}),
+    score: /** @type {Score} */ ({slots, beatSlots, modulation, bassFeel, bassTones, drumSteps, drumAccents, drumPitch, beatsPerBar, drumRate, barSettings}),
   }
 }
 

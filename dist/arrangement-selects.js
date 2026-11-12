@@ -21,7 +21,8 @@ function mountArrows(prefix, index, length, step) {
   }).mount(host)
 }
 
-export function mountStyleChoices() {
+/** @param {{capture:()=>string, restore:(json:string)=>Promise<void>}} [customStyles] */
+export function mountStyleChoices(customStyles) {
   const group = select('genre-group')
   const style = select('genre')
   const choices = genres
@@ -56,7 +57,7 @@ export function mountStyleChoices() {
     const next = ordered[current < 0 ? 0 : current + direction]
     if (next) void choose(next.id)
   })
-  mountStyleBrowser(style, choose)
+  mountStyleBrowser(style, choose, customStyles)
   return {style, choose}
 }
 
@@ -113,7 +114,10 @@ export function mountPresetChoices() {
 }
 
 /** @param {HTMLSelectElement} genreSelect @param {(id:string)=>Promise<void>} chooseStyle */
-function mountStyleBrowser(genreSelect, chooseStyle) {
+/** @param {HTMLSelectElement} genreSelect
+ * @param {(id:string)=>Promise<void>} chooseStyle
+ * @param {{capture:()=>string, restore:(json:string)=>Promise<void>}} [customStyles] */
+function mountStyleBrowser(genreSelect, chooseStyle, customStyles) {
   const styleDialog = document.createElement('dialog')
   styleDialog.className = 'style-browser selection-browser'
   styleDialog.setAttribute('aria-label', 'スタイルを選ぼう')
@@ -124,11 +128,57 @@ function mountStyleBrowser(genreSelect, chooseStyle) {
   const applying = ref(false)
   const error = ref('')
   const current = () => genres.find(item => item.id === selected.value) ?? genres[0]
+  const storageKey = 'oto-studio-styles-v1'
+  const registered = ref(/** @type {{name:string,json:string}[]} */ ([]))
+  const name = ref('')
+  const registrationStatus = ref('')
+  function refreshRegistered() {
+    try {
+      const items = JSON.parse(localStorage.getItem(storageKey) ?? '[]')
+      registered.value = Array.isArray(items) ? items.filter(item =>
+        typeof item?.name === 'string' && typeof item.json === 'string') : []
+    } catch { registered.value = [] }
+  }
+  function register() {
+    if (!customStyles) return
+    const label = name.value.trim()
+    if (!label || registered.value.some(item => item.name === label)) {
+      registrationStatus.value = '新しいスタイル名を入力してください。'
+      return
+    }
+    try {
+      const next = [...registered.value, {name:label, json:customStyles.capture()}]
+      localStorage.setItem(storageKey, JSON.stringify(next))
+      registered.value = next
+      name.value = ''
+      registrationStatus.value = `${label}を登録しました。`
+    } catch { registrationStatus.value = '保存できませんでした。ブラウザの保存設定をご確認ください。' }
+  }
+
   createApp({render: () => [
     h('div', {class: 'style-browser-header'}, [
       h('h2', 'スタイルを選ぼう'),
       h('button', {type:'button', 'aria-label':'閉じる', onClick:()=>styleDialog.close()}, '×'),
     ]),
+    customStyles ? h('details', {class:'custom-style-registration'}, [
+      h('summary', '新規登録'),
+      h('form', {class:'selection-family', onSubmit:(/** @type {Event} */ event) => { event.preventDefault(); register() }}, [
+        h('label', ['スタイル名', h('input', {value:name.value, required:true, maxlength:60,
+          onInput:(/** @type {Event} */ event) => { name.value = (/** @type {HTMLInputElement} */ (event.target)).value },
+        })]),
+        h('button', {type:'submit', disabled:applying.value}, '現在の編成を登録'),
+      ]),
+      h('p', {role:'status'}, registrationStatus.value),
+    ]) : null,
+    customStyles && registered.value.length ? h('div', {class:'selection-track-list', role:'group', 'aria-label':'登録したスタイル'},
+      registered.value.map(item => h('button', {type:'button', class:'style-browser-choice', disabled:applying.value,
+        onClick:async () => {
+          applying.value = true
+          try { await customStyles.restore(item.json); styleDialog.close() }
+          catch { registrationStatus.value = '登録したスタイルを読み込めませんでした。' }
+          finally { applying.value = false }
+        },
+      }, item.name))) : null,
     h('label', {class:'selection-family'}, ['ジャンル', h('select', {
       value:family.value, disabled:applying.value,
       onChange:(/** @type {Event} */ event)=>{
@@ -157,6 +207,8 @@ function mountStyleBrowser(genreSelect, chooseStyle) {
   document.getElementById('style-open')?.addEventListener('click',()=>{
     const item=genres.find(item=>item.id===genreSelect.value) ?? genres[0]
     selected.value=item.id;family.value=item.group;error.value=''
+    refreshRegistered()
+    registrationStatus.value = ''
     styleDialog.showModal()
   })
   styleDialog.addEventListener('click',event=>{if(event.target===styleDialog)styleDialog.close()})

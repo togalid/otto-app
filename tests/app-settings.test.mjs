@@ -1,3 +1,4 @@
+import {keys} from '../dist/music.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
@@ -49,8 +50,22 @@ test('style changes and arrangement round trips keep score and section settings 
       await new Promise(resolve => setImmediate(resolve))
       assert.equal(byId('song-status').textContent, '保存した設定を読み込みました。')
     }
+    const barControl = label => document.querySelector(`[aria-label="2小節目の${label}"]`)
+    for (const [label, value] of [['BPM', '96'], ['拍子', '6/8']]) {
+      const control = barControl(label)
+      control.value = value
+      control.dispatchEvent(new Event('change', {bubbles: true}))
+    }
+    const inheritedKey = keys.findIndex(({name}) => barControl('キー').value === name + '(0)')
+    document.querySelector('[aria-label="2小節目のキーを半音上げる"]').click()
+    assert.ok(inheritedKey >= 0)
+    const key = (inheritedKey + 1) % 12
+    assert.equal(barControl('キー').value, keys[key].name + '(+1)')
+    assert.equal(document.querySelector('[aria-label="3小節目のキー"]').value, keys[key].name + '(0)')
+    assert.equal(document.querySelectorAll('.chord-slot')[1].querySelectorAll('.beat-chord:not([hidden])').length, 6)
     const arrangement = await save()
     assert.notDeepEqual(arrangement.slots, initialSlots)
+    assert.deepEqual(arrangement.barSettings, {1: {bpm: 96, meter: '6/8', key}})
     const [section] = arrangement.sections
     const drum = byId('drum-timbre')
     const alternate = [...drum.options].find(option => option.value !== style.drum).value
@@ -59,18 +74,16 @@ test('style changes and arrangement round trips keep score and section settings 
       {...section, name: 'B', startBar: 8, partSettings: {...section.partSettings, 'drum-timbre': alternate}},
     ]
     await load(arrangement)
-    const selectSection = async name => {
-      document.querySelector(`[aria-label="セクション${name}を編集"]`).click()
-      await new Promise(resolve => setImmediate(resolve))
-    }
-    await selectSection('B')
-    assert.equal(drum.value, alternate)
-    await selectSection('A')
     assert.equal(drum.value, style.drum)
+    assert.equal(document.querySelector('#song-sections'), null)
+    assert.equal(document.querySelector('.bar-label').textContent, '1')
     const roundTrip = await save()
     await load(roundTrip)
-    await selectSection('B')
-    assert.equal(drum.value, alternate)
+    const reloaded = await save()
+    assert.deepEqual(reloaded.sections.map(({startBar, endBar, partSettings}) => ({startBar, endBar, partSettings})),
+      roundTrip.sections.map(({startBar, endBar, partSettings}) => ({startBar, endBar, partSettings})))
+    assert.deepEqual(reloaded.barSettings, arrangement.barSettings)
+    assert.equal(reloaded.sections[1].partSettings['drum-timbre'], alternate)
     assert.equal(byId('bass-pattern').value, style.bassPattern)
   } finally {
     URL.createObjectURL = createObjectURL

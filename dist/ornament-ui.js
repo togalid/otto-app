@@ -28,7 +28,8 @@ export function mountOrnaments(tracks, partSettings) {
     replacement.append(...Array.from(field.childNodes))
     field.replaceWith(replacement)
   }
-  document.querySelector('.mixer-layout-tools')?.append(caption)
+  const layoutSwitch = document.querySelector('.mixer-layout-tools > .workspace-switch')
+  layoutSwitch?.after(caption)
   const icons = ['✦', '♪', '≋', '◌']
   const rows = ornamentParts.map((part, index) => {
     const row = document.createElement('div')

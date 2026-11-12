@@ -1,3 +1,4 @@
+import { scoreTempoInput, scoreKeyStepper } from './chord-grid.js'
 import { keys } from './music.js'
 import { features } from './features.js'
 import { meterParts, partMeter } from './tone-engine.js'
@@ -473,68 +474,76 @@ return updatePartIcons
  * @param {{workspace:HTMLElement, progression:import('./progression.js').Progression,
  * editingSection:{value:number}, mixerKey:HTMLInputElement, meterInput:HTMLInputElement,
  * tempo:HTMLInputElement, keySelect:HTMLSelectElement, currentBar:()=>number, contextChanged:()=>void, harmonyChanged:()=>void}} controls */
-export function mountSectionKnobs({workspace, progression, editingSection, mixerKey, meterInput, tempo, keySelect, currentBar, contextChanged, harmonyChanged}) {
-// Section knobs edit range metadata without changing the song's fallback settings.
-const baselineControls=document.createElement('div')
-baselineControls.hidden=true
-workspace.append(baselineControls)
-const sectionKnobs = /** @type {(()=>void)[]} */ ([])
-for (const [source, field, caption] of /** @type {[HTMLInputElement, 'key'|'meter'|'bpm', string][]} */ ([[mixerKey,'key','キー'],[meterInput,'meter','拍子'],[tempo,'bpm','テンポ']])) {
-  const original=/** @type {HTMLElement} */(source.closest(field==='bpm'?'.timing-control':'.mixer-key, .mixer-meter'))
-  const clone=/** @type {HTMLElement} */(original.cloneNode(true))
-  clone.querySelectorAll('[id]').forEach(element=>element.id='section-'+element.id)
-  clone.querySelectorAll('[for]').forEach(element=>element.setAttribute('for','section-'+element.getAttribute('for')))
-  original.before(clone)
-  baselineControls.append(original)
-  const input=/** @type {HTMLInputElement} */(clone.querySelector('input[type=range]'))
-  input.setAttribute('aria-label',`セクションの${caption}`)
-  const numeric=/** @type {HTMLInputElement|null} */(clone.querySelector('input[type=number]'))
-  if(numeric)numeric.setAttribute('aria-label','セクションのテンポを数値で入力')
-  const output=clone.querySelector('output')
-  const knob=/** @type {HTMLElement} */(input.parentElement)
+export function mountSectionControls({workspace, progression, editingSection, mixerKey, meterInput, tempo, keySelect, currentBar, contextChanged, harmonyChanged}) {
+  const baselineControls = document.createElement('div')
+  baselineControls.hidden = true
+  workspace.append(baselineControls)
+  const meterControl = /** @type {HTMLElement} */ (meterInput.closest('.mixer-meter'))
+  const meterClone = /** @type {HTMLElement} */ (meterControl.cloneNode(true))
+  meterClone.querySelectorAll('[id]').forEach(element=>{element.id = 'section-' + element.id})
+  meterClone.querySelectorAll('[for]').forEach(element=>element.setAttribute('for', 'section-' + element.getAttribute('for')))
+  meterControl.before(meterClone)
+  const host = document.createElement('div')
+  meterClone.before(host)
+  baselineControls.append(
+    /** @type {HTMLElement} */ (mixerKey.closest('.mixer-key')),
+    meterControl,
+    /** @type {HTMLElement} */ (tempo.closest('.timing-control')),
+  )
+
+  const section = () => progression.sections[editingSection.value]
+  const keySection = () => progression.songMode ? progression.sections[progression.songSectionAt(currentBar())] : section()
+  const shownKey = () => ((keySection().key ?? progression.key) + (keySection().modulation[Math.floor(currentBar() / 2)] ?? 0) % 12 + 12) % 12
+  createApp({render:()=>h('div', {class:'score-bar-settings studio-default-settings'}, [
+    scoreTempoInput({id:'section-tempo-value', label:'既定のテンポを数値で入力', onChange:input=>{
+      if (input.value && input.validity.valid) {
+        if (progression.referenceBpm !== null) {
+          tempo.value = input.value
+          tempo.dispatchEvent(new Event('input', {bubbles:true}))
+          return
+        }
+        section().bpm = input.valueAsNumber
+        apply()
+      } else refresh()
+    }}),
+    scoreKeyStepper({id:'section-key-value', label:'既定のキー', transpose:delta=>{
+      const target = keySection()
+      target.key = ((target.key ?? progression.key) + delta + 12) % 12
+      apply()
+    }}),
+  ])}).mount(host)
+  const tempoValue = /** @type {HTMLInputElement} */ (host.querySelector('.score-bar-tempo'))
+  const keyValue = /** @type {HTMLOutputElement} */ (host.querySelector('.score-bar-key-value'))
+  const meter = /** @type {HTMLInputElement} */ (meterClone.querySelector('input'))
+  const meterValue = /** @type {HTMLOutputElement} */ (meterClone.querySelector('output'))
   function refresh() {
-    const section=progression.sections[editingSection.value]
-    const value=field==='key' ? progression.keyForBar(currentBar(), editingSection.value) : (field==='bpm' ? progression.referenceBpm : null) ?? section[field] ?? Number(source.value)
-    input.value=String(field==='key'&&value>6?value-12:value)
-    const text=field==='key'?keys[value].name:field==='meter'?`${value}/4`:String(value)
-    if(output)output.textContent=text
-    if(numeric)numeric.value=String(value)
-    input.setAttribute('aria-valuetext',text)
-    knob.style.setProperty('--angle',`${field==='key'?Number(input.value)*11.25:field==='meter'?(value-4)*90:(value-120)*1.6875}deg`)
+    const key = shownKey()
+    const difference = (key - progression.key + 18) % 12 - 6
+    keyValue.value = `${keys[key].name}(${difference > 0 ? '+' : ''}${difference})`
+    const bpm = String(progression.referenceBpm ?? section().bpm ?? Number(tempo.value))
+    tempoValue.value = bpm
+    tempoValue.defaultValue = bpm
+    meter.value = String(section().meter ?? Number(meterInput.value))
+    meterValue.value = meter.value + '/4'
+    meter.setAttribute('aria-valuetext', meterValue.value)
+    meter.parentElement?.style.setProperty('--angle', `${(Number(meter.value) - 4) * 90}deg`)
   }
-  function sectionOffset() {
-    const bar=currentBar()
-    const section=progression.songMode ? progression.sections[progression.songSectionAt(bar)] : progression.sections[editingSection.value]
-    return section.modulation[Math.floor(bar / 2)] ?? 0
-  }
-  input.addEventListener('input',()=>{
-    const value=Number(input.value)
-    if (field === 'bpm' && progression.referenceBpm !== null) {
-      tempo.value = input.value
-      tempo.dispatchEvent(new Event('input', {bubbles:true}))
-      return
-    }
-    const offset = field === 'key' ? (sectionOffset() % 12) : 0
-    const target = field === 'key' && progression.songMode ? progression.songSectionAt(currentBar()) : editingSection.value
-    progression.sections[target][field]=field==='key'?((value-offset)%12+12)%12:value
+  function apply() {
     contextChanged()
     refresh()
-    if(field!=='bpm'){harmonyChanged()}
+    harmonyChanged()
+  }
+  meter.addEventListener('input', ()=>{
+    section().meter = Number(meter.value)
+    apply()
   })
-  if(numeric)numeric.addEventListener('keydown',event=>{if(event.key==='Enter')numeric.blur();if(event.key==='Escape'){refresh();numeric.blur()}})
-  if(numeric)numeric.addEventListener('blur',()=>{
-    const value=Number(numeric.value)
-    if(Number.isFinite(value)&&value>=40&&value<=200){input.value=String(Math.round(value*10)/10);input.dispatchEvent(new Event('input',{bubbles:true}))}
-    else refresh()
-  })
-  if(field==='bpm')bindTempoKnob(input)
-  else bindKnobDrag(input,field==='meter'?.035:.12,true)
-  sectionKnobs.push(refresh)
-}
-const refreshSectionKnobs=()=>sectionKnobs.forEach(refresh=>refresh())
-refreshSectionKnobs()
-
-for (const control of [tempo,meterInput,keySelect]) control.addEventListener(control===keySelect?'change':'input',()=>{contextChanged();refreshSectionKnobs()})
-
-return refreshSectionKnobs
+  bindKnobDrag(meter, .035, true)
+  for (const control of [tempo, meterInput, keySelect]) {
+    control.addEventListener(control === keySelect ? 'change' : 'input', ()=>{
+      contextChanged()
+      refresh()
+    })
+  }
+  refresh()
+  return refresh
 }

@@ -39,22 +39,6 @@ test('whole-song scheduler changes settings at ranges and stops at the song end'
  assert.equal(player.running,false)
 })
 
-test('split and remove keep chords, while moving ranges moves their musical contents',async()=>{
- const {splitSongSection,removeSongSection,moveSongSection}=await import('../dist/song-score.js')
- const sections=migrateSongSections(legacy()), original=[...sections[0].slots]
- sections[0].backingSteps=Array.from({length:16},()=>({enabled:true,duration:.5,level:.6}))
- assert.equal(splitSongSection(sections,0),true)
- assert.equal(sections.length,5)
- assert.deepEqual(sections.map(s=>[s.startBar,s.endBar]),[[0,4],[4,8],[8,16],[16,24],[24,32]])
- assert.notEqual(sections[0].backingSteps,sections[1].backingSteps)
- assert.equal(removeSongSection(sections,1),true)
- assert.deepEqual(sections[0].slots,original)
- assert.equal(moveSongSection(sections,0,1),true)
- assert.equal(sections[0].slots[0],'Dm7')
- assert.equal(sections[1].slots[8],'C')
- assert.equal(sections[0].slots,sections[1].slots)
- assert.equal(moveSongSection(sections,0,-1),false)
-})
 test('custom backing schedules only enabled subdivisions with per-step dynamics',async()=>{
  const played=[], context={currentTime:0,state:'running'}
  const player=new Progression({context,async ready(){},silence(){},playAt(...args){played.push(args)}},()=>{},message=>assert.fail(message))
@@ -128,4 +112,78 @@ test('reference tempo controls accompaniment and seek offsets across section ove
  player.stop()
  player.referenceBpm = null
  assert.equal(player.bpmForBar(8), 80)
+})
+
+
+test('meter and tempo carry forward until the next change and are included in seek offsets', async () => {
+ const context = {currentTime: 0, state: 'running'}
+ const player = new Progression({context, async ready(){}, silence(){}, playAt(){}}, () => {}, message => assert.fail(message))
+ player.sections = migrateSongSections(legacy())
+ player.songMode = true
+ player.bpm = 120
+ player.barSettings = {1: {bpm: 60, meter: 5, key: 7}, 3: {meter: 4, bpm: 120}}
+ const scheduled = []
+ player.onScheduleBar = (bar, beat, time, secondsPerBeat) => scheduled.push({bar, time, secondsPerBeat})
+ await player.start(1)
+ clearInterval(player.timer)
+ assert.equal(player.beatsPerBar, 5)
+ assert.equal(player.keyForBar(1), 7)
+ assert.equal(player.keyForBar(2), 7)
+ assert.equal(scheduled[0].secondsPerBeat, 1)
+ context.currentTime = player.nextTime
+ player.tick()
+ assert.equal(scheduled[1].time - scheduled[0].time, 5)
+ assert.equal(scheduled[1].secondsPerBeat, 1)
+ assert.equal(player.bpmForBar(3), 120)
+ assert.equal(player.beatsPerBar, 5)
+ assert.equal(player.meterSignatureForBar(3), 4)
+ player.stop()
+ let offset
+ player.onStart = (_time, seconds) => { offset = seconds }
+ await player.start(3)
+ clearInterval(player.timer)
+ assert.equal(offset, 12)
+ player.stop()
+})
+
+test('eighth-note meters schedule all chord slots and keep quarter-note BPM', async () => {
+ const context = {currentTime: 0, state: 'running'}
+ const player = new Progression({context, async ready(){}, silence(){}, playAt(){}}, () => {}, message => assert.fail(message))
+ player.sections = migrateSongSections(legacy())
+ player.songMode = true
+ player.bpm = 120
+ player.barSettings = {0: {meter: '6/8'}, 1: {meter: '3/8'}}
+ player.beatSlots[0][5] = 'G7'
+ await player.start()
+ clearInterval(player.timer)
+ const first = player.pending.filter(step => step.index === 0)
+ assert.equal(first.length, 6)
+ assert.equal(first[5].chord, 'G7')
+ assert.ok(Math.abs(first[5].time - first[0].time - 1.25) < 1e-9)
+ const secondStart = player.nextTime
+ assert.ok(Math.abs(secondStart - first[0].time - 1.5) < 1e-9)
+ context.currentTime = secondStart - .01
+ player.tick()
+ assert.equal(player.pending.filter(step => step.index === 1).length, 3)
+ assert.ok(Math.abs(player.nextTime - secondStart - 0.75) < 1e-9)
+ player.stop()
+})
+
+test('pickup notes play before the first bar when starting at the pickup', async () => {
+ const context = {currentTime:0, state:'running'}
+ const notes = []
+ const instrument = {context, async ready(){}, silence(){}, playAt(){}}
+ const player = new Progression(instrument, ()=>{}, message=>assert.fail(message))
+ player.sections = migrateSongSections(legacy())
+ player.songMode = true
+ player.bpm = 120
+ player.melody = {async ready(){}, silence(){}, playAt(pitches, time){notes.push({pitches, time})}}
+ player.studioMelody = () => [{beat:-1, duration:.5, midi:60, velocity:.8}, {beat:0, duration:1, midi:62, velocity:.8}]
+ let startTime
+ player.onStart = time => {startTime = time}
+ await player.start(0, -1)
+ clearInterval(player.timer)
+ assert.equal(notes[0].pitches[0], 60)
+ assert.ok(Math.abs(startTime - notes[0].time - .5) < 1e-9)
+ player.stop()
 })

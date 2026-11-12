@@ -1,8 +1,36 @@
+import { scorePagination } from './score-navigation.js'
+import { barMeters, maxChordBeats } from './progression.js'
 import { keys } from './music.js'
-import { splitSongSection } from './song-score.js'
-import { createApp, h } from './vendor/vue.runtime.esm-browser.prod.js'
+import * as Vue from './vendor/vue.runtime.esm-browser.prod.js'
+const { createApp, h } = Vue
+const Teleport = Reflect.get(Vue, 'Teleport')
 
-/** @typedef {{ play: (bar: number) => void, modulate: (section: number, amount: number) => void,
+/** @param {{label:string, id?:string, onChange:(input:HTMLInputElement)=>void}} options */
+export function scoreTempoInput({label, id, onChange}) {
+  return h('label', {class:'score-bar-tempo-label'}, [
+    h('span', {'aria-hidden':'true'}, '♪'),
+    h('input', {
+      id, type:'number', min:40, max:200, step:0.1, inputmode:'decimal',
+      class:'score-bar-tempo', 'aria-label':label,
+      onChange:(/** @type {Event} */ event)=>onChange(/** @type {HTMLInputElement} */ (event.currentTarget)),
+      onKeydown:(/** @type {KeyboardEvent} */ event)=>{
+        if (event.key === 'Enter') /** @type {HTMLInputElement} */ (event.currentTarget).blur()
+      },
+    }),
+  ])
+}
+
+/** @param {{label:string, id?:string, transpose:(delta:number)=>void}} options */
+export function scoreKeyStepper({label, id, transpose}) {
+  return h('div', {class:'style-stepper score-bar-key'}, [
+    h('output', {id, class:'score-bar-key-value', 'aria-label':label}),
+    h('button', {type:'button', 'aria-label':label + 'を半音下げる', onClick:()=>transpose(-1)}, '−'),
+    h('button', {type:'button', 'aria-label':label + 'を半音上げる', onClick:()=>transpose(1)}, '＋'),
+  ])
+}
+
+/** @typedef {{ selectStart: (bar: number) => void, barSetting: (bar: number, field: keyof import('./progression.js').BarSettings, value: number | import('./progression.js').BarMeter | undefined) => void,
+ * transpose: (bar: number, delta: number) => void,
  * root: (bar: number, beat: number, value: string) => void,
  * quality: (bar: number, beat: number, select: HTMLSelectElement) => void,
  * openQuality: (select: HTMLSelectElement, bar: number, beat: number) => void,
@@ -12,14 +40,26 @@ import { createApp, h } from './vendor/vue.runtime.esm-browser.prod.js'
  * @param {number} bars @param {Actions} actions */
 export function mountChordGrid(bars, actions) {
   /** @param {number} bar */
-  function modulation(bar) {
-    const pair = `${bar + 1}〜${bar + 2}小節`
-    return h('div', { class: 'modulation-bar', role: 'group', 'aria-label': pair + 'の設定' }, [
-      h('span', '転調'),
-      h('output', { class: 'modulation-value', 'aria-live': 'polite' }),
-      h('div', { class: 'key-stepper modulation-stepper', role: 'group', 'aria-label': pair + 'のキーを半音ずつ変更' }, [
-        h('button', { type: 'button', class: 'modulation-down', 'aria-label': pair + 'のキーを半音下げる', onClick: () => actions.modulate(bar / 2, -1) }, '−'),
-        h('button', { type: 'button', class: 'modulation-up', 'aria-label': pair + 'のキーを半音上げる', onClick: () => actions.modulate(bar / 2, 1) }, '＋'),
+  function heading(bar) {
+    const label = `${bar + 1}小節目`
+    return h('div', {class: 'score-bar-heading'}, [
+      h('button', {
+        type: 'button', class: 'bar-label', 'aria-label': label + 'を再生開始位置にする',
+        'aria-pressed': 'false', onClick: () => actions.selectStart(bar),
+      }, String(bar + 1)),
+      h('div', {class: 'score-bar-settings', role: 'group', 'aria-label': label + 'の設定'}, [
+        scoreTempoInput({label:label + 'のBPM', onChange:input=>{
+          if (input.validity.valid) actions.barSetting(bar, 'bpm', input.value ? input.valueAsNumber : undefined)
+          else actions.refresh()
+        }}),
+        h('select', {
+          class: 'score-bar-meter', 'aria-label': label + 'の拍子',
+          onChange: (/** @type {Event} */ event) => {
+            const {value} = /** @type {HTMLSelectElement} */ (event.currentTarget)
+            actions.barSetting(bar, 'meter', barMeters.find(meter => String(meter) === value))
+          },
+        }, [h('option', {value: ''}), ...barMeters.map(meter => h('option', {value: meter}, typeof meter === 'number' ? `${meter}/4` : meter))]),
+        scoreKeyStepper({label:label + 'のキー', transpose:delta=>actions.transpose(bar, delta)}),
       ]),
     ])
   }
@@ -55,13 +95,11 @@ export function mountChordGrid(bars, actions) {
   }
 
   createApp({
-    render: () => Array.from({ length: bars }, (_, bar) => [
-      ...(bar % 2 === 0 ? [modulation(bar)] : []),
+    render: () => Array.from({ length: bars }, (_, bar) =>
       h('div', { class: ['chord-slot', { 'first-in-pair': bar % 2 === 0 }] }, [
-        h('span', { class: 'bar-label' }, String(bar + 1)),
-        ...Array.from({ length: 5 }, (_, beat) => cell(bar, beat)),
-      ]),
-    ]).flat(),
+        heading(bar),
+        ...Array.from({ length: maxChordBeats }, (_, beat) => cell(bar, beat)),
+      ])),
   }).mount('#chord-slots')
   return Array.from(document.querySelectorAll('#chord-slots .chord-slot'), element => /** @type {HTMLElement} */ (element))
 }
@@ -78,7 +116,6 @@ createApp({render:()=>{
   const meter=section.meter ?? Number(meterInput.value)
   const bpm=progression.referenceBpm ?? section.bpm ?? Number(tempo.value)
   return h('div',{class:'score-context'},[
-    h('span',{class:'score-context-section'},`${section.name ?? String.fromCharCode(65+index)} · ${(section.startBar ?? 0)+1}〜${section.endBar ?? progression.barCount()}小節`),
     h('span',`キー ${key}`),h('span',`${meter}/4`),h('span',`♩ ${bpm}`),
   ])
 }}).mount('#score-section-context')
@@ -113,43 +150,8 @@ chordDetail?.querySelector('.chord-grid-scroll')?.before(scoreHint)
 
 }
 
-/** @param {{progression:import('./progression.js').Progression, sectionRangeRevision:NumberState,
- * sectionContextRevision:NumberState, editingSection:NumberState, playingSection:NumberState,
- * sectionBars:NumberState, editSection:(index:number)=>void, changeBarCount:(delta:number)=>void,
- * refreshLabels:()=>void}} state */
-export function mountScoreSections({progression, sectionRangeRevision, sectionContextRevision, editingSection, playingSection, sectionBars, editSection, changeBarCount, refreshLabels}) {
-createApp({
-  render: () => (sectionRangeRevision.value, sectionContextRevision.value, [
-    ...progression.sections.map((_, index) => {const name=progression.sections[index].name ?? String.fromCharCode(65+index);return h('button', {
-      type: 'button', 'aria-label': `セクション${name}を編集`,
-      'aria-pressed': String(index === editingSection.value),
-      'data-playing': index === playingSection.value ? 'true' : undefined,
-      onClick: () => editSection(index),
-    }, name)}),
-    h('div',{class:'section-style-summary'}, `範囲 ${(progression.sections[editingSection.value].startBar ?? 0)+1}〜${progression.sections[editingSection.value].endBar ?? progression.barCount()}小節`),
-    h('div',{class:'song-range-settings',key:sectionRangeRevision.value},[
-      h('span',`${(progression.sections[editingSection.value].startBar ?? 0)+1}小節〜`),
-      h('input',{type:'number',min:(progression.sections[editingSection.value].startBar ?? 0)+1,max:editingSection.value===progression.sections.length-1?1024:(progression.sections[editingSection.value+1].endBar ?? progression.barCount())-1,value:progression.sections[editingSection.value].endBar,'aria-label':'セクションの終了小節',onChange:(/** @type {Event} */ event)=>{
-        const input=/** @type {HTMLInputElement} */(event.target), index=editingSection.value
-        const next=progression.sections[index+1]
-        const value=Math.round(Number(input.value)), current=progression.sections[index]
-        if(!Number.isFinite(value)||value<1||value>1024){input.value=String(current.endBar);return}
-        if(!next&&value>=progression.barCount()){
-          changeBarCount(value-progression.barCount());sectionRangeRevision.value++
-        }
-        else if(!next&&value>(current.startBar ?? 0)&&value<progression.barCount()){
-          if(splitSongSection(progression.sections,index)){
-            current.endBar=value;progression.sections[index+1].startBar=value
-            sectionRangeRevision.value++;refreshLabels()
-          }
-        }
-        else if(next&&value>(current.startBar ?? 0)&&value<=(next.endBar ?? 0)-1){current.endBar=value;if(next)next.startBar=value;sectionRangeRevision.value++;refreshLabels()}
-        else input.value=String(current.endBar)
-      }}),
-    ]),
-  ]),
-}).mount('#song-sections')
-
+/** @param {{sectionBars:NumberState, changeBarCount:(delta:number)=>void}} state */
+export function mountScoreBarCount({sectionBars, changeBarCount}) {
 createApp({setup: () => () => h('div', {class:'section-bar-count'}, [
   h('span', {}, '小節数'),
   h('div', {class:'style-stepper'}, [
@@ -161,21 +163,26 @@ createApp({setup: () => () => h('div', {class:'section-bar-count'}, [
 
 }
 
-/** @param {{scorePage:NumberState, sectionBars:NumberState, refreshLabels:()=>void}} state */
-export function mountScorePaging({scorePage, sectionBars, refreshLabels}) {
-const scorePaging=document.createElement('div')
-scorePaging.className='score-paging compact-playhead'
-document.getElementById('section-bar-count')?.after(scorePaging)
-const scoreHeading=document.querySelector('#detail-chord .chord-heading')
-const scoreSettings=document.querySelector('#detail-chord .chord-settings')
-if(scoreHeading && scoreSettings)scoreSettings.after(scoreHeading)
-createApp({setup:()=>()=>h('div',{class:'part-choice-picker',role:'group','aria-label':'コード進行のページ'},[
- h('output',{'aria-live':'polite'},`${scorePage.value*16+1}〜${Math.min((scorePage.value+1)*16,sectionBars.value)}小節`),
- h('div',{class:'style-stepper part-choice-steps'},[
- h('button',{type:'button',disabled:scorePage.value===0,'aria-label':'前の16小節',onClick:()=>{scorePage.value--;refreshLabels()}},'←'),
- h('button',{type:'button',disabled:(scorePage.value+1)*16>=sectionBars.value,'aria-label':'次の16小節',onClick:()=>{scorePage.value++;refreshLabels()}},'→'),
- ]),
-])}).mount(scorePaging)
-
-
+/** @param {{scorePage:NumberState, sectionBars:NumberState, refreshLabels:()=>void, changeBarCount:(delta:number)=>void}} state */
+export function mountScorePaging({scorePage, sectionBars, refreshLabels, changeBarCount}) {
+  const scoreHeading = document.querySelector('#detail-chord .chord-heading')
+  const scoreSettings = document.querySelector('#detail-chord .chord-settings')
+  const host = document.querySelector('#score-pagination')
+  if (scoreHeading && scoreSettings) scoreSettings.after(scoreHeading)
+  if (!host) return
+  createApp({render:()=>[scorePagination({
+    page:scorePage.value, pageSize:16, totalBars:sectionBars.value, maxBars:Math.max(100, sectionBars.value), label:'コード進行のページ',
+    onPageChange:page=>{
+      if (page * 16 >= sectionBars.value) changeBarCount(Math.min(16, 100 - sectionBars.value))
+      scorePage.value = page
+      refreshLabels()
+    },
+  }), h(Teleport, {to:'#score-length-host'}, h('label', {class:'score-length'}, [
+    h('span', '小節数'),
+    h('input', {type:'number', min:1, max:100, step:1, value:sectionBars.value, 'aria-label':'曲の小節数', onChange:(/** @type {Event} */ event)=>{
+      const input = /** @type {HTMLInputElement} */ (event.currentTarget)
+      if (input.value && input.validity.valid) changeBarCount(input.valueAsNumber - sectionBars.value)
+      input.value = String(sectionBars.value)
+    }}),
+  ]))]}).mount(host)
 }

@@ -52,7 +52,10 @@ export function mountPlayhead(actions, host) {
   element.className = 'melody-playhead'
   element.setAttribute('aria-label', '現在の再生位置')
   if (host) host.append(element)
-  else document.querySelector('.mixer-layout-tools')?.append(element)
+  else {
+    const tools = document.querySelector('.mixer-layout-tools')
+    tools?.insertBefore(element, tools.querySelector('#score-length-host'))
+  }
   const reset = () => { input.value = String(actions.current() + 1) }
   const app = createApp({render: () => [
     h('div', {class:'style-stepper melody-navigation melody-navigation-start'}, [
@@ -72,9 +75,6 @@ export function mountPlayhead(actions, host) {
         },
       }), h('span', '小節'),
     ]),
-    h('div', {class:'style-stepper melody-navigation'}, [-1,1].map(direction =>
-      h('button', {type:'button', 'aria-label':direction<0?'前の小節へ':'次の小節へ', onClick:()=>actions.seek(actions.current()+direction)}, direction<0?'←':'→'),
-    )),
   ]})
   app.mount(element)
   const input = /** @type {HTMLInputElement} */ (element.querySelector('input'))

@@ -1046,18 +1046,18 @@ main {
   border-radius: 9px;
   background: #f0f2e9;
 }
-#notation label {
+:is(#notation, .melody-notation) label {
   display: block;
   position: relative;
   cursor: pointer;
 }
-#notation input {
+:is(#notation, .melody-notation) input {
   position: absolute;
   opacity: 0;
   width: 1px;
   height: 1px;
 }
-#notation label > span {
+:is(#notation, .melody-notation) label > span {
   display: block;
   min-height: 36px;
   padding: 8px 12px;
@@ -1068,12 +1068,12 @@ main {
   line-height: 18px;
   white-space: nowrap;
 }
-#notation input:checked + span {
+:is(#notation, .melody-notation) input:checked + span {
   background: var(--control-bg);
   border-color: var(--control-border);
   color: #303b35;
 }
-#notation input:focus-visible + span {
+:is(#notation, .melody-notation) input:focus-visible + span {
   outline: 3px solid #395c50;
   outline-offset: 1px;
 }
@@ -1203,7 +1203,7 @@ main {
   .progression .transport {
     grid-template-columns: 1fr;
   }
-  #notation label > span {
+  :is(#notation, .melody-notation) label > span {
     padding-left: 10px;
     padding-right: 10px;
   }

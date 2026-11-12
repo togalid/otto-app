@@ -453,8 +453,7 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
     {id:'categories',title:'チュートリアル',subtitle:'お手本に合わせてチャレンジ',description:'聴いて、まねして、ひとつずつ。楽器を選んでリズムの冒険へ。',badge:'はじめてでも大丈夫',icon:'keys',image:'./mode-tutorial.svg'},
     {id:'song-session',title:'曲でセッション',subtitle:'曲に合わせて演奏',description:'デモ曲に合わせて演奏しよう。ベースは譜面を見ながら練習できるよ。',badge:'ベータ',icon:'session',image:'./mode-song.svg'},
     {id:'free',title:'スタジオ',subtitle:'自由に作曲・演奏',description:'音色や伴奏にこだわって、自由に作曲・演奏を楽しもう。',badge:'じっくり音楽づくり',icon:'session',image:'./mode-free.svg'},
-    ...(typeof location !== 'undefined' && ['localhost','127.0.0.1'].includes(location.hostname)
-      ? [{id:'melody-arrange',title:'メロディアレンジ',subtitle:'コネクト・スカイ',description:'お手本を聴いて、鍵盤で一音ずつ変えてみよう。',badge:'試作',icon:'keys'}] : []),
+    {id:'melody-arrange',title:'メロディアレンジ',subtitle:'コネクト・スカイ',description:'お手本を聴いて、鍵盤で一音ずつ変えてみよう。',badge:'試作',icon:'keys'},
   ], mode => {
     if (mode === 'melody-arrange') location.assign('./melody-arrange.html')
     else open(mode)

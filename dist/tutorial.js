@@ -1,5 +1,5 @@
 /** @typedef {{beat:number,midi:number,duration:number,staccato?:boolean}} TutorialNote */
-/** @typedef {{title:string,messages:readonly string[],notes:readonly TutorialNote[],patterns?:readonly (readonly TutorialNote[])[],freePitch?:boolean,session?:boolean,earlyPhrases?:readonly (readonly TutorialNote[])[],laterPhrases?:readonly (readonly TutorialNote[])[]}} TutorialLesson */
+/** @typedef {{title:string,messages:readonly string[],notes:readonly TutorialNote[],patterns?:readonly (readonly TutorialNote[])[],freePitch?:boolean,session?:boolean,keySignature?:string,earlyPhrases?:readonly (readonly TutorialNote[])[],laterPhrases?:readonly (readonly TutorialNote[])[]}} TutorialLesson */
 
 // Development navigation is scoped to the current tab.
 const developmentScreen = typeof location !== 'undefined' && ['localhost', '127.0.0.1'].includes(location.hostname)
@@ -54,7 +54,7 @@ const sessionPhrases = [
     : round === 6 && index === 2 ? 1 : round === 7 && index === 2 ? 2 : Math.min(.5, (phrase[index+1]?.beat ?? 4) - note.beat),
 })))
 
-/** @type {readonly TutorialLesson[]} */
+/** @type {TutorialLesson[]} */
 export const lessons = [
   { title: 'ドをひとつ', messages: ['チュートリアルへようこそ！メロディを一緒に弾いてみよう', 'これがきみのけんばん。タップして音を鳴らしてみて。', 'ここに演奏するタイミングと音が表示されるよ。', '最初に僕がお手本を弾いて、その後にきみが弾くを4回繰り返すよ。'], notes: [{beat:0,midi:60,duration:2}], laterPhrases: [[{beat:0,midi:64,duration:2}],[{beat:0,midi:64,duration:2}]] },
   { title: 'ドからレへ', messages: ['2つの音を行ったり来たりしよう。', '「ド・レ」。後半は「ド・ミ」に変わるよ。'], notes: [{beat:0,midi:60,duration:1},{beat:2,midi:62,duration:1}], laterPhrases: [[{beat:0,midi:60,duration:1},{beat:2,midi:64,duration:1}],[{beat:0,midi:60,duration:1},{beat:2,midi:64,duration:1}]] },
@@ -98,6 +98,15 @@ export const lessons = [
   {title:'Ottoとセッション',session:true,freePitch:true,notes:sessionPhrases[0],
     messages:['ドラム、ベース、コードの伴奏に乗って、Ottoと16小節のセッション！','2小節ずつ交代で弾こう。ナビのリズムに合わせて弾いてみよう！']},
 ]
+
+// An independent starting point for the advanced course, initially based on No.5.
+lessons.push({
+  title:'きらきら星',
+  messages:['きらきら星を弾いてみよう！','Ottoのお手本を聴いて、同じフレーズを弾いてね。'],
+  notes:lessons[4].notes.map(note=>({...note})),
+  earlyPhrases:lessons[4].earlyPhrases?.map(phrase=>phrase.map(note=>({...note}))),
+  laterPhrases:lessons[4].laterPhrases?.map(phrase=>phrase.map(note=>({...note}))),
+})
 
 /** The Otto bar and following user bar share the same phrase.
  * @param {TutorialLesson} lesson @param {number} bar @param {number} [level] @returns {readonly TutorialNote[]} */
@@ -271,7 +280,7 @@ export function createTutorialPlayer({voice,onUpdate,accompaniment,setTimer = (c
           const connected = (lesson.patterns || (lesson.session && isSessionSlide(bar)) || ((index === 7 || index === 8) && bar >= 4 && next && note.beat + note.duration >= next.beat - .001)) && next
           const duration = connected
             ? (next.beat - note.beat) * beatSeconds + (next.midi === note.midi ? -.025 : .01)
-            : note.duration * beatSeconds * (index === 4 && note.duration === 1 ? .8 : 1)
+            : note.duration * beatSeconds * ((index === 4 || index === 10) && note.duration === 1 ? .8 : 1)
           return {midi:note.midi, time:startTime + (bar * 4 + note.beat) * beatSeconds, duration}
         })
       }).flat()
@@ -295,7 +304,7 @@ export function createTutorialPlayer({voice,onUpdate,accompaniment,setTimer = (c
               else if (index === 1) {
                 const chord = lessonThreeChords[Math.floor(event.beat / 2) % lessonThreeChords.length]
                 accompaniment.playAt(chord.notes,event.time,.35,event.beat % 4 === 0 ? .32 : .18,chord.bass)
-              } else if (index === 4) {
+              } else if (index === 4 || index === 10) {
                 const bar = Math.floor(event.beat / 4)
                 const phraseIndex = Math.floor(bar / 4) * 2 + bar % 2
                 const chordIndex = [[0,0],[4,0],[4,0],[3,0]][phraseIndex][Math.floor(event.beat % 4 / 2)]

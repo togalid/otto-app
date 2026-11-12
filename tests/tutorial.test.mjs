@@ -18,7 +18,7 @@ function harness(ready = async () => {}) {
 }
 
 test('ten self-contained lessons fit a one-octave keyboard and one demo bar',()=>{
-  assert.equal(lessons.length,10)
+  assert.equal(lessons.length,11)
   for(const lesson of lessons) {
     assert.ok(lesson.messages.length > 0)
     assert.ok(lesson.notes.length)

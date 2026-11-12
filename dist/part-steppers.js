@@ -239,3 +239,15 @@ export function mountMelodyVoiceChoice(source) {
     app.unmount()
   }}
 }
+
+/** @param {number} value @param {(delta:number)=>void} shift @param {{min?:number,max?:number}} [bounds] */
+export function octaveControl(value, shift, bounds = {}) {
+  return h('div', {class:'keyboard-octave shared-octave-control', role:'group', 'aria-label':'鍵盤のオクターブ'}, [
+    h('span', 'Oct'),
+    h('div', {class:'style-stepper'}, [
+      h('button', {type:'button', 'aria-label':'オクターブを下げる', disabled:value <= (bounds.min ?? -2), onClick:()=>shift(-1)}, '−'),
+      h('output', `${value > 0 ? '+' : ''}${value}`),
+      h('button', {type:'button', 'aria-label':'オクターブを上げる', disabled:value >= (bounds.max ?? 2), onClick:()=>shift(1)}, '＋'),
+    ]),
+  ])
+}

@@ -1,6 +1,5 @@
 // Explicit public files: server code, configuration, and user files are never exposed.
 export const routes = new Map([
-  ['/melody-arrange.html', ['melody-arrange.html', 'text/html']],
   ['/melody-arrange.js', ['melody-arrange.js', 'text/javascript']],
   ['/connect-sky-demo.mid', ['connect-sky-demo.mid', 'audio/midi']],
   ['/song-session.js', ['song-session.js', 'text/javascript']],
@@ -10,11 +9,12 @@ export const routes = new Map([
   ...['tutorial.js', 'tutorial-view.js', 'drum-tutorial.js'].map(file => [`/${file}`, [file, 'text/javascript']]),
   ['/features.js', ['features.js', 'text/javascript']],
   ['/song-score.js', ['song-score.js', 'text/javascript']],
+  ['/score-navigation.js', ['score-navigation.js', 'text/javascript']],
   ['/score-pad.js', ['score-pad.js', 'text/javascript']],
   ['/chord-pad.html', ['chord-pad.html', 'text/html']],
   ['/chord-pad.js', ['chord-pad.js', 'text/javascript']],
   ['/chord-pad.css', ['chord-pad.css', 'text/css']],
-  ...['arrangement-file.js', 'part-settings.js', 'reference-timing-grid.js', 'reference-key-preview.js', 'arrangement-selects.js', 'bass-detail.js', 'backing-detail.js', 'quick-mixer.js', 'reference-timing-view.js', 'main-controls.js', 'part-steppers.js', 'chord-grid.js', 'choice-menu.js', 'transport-view.js', 'drum-grid.js', 'chord-monitor.js', 'appearance-dialog.js', 'song-dialog.js', 'melody-view.js', 'reference-player.js', 'reference-import.js', 'otto-phrases.js', 'chord-harmony.js', 'chord-voicing.js', 'reference-analysis.js', 'reference-song-analysis.js', 'reference-performance.js', 'reference-analysis-worker.js', 'reference-analysis-client.js', 'ornaments.js', 'ornament-audio.js', 'ornament-ui.js', 'style-ornaments.js', 'otto-style.js'].map(file => [`/${file}`, [file, 'text/javascript']]),
+  ...['melody-presets.js', 'arrangement-file.js', 'part-settings.js', 'reference-timing-grid.js', 'reference-key-preview.js', 'arrangement-selects.js', 'bass-detail.js', 'backing-detail.js', 'quick-mixer.js', 'reference-timing-view.js', 'main-controls.js', 'part-steppers.js', 'chord-grid.js', 'choice-menu.js', 'transport-view.js', 'drum-grid.js', 'chord-monitor.js', 'appearance-dialog.js', 'song-dialog.js', 'melody-view.js', 'reference-player.js', 'reference-import.js', 'otto-phrases.js', 'chord-harmony.js', 'chord-voicing.js', 'reference-analysis.js', 'reference-song-analysis.js', 'reference-performance.js', 'reference-analysis-worker.js', 'reference-analysis-client.js', 'ornaments.js', 'ornament-audio.js', 'ornament-ui.js', 'style-ornaments.js', 'otto-style.js'].map(file => [`/${file}`, [file, 'text/javascript']]),
   ['/keyboard.js', ['keyboard.js', 'text/javascript']],
   ['/buddy-view.js', ['buddy-view.js', 'text/javascript']],
   ['/buddy.js', ['buddy.js', 'text/javascript']],

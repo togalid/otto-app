@@ -18,7 +18,8 @@ function harness(ready = async () => {}) {
 }
 
 test('tutorial lessons fit a one-octave keyboard and four-beat bars',()=>{
-  assert.equal(lessons.length - advancedStart,7)
+  assert.equal(lessons.length - advancedStart,5)
+  assert.equal(lessons.at(-1).title,'春の小川')
   for(const lesson of lessons) {
     assert.ok(lesson.messages.length > 0)
     assert.ok(lesson.notes.length)
@@ -43,7 +44,7 @@ test('Mary starts with a dotted rhythm and Otto separates repeated notes', async
 })
 
 test('advanced songs schedule accompaniment through both turns and resolve to their tonic', async () => {
-  for (const [offset, tonic] of [36,36,38,41,36,40,38].entries()) {
+  for (const [offset, tonic] of [36,36,38,41,36].entries()) {
     const h = harness()
     const backing = []
     const player = createTutorialPlayer({
@@ -542,4 +543,29 @@ test('sustained notes accept a slightly early release without filling larger gap
   assert.equal(responseComplete([{beat:0,midi:60,duration:2}], [{bar:1,midi:60,start:0,end:1.65}], 1), true)
   assert.equal(responseComplete([{beat:0,midi:60,duration:2}], [{bar:1,midi:60,start:0,end:1.64}], 1), false)
   assert.equal(responseComplete([{beat:0,midi:60,duration:.7}], [{bar:1,midi:60,start:0,end:.525}], 1), true)
+})
+
+test('moving lessons to different indices preserves their playback', async () => {
+  const original = lessons.slice()
+  async function trace(lesson) {
+    const h = harness()
+    const backing = []
+    const player = createTutorialPlayer({
+      voice:h.voice,onUpdate:state=>h.states.push(state),
+      accompaniment:{ready:async()=>{},playAt:(...args)=>backing.push(args),silence:()=>{}},
+      setTimer:cb=>{h.timers.set(1,cb);return 1},clearTimer:()=>h.timers.clear(),
+    })
+    const index = lessons.indexOf(lesson)
+    await player.start(index, lesson.session ? 1 : 0, lesson.settings?.tempo)
+    for (let i = 0; i < 1500 && h.timers.size; i++) h.tick(10 + i * .05)
+    return {notes:h.notes,backing,states:h.states,freePitch:isTutorialFreePitch(index,65)}
+  }
+  const expected = []
+  for (const lesson of original) expected.push(await trace(lesson))
+  try {
+    lessons.reverse()
+    for (const [i,lesson] of original.entries()) assert.deepEqual(await trace(lesson),expected[i],lesson.title)
+  } finally {
+    lessons.splice(0,lessons.length,...original)
+  }
 })

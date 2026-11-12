@@ -6,13 +6,36 @@ The browser loads authored native ES modules from `dist/`. The transport, score,
 
 `app.js` composes controls, instruments, progression, and Otto. Musical events use the AudioContext clock and look-ahead scheduling. Visual work must never become the audio clock. The reference track uses the same AudioContext, starts at the scheduled backing bar time plus a shared source offset, and uses the part mixer for volume, mute, and solo. Large reference analysis belongs off the UI thread; worker output is accepted only for the current file/selection.
 
+## Ottoのモード構成（開発方針）
+
+| モード | ユーザーの目的 | 画面の中心 |
+| --- | --- | --- |
+| チュートリアル | 学ぶ | お手本を聴き、まねして、演奏を練習する |
+| ライブ | 演奏する | スタイルや曲に合わせて弾き、Ottoとセッションする |
+| スタジオ | 作る・編曲する | メロディ、コード進行、伴奏パートを編集し、スタイルとして仕上げる |
+
+スタジオはスタイル編集の快適さを優先する。伴奏再生とOttoとのセッションは、編集中のスタイルの試聴・動作確認に使う。演奏を楽しむためのセッション体験はライブに集約する。
+
+独立したメロディアレンジ画面は終了し、譜面編集はスタジオのメロディパートに統合する。メニューの「ライブ」から既存の曲セッションを開く。ライブ専用画面への発展は今後の開発項目とする。
+
+### ライブの開始フロー（構想）
+
+1. 曲を選ぶ。
+2. 遊び方を選ぶ。「Ottoとセッション」「自分で弾く」「ゲームモード」から選択する。
+3. 楽器を選ぶ。「メロディ」「ドラム」「ベース」「バッキング」から選択する。
+
+曲を選んだあと、遊び方と楽器の選択が揃ったら曲を開始する。ゲームモードでは、チュートリアルのようにお手本に合わせて演奏し、高得点を目指す。
+
 ## Ownership
 
 | Change | Read first | Focused tests |
 | --- | --- | --- |
+| Shared score navigation, lanes, note rendering and editing adapters | `score-navigation.js`, `tutorial-view.js`, `melody-arrange.js` | `score-navigation`, `tutorial`, browser |
 | Tutorial curriculum, eight-bar clock, dedicated lesson UI | `tutorial.js`, `tutorial-view.js`; mode lifecycle in `melody-view.js` | `tests/tutorial.test.mjs`, browser |
 | Drum tutorial, mirrored pads, staged rhythm practice and sessions | `drum-tutorial.js`; category navigation in `melody-view.js` | `drum-tutorial`, browser |
+| Shared tutorial score, stamp and count label | `tutorial-view.js`; count sound in `tutorial.js` | `tests/tutorial.test.mjs`, browser |
 | Instrument and chord choice menus | `choice-menu.js`, `part-steppers.js` | browser |
+| Song session and melody arrangement octave control | `part-steppers.js` (`octaveControl`), `song-session.js`, `melody-arrange.js` | browser |
 | Score grid and part pattern controls | `chord-grid.js`, `backing-detail.js`, `part-steppers.js` | browser |
 | Harmony, chord labels | `chord-harmony.js`, `music.js`, `presets.js` | `music`, `presets` |
 | Chord register, voice leading and Pad voicings | `chord-voicing.js` | `chord-voicing`, `chord-pad-voicing` |
@@ -28,6 +51,7 @@ The browser loads authored native ES modules from `dist/`. The transport, score,
 | Style and progression selectors | `arrangement-selects.js`, arrangement handlers in `app.js` | browser |
 | Bass detail and phrase preview | `bass-detail.js`, `groove.js` | browser |
 | Basic parts, section knobs and reference header | `main-controls.js` | browser |
+| Phone tempo entry and shared knob handling | `main-controls.js`, `reference-timing-view.js` | `tempo-entry`, browser |
 | Quick mixer, accompaniment pads and shared choice fields | `quick-mixer.js`, `part-steppers.js` | `part-steppers`, browser |
 | Reference waveform, timing and key assistance | `reference-timing-view.js` | `reference-timing-view`, browser |
 | Mobile score editor | `score-pad.js`, mobile toolbar in `chord-grid.js` | browser |
@@ -35,7 +59,7 @@ The browser loads authored native ES modules from `dist/`. The transport, score,
 | Reference import processing and PCM encoding | `reference-import.js`, analysis worker modules | `reference-import`, `reference-player` |
 | File serving/stems | `server.mjs`, `server/` | server tests |
 | Appearance | `appearance-dialog.js`, `skins.js`, `style.css`, `skins.css` | browser |
-| Portable settings | `arrangement-file.js`, UI adapter at the end of `app.js` | temporary JSON round trip |
+| Portable settings | `arrangement-file.js`, UI adapter at the end of `app.js`, and `scripts/set-style-default.mjs` for packaged defaults | temporary JSON round trip |
 
 Test names are `tests/<name>.test.mjs`. Sources referenced above live under `dist/` unless noted. Keep public analysis exports compatible with existing consumers.
 
@@ -121,3 +145,5 @@ Large preset/timbre tables are mostly data and are lower priority. Do not migrat
 Mode and tutorial-instrument selection use the shared Vue selector in `melody-view.js`: browsing changes the preview, and a separate confirmation enters the mode. New mode entries belong in its option data. The planned curated-MP3 mode (“曲でセッション”) is a preview-only, unavailable entry; it does not load audio or claim a catalog exists. A future catalog should provide preconfigured source timing and session settings before enabling entry.
 
 `arrangement-selects.js` owns the style list, selected-detail preview and explicit application through the existing `chooseStyle` path. `selection-browser.css` supplies its responsive appearance. The song/settings dialog remains JSON save/load. Validate preview/cancel without changing active music, confirmation, keyboard focus, and narrow screens.
+
+スタイルのメロディプリセットは `scripts/set-melody-preset.mjs` でMIDIから登録し、`dist/melody-presets.js` のノートを `progression.js` が伴奏と一緒に予約します。

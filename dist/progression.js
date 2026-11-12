@@ -1,3 +1,4 @@
+import { melodyPresets } from './melody-presets.js'
 import { chordWeights } from './audio.js'
 import { planBassPattern, bassToneOffset, bassArticulation, swungBassBeat } from './groove.js'
 import { backingEvents, planBackingBar, backingAttacks } from './backing.js'
@@ -219,6 +220,7 @@ export class Progression {
   /** @type {import('./audio.js').Instrument | undefined} */
   melody
   melodyPattern = ''
+  presetMelody = false
   /** @type {{id:string,pattern:string,voice:{ready():Promise<void>,silence():void,schedule(event:import('./ornaments.js').OrnamentEvent,time:number,seconds:number):void}}[]} */
   ornaments = []
   running = false
@@ -379,6 +381,21 @@ export class Progression {
       })) {
         playBacking(event.notes, this.nextTime + event.offset, event.length, event.level,
           chordWeights(event.notes, event.chord, barKey), event.chord)
+      }
+      if (this.melody && this.presetMelody) {
+        const notes = melodyPresets[score.style ?? this.genre] ?? []
+        if (notes.length) {
+          let barBeat = 0
+          for (let bar = 0; bar < this.nextStep; bar++) barBeat += this.meterForBar(bar)
+          const end = barBeat + this.beatsPerBar
+          const secondsPerBeat = duration / this.beatsPerBar
+          for (const note of notes) {
+            if (note.beat >= end) break
+            if (note.beat < barBeat + startBeat) continue
+            this.melody.playAt([note.midi], this.nextTime + (note.beat - barBeat - startBeat) * secondsPerBeat,
+              note.duration * secondsPerBeat, note.velocity)
+          }
+        }
       }
       if (this.melody && this.melodyPattern) {
         for (const change of changes) {

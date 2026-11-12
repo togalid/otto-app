@@ -1,7 +1,7 @@
 import { mountSongSession } from './song-session.js'
 import { mountDrumTutorial } from './drum-tutorial.js'
 import { mountTutorial } from './tutorial-view.js'
-import { advancedStart, lessons, readDevelopmentScreen, saveDevelopmentScreen } from './tutorial.js'
+import { lessons, readDevelopmentScreen, saveDevelopmentScreen } from './tutorial.js'
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { genres } from './groove.js'
 import { presets, notes, melodyPalette, melodyRole, displayChordParts } from './music.js'
@@ -416,10 +416,44 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
   const songPrototype = document.createElement('section')
   songPrototype.className = 'tutorial-screen song-session-prototype'
   songPrototype.hidden = true
-  songPrototype.innerHTML = '<header class="selection-header"><button type="button" data-song-back>← メニュー</button><h1>曲でセッション</h1></header><main aria-label="曲でセッションの試作エリア"></main>'
+  songPrototype.innerHTML = '<header class="selection-header"><button type="button" data-song-back>← メニュー</button><h1>ライブ</h1></header><section class="live-setup"></section><main aria-label="ライブ演奏" hidden></main>'
   songPrototype.querySelector('[data-song-back]')?.addEventListener('click', () => open('menu'))
   menu.after(categories, drumRoot, songPrototype)
-  const songSession = mountSongSession(/** @type {HTMLElement} */ (songPrototype.querySelector('main')))
+  const livePerformance = /** @type {HTMLElement} */ (songPrototype.querySelector('main'))
+  const songSession = mountSongSession(livePerformance)
+  const liveStep = ref(0)
+  const playMode = ref('')
+  const playModes = ['Ottoとセッション', '自分で弾く', 'ゲームモード']
+  const liveSetup = /** @type {HTMLElement} */ (songPrototype.querySelector('.live-setup'))
+  /** @param {string} label @param {()=>void} select */
+  const liveChoice = (label, select) => h('button', {type:'button', onClick:select}, label)
+  createApp({render: () => {
+    if (liveStep.value === 3) return [
+      h('p', playMode.value === '自分で弾く' ? playMode.value : `${playMode.value}（試作では自由演奏）`),
+      liveChoice('選び直す', () => {
+        songSession.stop()
+        livePerformance.hidden = true
+        liveStep.value = 0
+      }),
+    ]
+    const title = ['曲を選ぶ', '遊び方を選ぶ', '楽器を選ぶ'][liveStep.value]
+    const choices = liveStep.value === 0 ? [liveChoice('Otto体験用（ベース抜き）', () => {liveStep.value = 1})]
+      : liveStep.value === 1 ? playModes.map(mode => liveChoice(mode, () => {
+        playMode.value = mode
+        liveStep.value = 2
+      }))
+      : songSession.parts.map(part => liveChoice(part.label, () => {
+        songSession.selectPart(part.id)
+        livePerformance.hidden = false
+        liveStep.value = 3
+        void songSession.togglePlayback()
+      }))
+    return [
+      h('h2', {tabindex:-1}, title),
+      h('div', {class:'song-session-parts', role:'group', 'aria-label':title}, choices),
+      liveStep.value ? liveChoice('← 戻る', () => {liveStep.value--}) : null,
+    ]
+  }}).mount(liveSetup)
   const drumView = mountDrumTutorial(drumRoot, () => open('categories'))
   categories.querySelector('[data-category-back]')?.addEventListener('click', () => open('menu'))
 
@@ -427,6 +461,10 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
   function open(mode, restore = false) {
     stopPlayback()
     if (!songPrototype.hidden) songSession.stop()
+    if (mode === 'song-session') {
+      liveStep.value = 0
+      livePerformance.hidden = true
+    }
     tutorialView.close()
     drumView.close()
     categories.hidden = mode !== 'categories'
@@ -451,24 +489,21 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
   const modeHost = menu.querySelector('#mode-selection')
   if (modeHost) mountSelectionStage(modeHost, [
     {id:'categories',title:'チュートリアル',subtitle:'お手本に合わせてチャレンジ',description:'聴いて、まねして、ひとつずつ。楽器を選んでリズムの冒険へ。',badge:'はじめてでも大丈夫',icon:'keys',image:'./mode-tutorial.svg'},
-    {id:'song-session',title:'曲でセッション',subtitle:'曲に合わせて演奏',description:'デモ曲に合わせて演奏しよう。ベースは譜面を見ながら練習できるよ。',badge:'ベータ',icon:'session',image:'./mode-song.svg'},
+    {id:'song-session',title:'ライブ',subtitle:'曲に合わせて演奏',description:'デモ曲に合わせて演奏しよう。ベースは譜面を見ながら練習できるよ。',badge:'ベータ',icon:'session',image:'./mode-song.svg'},
     {id:'free',title:'スタジオ',subtitle:'自由に作曲・演奏',description:'音色や伴奏にこだわって、自由に作曲・演奏を楽しもう。',badge:'じっくり音楽づくり',icon:'session',image:'./mode-free.svg'},
-    {id:'melody-arrange',title:'メロディアレンジ',subtitle:'コネクト・スカイ',description:'お手本を聴いて、鍵盤で一音ずつ変えてみよう。',badge:'試作',icon:'keys'},
-  ], mode => {
-    if (mode === 'melody-arrange') location.assign('./melody-arrange.html')
-    else open(mode)
-  })
+  ], mode => open(mode))
   const categoryHost = categories.querySelector('.category-selection')
   if (categoryHost) mountSelectionStage(categoryHost, [
-    {id:'melody-basic',title:'メロディ編 1',detailTitle:'きほんのそうさ',subtitle:'鍵盤で音とリズムを楽しもう',description:'ひとつの音からスライドまで。Ottoのお手本に合わせて弾いてみよう。',badge:'7 LESSONS',icon:'keys'},
-    {id:'melody-advanced',title:'メロディ編 2',detailTitle:'いろんな曲',subtitle:'曲のメロディを弾こう',description:'「ちょうちょう」から、シャープやフラットが出てくる曲まで。',badge:`${lessons.length - advancedStart} LESSONS`,icon:'keys'},
-    {id:'adlib',title:'メロディ編 3',detailTitle:'即興アレンジ',subtitle:'好きな音でメロディをつくろう',description:'好きな音を選んで、その場でメロディをつくろう。Ottoとのセッションにも挑戦！',badge:'3 LESSONS',icon:'keys'},
+    {id:'melody-basic',title:'メロディ編 1',detailTitle:'きほんのそうさ',subtitle:'鍵盤で音とリズムを楽しもう',description:'ひとつの音からスライドまで。Ottoのお手本に合わせて弾いてみよう。',badge:`${lessons.filter(lesson=>(lesson.settings?.course ?? 'basic') === 'basic').length} LESSONS`,icon:'keys'},
+    {id:'melody-advanced',title:'メロディ編 2',detailTitle:'いろんな曲',subtitle:'曲のメロディを弾こう',description:'「ちょうちょう」から、シャープやフラットが出てくる曲まで。',badge:`${lessons.filter(lesson=>lesson.settings?.course === 'songs').length} LESSONS`,icon:'keys'},
+    {id:'adlib',title:'メロディ編 3',detailTitle:'即興アレンジ',subtitle:'好きな音でメロディをつくろう',description:'好きな音を選んで、その場でメロディをつくろう。Ottoとのセッションにも挑戦！',badge:`${lessons.filter(lesson=>lesson.settings?.course === 'adlib').length} LESSONS`,icon:'keys'},
     {id:'drum-tutorial',title:'ビート編',subtitle:'8つのパッドでビートを刻もう',description:'左右の手で、トン、タン。基本のリズムからセッションまで、少しずつステップアップ。',badge:'10 LESSONS',icon:'drums'},
     {id:'bass',title:'ベース編',subtitle:'',description:'',badge:'',icon:'keys',disabled:true},
     {id:'chords',title:'コード編',subtitle:'',description:'',badge:'',icon:'keys',disabled:true},
   ], mode => {
-    const index = { 'melody-basic':0, 'melody-advanced':advancedStart, 'adlib':7 }[mode]
-    if (index !== undefined) { open('tutorial'); tutorialView.selectLesson(index) }
+    const course = { 'melody-basic':'basic', 'melody-advanced':'songs', 'adlib':'adlib' }[mode]
+    const index = course === undefined ? -1 : lessons.findIndex(lesson=>(lesson.settings?.course ?? 'basic') === course)
+    if (index >= 0) { open('tutorial'); tutorialView.selectLesson(index) }
     else open(mode)
   })
   const midiButton = document.querySelector('#mode-midi')

@@ -5,7 +5,7 @@ import { padChordNotes } from './music.js'
 import { createBackingDetail } from './backing-detail.js'
 import { performanceMatch } from './buddy.js'
 import { migrateSongSections } from './song-score.js'
-import { sectionControlIds, arrangementControlIds, arrangementMixIds, decodeArrangement, encodeArrangement, restoreArrangement } from './arrangement-file.js'
+import { sectionControlIds, arrangementControlIds, arrangementMixIds, styleDefaultJson, decodeArrangement, encodeArrangement, restoreArrangement } from './arrangement-file.js'
 import { mountBassDetail } from './bass-detail.js'
 import { mountStyleChoices, mountPresetChoices } from './arrangement-selects.js'
 import { mountBasicParts, mountReferenceControls, mountReferenceDetail, bindKnobDrag, bindTempoKnob, mountPartIcons, mountSectionKnobs } from './main-controls.js'
@@ -1140,7 +1140,15 @@ buddyController = mountBuddy({
   progression, instrument, drums,
   getNotes: () => playableNotes,
   refreshTransport: updateTransport,
-  onModeChange: mode => { melodyMode.value = ['pc', 'you'].includes(mode) ? 'session' : mode; melodyMode.dispatchEvent(new Event('part-sync')) },
+  onModeChange: mode => {
+    const preset = mode === 'preset'
+    const presetChanged = progression.presetMelody !== preset
+    if (presetChanged) instrument.silence()
+    progression.presetMelody = preset
+    melodyMode.value = ['pc', 'you'].includes(mode) ? 'session' : mode
+    melodyMode.dispatchEvent(new Event('part-sync'))
+    if (presetChanged) rememberSectionParts()
+  },
   onPlayStyleChange: style => setJazzSwing(style === 'jazz'),
   notesAt: (bar, beat, absoluteBar) => {
     const {section, bar:localBar} = progression.positionAt(absoluteBar)
@@ -1310,7 +1318,7 @@ function saveArrangement() {
   const url = URL.createObjectURL(new Blob([json], {type: 'application/json'}))
   const link = document.createElement('a')
   link.href = url
-  link.download = 'oto-style.json'
+  link.download = `oto-${genreSelect.value}.json`
   link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
   return '設定ファイルを書き出しました。'
@@ -1320,65 +1328,83 @@ function saveArrangement() {
 async function loadArrangement(file) {
   try {
     if (file.size > 16 * 1024 * 1024) throw new Error('size')
-    const rules = [...savedControls.values()].map(el => {
-      if (el instanceof HTMLSelectElement && el.id !== 'genre') {
-        const options = Array.from(el.options, option => option.value)
-        if (el.id === 'bass-pattern') options.push('')
-        return {id: el.id, options}
-      }
-      if (el instanceof HTMLInputElement && (el.type === 'range' || el.type === 'number')) {
-        return {id: el.id, range: /** @type {[number,number]} */ ([Number(el.min), Number(el.max)])}
-      }
-      return {id: el.id}
-    })
-    const arrangement = decodeArrangement(await file.text(), rules)
-    await restoreArrangement(arrangement, {
-      stop() { buddyController?.stop(); progression.stop() },
-      chooseStyle,
-      applyControl({id, value, checked}) {
-        const el = savedControls.get(id)
-        if (!el) return
-        if (el instanceof HTMLSelectElement && partSettings.apply(el, value)) {
-          rememberSectionParts()
-          return
-        }
-        el.value = value
-        if (el instanceof HTMLInputElement) el.checked = checked
-        const eventType = el.type === 'range' || el.type === 'number' ? 'input' : 'change'
-        el.dispatchEvent(new Event(eventType, {bubbles: true}))
-      },
-      applyMix({id, pressed}) {
-        const el = savedMix.get(id)
-        if (el && (el.getAttribute('aria-pressed') === 'true') !== pressed) el.click()
-      },
-      applyScore(score, sections) {
-        progression.drumRate = score.drumRate ?? 1
-        const selectedRate = /** @type {HTMLInputElement | null} */ (document.querySelector(`input[name="drum-rate"][value="${progression.drumRate}"]`))
-        if (selectedRate) selectedRate.checked = true
-        progression.beatsPerBar = score.beatsPerBar ?? 4
-        refreshMeter()
-        const fallbackParts = readSectionParts()
-        for (const section of sections) section.partSettings ??= {...fallbackParts}
-        progression.sections = migrateSongSections(sections)
-        progression.songMode = true
-        scorePage.value=0
-        sectionRangeRevision.value++
-        progression.bassFeel = score.bassFeel
-        progression.bassTones = score.bassTones
-        progression.drumSteps = score.drumSteps
-        progression.drumAccents = score.drumAccents ?? []
-        progression.drumPitch = score.drumPitch ?? {}
-        drumGrid.refreshSettings()
-        editSection(0)
-        renderDrumSteps()
-        buddyController?.styleChanged()
-      },
-    })
+    await applyArrangementJson(await file.text())
     return '保存した設定を読み込みました。'
   } catch {
     return '読み込めませんでした。otoで保存した設定ファイルを選んでください。'
   }
 }
+
+/** @param {string} json */
+async function applyArrangementJson(json, selectedStyle = false) {
+  const rules = [...savedControls.values()].map(el => {
+    if (el instanceof HTMLSelectElement && el.id !== 'genre') {
+      const options = Array.from(el.options, option => option.value)
+      if (el.id === 'bass-pattern') options.push('')
+      return {id: el.id, options}
+    }
+    if (el instanceof HTMLInputElement && (el.type === 'range' || el.type === 'number')) {
+      return {id: el.id, range: /** @type {[number,number]} */ ([Number(el.min), Number(el.max)])}
+    }
+    return {id: el.id}
+  })
+  const arrangement = decodeArrangement(json, rules)
+  await restoreArrangement(arrangement, {
+    stop() { buddyController?.stop(); progression.stop() },
+    chooseStyle: selectedStyle ? async () => {} : async id => {
+      restoringArrangementStyle = true
+      try { await chooseStyle(id) } finally { restoringArrangementStyle = false }
+    },
+    applyControl({id, value, checked}) {
+      const el = savedControls.get(id)
+      if (!el) return
+      if (el instanceof HTMLSelectElement && partSettings.apply(el, value)) {
+        rememberSectionParts()
+        return
+      }
+      el.value = value
+      if (el instanceof HTMLInputElement) el.checked = checked
+      const eventType = el.type === 'range' || el.type === 'number' ? 'input' : 'change'
+      el.dispatchEvent(new Event(eventType, {bubbles: true}))
+    },
+    applyMix({id, pressed}) {
+      const el = savedMix.get(id)
+      if (el && (el.getAttribute('aria-pressed') === 'true') !== pressed) el.click()
+    },
+    applyScore(score, sections) {
+      progression.drumRate = score.drumRate ?? 1
+      const selectedRate = /** @type {HTMLInputElement | null} */ (document.querySelector(`input[name="drum-rate"][value="${progression.drumRate}"]`))
+      if (selectedRate) selectedRate.checked = true
+      progression.beatsPerBar = score.beatsPerBar ?? 4
+      refreshMeter()
+      const fallbackParts = readSectionParts()
+      for (const section of sections) section.partSettings ??= {...fallbackParts}
+      progression.sections = migrateSongSections(sections)
+      progression.songMode = true
+      scorePage.value=0
+      sectionRangeRevision.value++
+      progression.bassFeel = score.bassFeel
+      progression.bassTones = score.bassTones
+      progression.drumSteps = score.drumSteps
+      progression.drumAccents = score.drumAccents ?? []
+      progression.drumPitch = score.drumPitch ?? {}
+      drumGrid.refreshSettings()
+      editSection(0)
+      renderDrumSteps()
+      buddyController?.styleChanged()
+    },
+  })
+}
+
+let restoringArrangementStyle = false
+genreSelect.addEventListener('change', () => {
+  if (restoringArrangementStyle) return
+  const json = styleDefaultJson[genreSelect.value]
+  if (!json) return
+  void applyArrangementJson(json, true).catch(() => {
+    if (progressionStatus) progressionStatus.textContent = 'スタイルの既定の編成を読み込めませんでした。'
+  })
+})
 
 const songOpen = /** @type {HTMLButtonElement} */ (document.querySelector('#song-open'))
 /** @type {Promise<ReturnType<import('./song-dialog.js').mountSongDialog>> | undefined} */
@@ -1387,7 +1413,11 @@ songOpen.addEventListener('click', async () => {
   songOpen.disabled = true
   try {
     songDialogPromise ??= import('./song-dialog.js').then(({ mountSongDialog }) =>
-      mountSongDialog({ save: saveArrangement, load: loadArrangement, onClose: () => document.getElementById('settings-open')?.focus() }))
+      mountSongDialog({
+        save: saveArrangement,
+        load: loadArrangement,
+        onClose: () => document.getElementById('settings-open')?.focus(),
+      }))
     const dialog = await songDialogPromise
     dialog.open()
   } catch {
@@ -1517,3 +1547,13 @@ const tutorialView = mountModeMenu(() => {
   magicVoice.stop()
   instrument.silence()
 }, () => midiInput.connect(), () => partSettings.apply(melodyMode, 'session'))
+
+
+// Both Studio and the prototype mount the same melody editor.
+const studioMelodyHost = document.createElement('section')
+studioMelodyHost.className = 'melody-arrange tutorial-screen studio-melody-editor'
+studioMelodyHost.setAttribute('aria-label', 'メロディを編集')
+document.querySelector('#detail-melody')?.append(studioMelodyHost)
+void import('./melody-arrange.js').then(({mountMelodyEditor}) => {
+  mountMelodyEditor(studioMelodyHost, {empty:true, barCount:()=>progression.barCount()})
+})

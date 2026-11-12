@@ -2,6 +2,7 @@ import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { Instrument } from './audio.js'
 import { capturePianoPointer, pianoKey, pianoKeyAtPointer, pianoNotes, pianoWhiteLabel } from './keyboard.js'
 import { DrumSynth } from './rhythm.js'
+import { octaveControl } from './part-steppers.js'
 
 // Bass MIDI transcription: [start tick, duration in ticks, MIDI pitch].
 const bassNotes = [
@@ -93,6 +94,7 @@ export function mountSongSession(host) {
     { id: 'melody', label: 'メロディ', icon: '♫' },
     { id: 'drums', label: 'ドラム', icon: '▦' },
     { id: 'bass', label: 'ベース', icon: '♬' },
+    { id: 'backing', label: 'バッキング', icon: '▥' },
   ]
   const keys = pianoNotes.slice(0, 13).map(pianoKey)
   let whiteCount = 0
@@ -239,6 +241,16 @@ export function mountSongSession(host) {
     octave.value += delta
   }
 
+  /** @param {string} id */
+  function selectPart(id) {
+    if (!parts.some(item => item.id === id)) return
+    releaseKey()
+    pointer = -1
+    voice.silence()
+    midiHeld.value.clear()
+    part.value = id
+  }
+
   createApp({ render: () => {
     const bar = Math.floor(position.value / barTicks)
     const barStart = firstTick + bar * barTicks
@@ -253,7 +265,7 @@ export function mountSongSession(host) {
     h('div', { class: 'song-session-parts', role: 'group', 'aria-label': '演奏パート' }, parts.map(item =>
       h('button', {
         type: 'button', 'aria-pressed': part.value === item.id,
-        onClick: () => { releaseKey(); pointer = -1; voice.silence(); midiHeld.value.clear(); part.value = item.id },
+        onClick: () => selectPart(item.id),
       }, [h('span', { 'aria-hidden': 'true' }, item.icon), item.label]),
     )),
     h('section', { class: 'tutorial-navigation', 'aria-label': '譜面' }, [
@@ -282,14 +294,7 @@ export function mountSongSession(host) {
         [['kick', 'キック'], ['snare', 'スネア'], ['hat', 'ハイハット']].map(([id, label]) =>
           h('button', { type: 'button', onClick: () => void playNote(id) }, label)))
       : h('div', { class: 'song-session-keyboard-dock' }, [
-        h('div', { class: 'keyboard-octave song-session-octave', role: 'group', 'aria-label': '鍵盤のオクターブ' }, [
-      h('span', 'Oct'),
-      h('div', { class: 'style-stepper' }, [
-      h('button', { type:'button', 'aria-label':'オクターブを下げる', disabled:octave.value <= -2, onClick:()=>shiftOctave(-1) }, '−'),
-      h('output', `${octave.value > 0 ? '+' : ''}${octave.value}`),
-      h('button', { type:'button', 'aria-label':'オクターブを上げる', disabled:octave.value >= 2, onClick:()=>shiftOctave(1) }, '＋'),
-      ]),
-    ]),
+        octaveControl(octave.value, shiftOctave),
         h('div', {
         class: 'tutorial-keyboard song-session-keys', role: 'group', 'aria-label': `C${3 + octave.value}からC${4 + octave.value}の鍵盤`,
         style: { gridTemplateColumns: `repeat(${whiteCount}, minmax(0, 1fr))` },
@@ -327,6 +332,8 @@ export function mountSongSession(host) {
   return {
     stop,
     togglePlayback,
+    selectPart,
+    parts,
     /** @param {number} midi */
     midiRelease(midi) { if (midiHeld.value.delete(midi)) voice.release(instrumentPitch(midi)) },
     /** @param {number} midi */

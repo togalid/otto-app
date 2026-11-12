@@ -58,6 +58,7 @@ export function mountBuddy(source, mountView = mountBuddyView) {
   partner.singing = true
   const lab=ref(/** @type {OttoLabSettings} */ ({...defaultOttoLab}))
   const labMode=ref(false)
+  const presetMode = ref(false)
   const sessionMode=ref(false)
   view.sessionVisible=sessionMode.value
   /** @type {PhraseNote[]} */
@@ -503,13 +504,14 @@ export function mountBuddy(source, mountView = mountBuddyView) {
   }
   /** @param {string} value */
   function setPlayMode(value) {
-    if (!['session', 'all-pc', 'all-you'].includes(value)) return
+    if (!['session', 'all-pc', 'all-you', 'preset'].includes(value)) return
+    presetMode.value = value === 'preset'
     sessionMode.value = value === 'session'
     view.sessionVisible = sessionMode.value
     labMode.value = value === 'all-pc'
-    setMode(sessionMode.value ? (userFirst ? 'you' : 'pc') : value)
+    setMode(sessionMode.value ? (userFirst ? 'you' : 'pc') : presetMode.value ? 'all-you' : value)
     source.onModeChange(sessionMode.value ? 'session' : value)
-    if (value === 'all-you') stop(false)
+    if (value === 'all-you' || presetMode.value) stop(false)
     else if (transport.running && !active && !preparing) void joinPlayback()
   }
   window.addEventListener('blur', () => { if (active || preparing) stop() })
@@ -537,7 +539,7 @@ export function mountBuddy(source, mountView = mountBuddyView) {
     scheduled.clear()
   }
   if (mountView === mountBuddyView) mountBuddyLab(panel, {
-    view, player, partner, lab, labMode, sessionMode, setPlayMode,
+    view, player, partner, lab, labMode, sessionMode, presetMode, setPlayMode,
     onPlayStyleChange:source.onPlayStyleChange,
   })
   /** @param {number} amount */

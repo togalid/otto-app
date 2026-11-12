@@ -1,8 +1,8 @@
-import { TutorialCompanion, TutorialSelector, TutorialTempo, playTutorialSuccess } from './tutorial-view.js'
+import { TutorialCompanion, TutorialSelector, TutorialTempo, TutorialScore, tutorialCountLabel, playTutorialSuccess } from './tutorial-view.js'
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { audioContext, Instrument } from './audio.js'
-import { BassSynth, swungBassBeat } from './groove.js'
-import { readDevelopmentScreen, saveDevelopmentScreen } from './tutorial.js'
+import { BassSynth, swungBassBeat, genres } from './groove.js'
+import { readDevelopmentScreen, saveDevelopmentScreen, playTutorialCount } from './tutorial.js'
 
 export const drumPads = Object.freeze([
   {name:'ハイハット',sound:'hat',hand:'左',finger:'薬指',key:'a',pan:-.24,level:.72},
@@ -128,7 +128,8 @@ export function mountDrumTutorial(host,onBack) {
   /** @type {Set<number>} */ let matches=new Set()
   /** @type {Map<number,Set<number>>} */ const sessionMatches=new Map()
   /** @type {Set<OscillatorNode>} */ const successSounds=new Set()
-  const backing=new Instrument('chord'), melody=new Instrument('melody'), bass=new BassSynth(backing)
+  const backing=new Instrument('chord'), melody=new Instrument('melody'), countVoice=new Instrument('chord'), bass=new BassSynth(backing)
+  countVoice.setTimbre(genres.find(item=>item.id==='pop')?.chord ?? 'piano')
   backing.setTimbre('piano'); melody.setTimbre('lead-round'); bass.setVolume(.25)
   let secondsPerBeat=60/DRUM_LESSON_BPM
   const advanced=()=>advancedStages[state.stage-5]
@@ -180,7 +181,7 @@ export function mountDrumTutorial(host,onBack) {
   }
   function cancel() {
     generation++;window.clearInterval(tick);cancelAnimationFrame(frame)
-    backing.silence();melody.silence();bass.silence()
+    backing.silence();melody.silence();countVoice.silence();bass.silence()
     successSounds.forEach(source=>{try{source.stop()}catch{}});successSounds.clear()
     sources.forEach(source=>{try{source.stop()}catch{}});sources.clear()
     flashes.forEach(timer=>window.clearTimeout(timer));flashes.clear()
@@ -214,7 +215,7 @@ export function mountDrumTutorial(host,onBack) {
     try {
       await ready();if(ticket!==generation||!visible)return
       backing.setTimbre(state.stage===6?'supersaw':'piano');melody.setTimbre(state.stage===6?'lead-supersaw':'lead-round');bass.timbre=state.stage===6?'synth':'electric'
-      if(session())await Promise.all([backing.ready(),melody.ready()]);if(ticket!==generation||!visible)return
+      await Promise.all([countVoice.ready(), ...(session() ? [backing.ready(),melody.ready()] : [])]);if(ticket!==generation||!visible)return
       origin=/** @type {AudioContext} */(context).currentTime+4*secondsPerBeat+.12
       state.score=0;matches=new Set();sessionMatches.clear();state.matched=[];nextBar=-1;judgedBar=-1;displayedBar=-1;state.phase='count'
       const accompanied=session()
@@ -270,7 +271,7 @@ export function mountDrumTutorial(host,onBack) {
         }
       }
       // Four quiet quarter-note clicks before the first demonstration.
-      for(let i=0;i<4;i++)metronome(origin-(4-i)*secondsPerBeat,i===0)
+      for(let i=0;i<4;i++)playTutorialCount(countVoice,origin-(4-i)*secondsPerBeat,i===0)
       nextBar=0;schedule();tick=window.setInterval(schedule,25);animate()
     } catch(error) {if(ticket!==generation)return;state.phase='intro';state.error=error instanceof Error?error.message:'音を準備できませんでした。'}
   }
@@ -353,7 +354,7 @@ export function mountDrumTutorial(host,onBack) {
       ]:undefined,
     }),
     h('section',{class:'drum-lesson-guide',style:{'--drum-grid-columns':grid},'aria-label':'ドラムのリズム'},[
-      h('div',{class:'drum-guide-heading'},[h('strong',state.phase==='play'?(session()?'あなたが叩く':state.bar%2?'あなたが叩く':'Ottoが叩く'):session()?'8小節セッション':advanced()?'前半：リズムの練習':'まずはお手本を聴こう'),h('div',{class:'drum-guide-hands','aria-label':'左右の手'},['左','右'].map(hand=>h('div',{class:'drum-guide-hand'},[
+      h('div',{class:'drum-guide-heading'},[h('strong',state.phase==='count'?tutorialCountLabel(4-state.countIndex):state.phase==='play'?(session()?'あなたが叩く':state.bar%2?'あなたが叩く':'Ottoが叩く'):session()?'8小節セッション':advanced()?'前半：リズムの練習':'まずはお手本を聴こう'),h('div',{class:'drum-guide-hands','aria-label':'左右の手'},['左','右'].map(hand=>h('div',{class:'drum-guide-hand'},[
         h('svg',{viewBox:'0 0 60 64',class:hand==='左'?'drum-hand-left':'','aria-hidden':'true'},[
           h('path',{class:'drum-hand-palm',d:'M21 60 Q19 54 14 50 Q10 46 7 40 L3 33 Q1 29 4 27 Q7 25 10 29 L16 36 L14 15 Q14 11 17 11 Q21 10 22 15 L25 29 L25 8 Q25 3 29 3 Q33 3 33 8 L34 28 L37 11 Q38 7 41 8 Q45 8 44 13 L42 31 L47 19 Q49 15 52 17 Q55 18 53 23 L49 40 Q48 50 42 55 L41 60 Z'}),
           ...[
@@ -368,7 +369,7 @@ export function mountDrumTutorial(host,onBack) {
             return h('path',{d,class:'drum-hand-active','data-hint':hint && !active?'':undefined,visibility:active || hint?'visible':'hidden'})
           }),
         ]),h('span',hand+'手'),
-      ]))),h('div',{class:'tutorial-score',role:'status','aria-label':session() && state.phase==='count' ? `カウント ${['3','2','1','スタート'][state.countIndex]}` : `成功 ${state.score} / ${goal()}回`},[session() && state.phase==='count' ? [h('svg',{viewBox:'0 0 100 100','aria-hidden':'true'},[h('circle',{cx:50,cy:50,r:42,class:'tutorial-score-track'}),h('circle',{cx:50,cy:50,r:42,class:'tutorial-score-progress','stroke-dasharray':`${(state.countIndex+1)*25} 100`,pathLength:100,transform:'rotate(-90 50 50)'})]),h('span',{class:'drum-count-label'},['3','2','1','スタート！'][state.countIndex])] : state.score===goal() ? h('span',{class:'tutorial-hanamaru'},'💮') : [h('svg',{viewBox:'0 0 100 100','aria-hidden':'true'},[h('circle',{cx:50,cy:50,r:42,class:'tutorial-score-track'}),h('circle',{cx:50,cy:50,r:42,class:'tutorial-score-progress','stroke-dasharray':`${state.score*100/(goal())} 100`,pathLength:100,transform:'rotate(-90 50 50)'})]),h('span',`${state.score}/${goal()}`)]])]),
+      ]))),h(TutorialScore,{score:state.score,goal:goal()})]),
       h('div',{class:'drum-timeline'},[
         h('div',{class:'drum-timeline-grid','aria-hidden':'true'},gridSteps.map(i=>h('span',{class:gridLine(i)},i%slotsPerBeat?'':String(i/slotsPerBeat+1)))),
         state.phase==='play'?h('span',{class:'drum-playhead','aria-hidden':'true',style:{left:`${state.beat*25}%`,height:`${30+rows.length*28}px`}}):null,

@@ -247,6 +247,7 @@ export function mountBasicParts(reference, player) {
           h("span", {"class": "sr-only"}, "メロディの演奏方法"),
           h("select", {"id": "melody-mode"}, [
             h("option", {"value": "all-you"}, "自分で弾く"),
+            h("option", {"value": "preset"}, "プリセット"),
             h("option", {"value": "all-pc"}, "Ottoに弾いてもらう"),
             h("option", {"value": "session"}, "Ottoとセッション"),
           ]),
@@ -263,11 +264,19 @@ export function mountBasicParts(reference, player) {
       ]
       const [referencePart, drums, bass, backing, melody] = parts
       return [
-        h('div', {key:'mp3-label', class:'compact-mixer-caption compact-mixer-mp3'}, 'MP3'),
         referencePart,
-        h('div', {key:'play-label', class:'compact-mixer-caption compact-mixer-play'}, 'Play'),
         melody,
-        h('div', {key:'accompaniment-label', class:'compact-mixer-caption compact-mixer-accompaniment'}, '伴奏'),
+        h('div', {key:'score', class:'score-part-controls', role:'group', 'aria-label':'コード進行'}, [
+          h('button', {type:'button', class:'part-heading track-select mixer-score-link', 'aria-controls':'detail-chord', 'aria-pressed':'false'}, [
+            h('svg', {class:'part-icon', viewBox:'0 0 24 24', 'aria-hidden':'true', focusable:'false'}, [
+              h('rect', {class:'stamp', x:1, y:4, width:22, height:16, rx:2}),
+              h('path', {class:'cut', fill:'none', d:'M5 8h14M5 12h14M5 16h14'}),
+              h('circle', {class:'print', cx:9, cy:8, r:2}),
+              h('circle', {class:'print', cx:15, cy:16, r:2}),
+            ]),
+            h('span', {class:'track-name'}, 'コード'),
+          ]),
+        ]),
         drums, bass, backing,
       ]
     },
@@ -310,11 +319,87 @@ export function bindSynthKnob(element) {
   bindKnobDrag(element, (Number(element.max) - Number(element.min)) / 270)
 }
 
+/** Open a native numeric keyboard on a phone without changing the knob until confirmed.
+ * @param {HTMLInputElement} source */
+function openTempoEntry(source) {
+  if (!source.isConnected || source.disabled || document.querySelector('.tempo-entry-dialog[open]')) return
+  const dialog = document.createElement('dialog')
+  dialog.className = 'tempo-entry-dialog'
+  dialog.setAttribute('aria-labelledby', 'tempo-entry-title')
+  const form = document.createElement('form')
+  const heading = document.createElement('h2')
+  heading.id = 'tempo-entry-title'
+  heading.textContent = 'テンポ'
+  const label = document.createElement('label')
+  label.textContent = 'BPM'
+  const field = document.createElement('input')
+  field.type = 'number'
+  field.inputMode = Number(source.step) < 1 ? 'decimal' : 'numeric'
+  field.min = source.min
+  field.max = source.max
+  field.step = source.step || '1'
+  field.value = source.value
+  field.required = true
+  field.setAttribute('aria-describedby', 'tempo-entry-range')
+  const range = document.createElement('p')
+  range.id = 'tempo-entry-range'
+  range.textContent = `${source.min}〜${source.max} BPM`
+  const actions = document.createElement('div')
+  actions.className = 'tempo-entry-actions'
+  const cancel = document.createElement('button')
+  cancel.type = 'button'
+  cancel.textContent = 'キャンセル'
+  cancel.addEventListener('click', () => dialog.close())
+  const confirm = document.createElement('button')
+  confirm.type = 'submit'
+  confirm.textContent = '決定'
+  actions.append(cancel, confirm)
+  label.append(field)
+  form.append(heading, label, range, actions)
+  dialog.append(form)
+  dialog.addEventListener('keydown', event => event.stopPropagation())
+  form.addEventListener('submit', event => {
+    event.preventDefault()
+    if (!source.isConnected || source.disabled) { dialog.close(); return }
+    if (!field.reportValidity()) return
+    source.value = field.value
+    source.dispatchEvent(new Event('input', {bubbles:true}))
+    dialog.close()
+  })
+  const observer = new MutationObserver(() => {
+    if (!source.isConnected || source.disabled) dialog.close()
+  })
+  observer.observe(document.body, {childList:true, subtree:true, attributes:true, attributeFilter:['disabled']})
+  dialog.addEventListener('close', () => {
+    observer.disconnect()
+    dialog.remove()
+    if (source.isConnected && !source.disabled) source.focus({preventScroll:true})
+  }, {once:true})
+  document.body.append(dialog)
+  dialog.showModal()
+  field.focus({preventScroll:true})
+  field.select()
+}
+
+const numericTempoKnobs = new WeakSet()
+/** @param {unknown} element */
+export function bindTempoNumericEntry(element) {
+  if (!(element instanceof window.HTMLInputElement) || numericTempoKnobs.has(element)) return
+  numericTempoKnobs.add(element)
+  element.addEventListener('pointerdown', event => {
+    if (event.pointerType !== 'touch' || !window.matchMedia('(max-width: 700px)').matches || element.disabled) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    openTempoEntry(element)
+  }, {capture:true})
+}
+
 const tempoKnobs = new WeakSet()
 /** @param {unknown} element */
 export function bindTempoKnob(element) {
   if (!(element instanceof HTMLInputElement) || tempoKnobs.has(element)) return
   tempoKnobs.add(element)
+  bindTempoNumericEntry(element)
   bindKnobDrag(element, .6, true)
 }
 

@@ -127,9 +127,9 @@ export function mountPhraseHistory(anchor, isPlaying) {
  * @param {{view:ReturnType<typeof mountBuddyView>, player:Instrument, partner:Instrument,
  * lab:{value:import('./otto-phrases.js').OttoLabSettings},
  * labMode:{value:boolean},
- * sessionMode:{value:boolean},
+ * sessionMode:{value:boolean}, presetMode:{value:boolean},
  * setPlayMode:(value:string)=>void,onPlayStyleChange?:(style:string)=>void}} options */
-export function mountBuddyLab(panel, {view,player,partner,lab,labMode,sessionMode,setPlayMode,onPlayStyleChange}) {
+export function mountBuddyLab(panel, {view,player,partner,lab,labMode,sessionMode,presetMode,setPlayMode,onPlayStyleChange}) {
   const labHost=document.createElement('div');labHost.className='otto-lab-host';panel.querySelector('.melody-heading')?.after(labHost)
   const groups=[
     {name:'音階',toggles:[['repeat','音形を繰り返す'],['resolve','終わりを着地させる']],knobs:[['tension','テンション',0,100],['avoid','半音のぶつかり',0,100],['leaps','跳躍',0,100],['register','音域の中心',48,84],['maxLeap','最大跳躍（半音）',1,24],['highest','最高音',48,84]]},
@@ -190,7 +190,7 @@ export function mountBuddyLab(panel, {view,player,partner,lab,labMode,sessionMod
   createApp({render:()=>{view.status;toneRevision.value;return [
     h('div',{class:'part-choice-field otto-mode-field'},[
       h('span',{'aria-hidden':'true'},'弾く人'),
-      h('fieldset',{class:'segmented-control otto-play-mode','aria-label':'弾く人'},[h('legend',{class:'sr-only'},'弾く人'),...[['manual','あなた'],['auto','Otto'],['session','セッション']].map(([value,label])=>h('label',[h('input',{type:'radio',name:'otto-lab-mode',value,checked:value==='session'?sessionMode.value:value==='auto'?labMode.value:!labMode.value&&!sessionMode.value,onChange:()=>setPlayMode(value==='session'?'session':value==='auto'?'all-pc':'all-you')}),h('span',label)]))]),
+      h('fieldset',{class:'segmented-control otto-play-mode','aria-label':'弾く人'},[h('legend',{class:'sr-only'},'弾く人'),...[['manual','あなた'],['auto','Otto'],['session','セッション'],['preset','プリセット']].map(([value,label])=>h('label',[h('input',{type:'radio',name:'otto-lab-mode',value,checked:value==='session'?sessionMode.value:value==='auto'?labMode.value:value==='preset'?presetMode.value:!labMode.value&&!sessionMode.value&&!presetMode.value,onChange:()=>setPlayMode(value==='session'?'session':value==='auto'?'all-pc':value==='preset'?'preset':'all-you')}),h('span',label)]))]),
     ]),
     h('div',{class:'otto-style-choice part-choice-field'},[h('span','Ottoのプレイスタイル'),h('div',{class:'part-choice-picker'},[
       h('select',{'aria-label':'Ottoのプレイスタイル',value:lab.value.playStyle??'craft',onChange:(/** @type {Event} */ e)=>update('playStyle',(/** @type {HTMLSelectElement} */(e.target)).value)},...playStyles.map(([value,label])=>h('option',{value},label))),

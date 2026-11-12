@@ -52,7 +52,7 @@ export function mountPlayhead(actions, host) {
   element.className = 'melody-playhead'
   element.setAttribute('aria-label', '現在の再生位置')
   if (host) host.append(element)
-  else document.querySelector('.mixer-score-link')?.before(element)
+  else document.querySelector('.mixer-layout-tools')?.append(element)
   const reset = () => { input.value = String(actions.current() + 1) }
   const app = createApp({render: () => [
     h('div', {class:'style-stepper melody-navigation melody-navigation-start'}, [

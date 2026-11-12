@@ -1,4 +1,5 @@
 import { mountPlayhead } from './transport-view.js'
+import { bindTempoNumericEntry } from './main-controls.js'
 import { createKeyPreview } from './reference-key-preview.js'
 import { timingGrid } from './reference-timing-grid.js'
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
@@ -707,6 +708,7 @@ export function mountReferenceTiming(host, options) {
     host.querySelector('.timing-waveform')
   )
   cursor = /** @type {SVGLineElement} */ (waveform.querySelector('.playhead'))
+  bindTempoNumericEntry(host.querySelector('.timing-tempo-knob input'))
   for (const [
     selector,
     sensitivity,

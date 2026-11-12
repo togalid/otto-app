@@ -336,7 +336,7 @@ export function mountDrumTutorial(host,onBack) {
     const placementPads=intro?.pads ?? (state.phase==='intro' ? (state.stage===1 ? (state.exercise===0 ? [2,3] : [0,2,3]) : state.stage===2 ? (state.exercise===0 ? [6] : [0,2,3,6]) : state.stage===4 ? (state.exercise===0 ? [0,3,5,6] : [0,5]) : state.stage===6 ? [4] : []) : [])
     return h('div',{class:'drum-lesson'},[
     h(TutorialSelector,{
-      onBack,onSelect:selectStage,index:state.stage,count:stages.length,label:'ドラム編のレッスン',
+      onBack,onSelect:selectStage,index:state.stage,count:stages.length,label:'ビート編のレッスン',
       options:stages.map((stage,i)=>h('option',{value:i},`No.${i+1} · ${stage.title}${i>=5?'（応用）':''}`)),
       onStop:['play','count','loading'].includes(state.phase)?()=>selectStage(state.stage):undefined,
     }),

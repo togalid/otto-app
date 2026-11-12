@@ -54,7 +54,9 @@ export function mountKeyboard(source) {
   for (const button of Array.from(board.querySelectorAll('button'))) {
     buttons.set(Number(button.dataset.midi), button)
   }
-  board.style.width = `calc(${white} * var(--piano-width))`
+  board.style.width = 'calc(var(--piano-white-count, 15) * var(--piano-width))'
+  const portrait = typeof matchMedia === 'function' ? matchMedia('(max-width:600px) and (orientation:portrait)') : null
+  const lastMidi = () => portrait?.matches ? 60 : 72
   /** @type {{pointer:number,midi:number,ready:boolean,token:number}|undefined} */
   let gesture
   let token=0
@@ -106,7 +108,7 @@ export function mountKeyboard(source) {
     const midi=Number(/** @type {HTMLElement} */(button).dataset.midi)
     if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
       event.preventDefault()
-      const next=event.key==='Home'?48:event.key==='End'?72:Math.max(48,Math.min(72,midi+(event.key==='ArrowRight'?1:-1)))
+      const next=event.key==='Home'?48:event.key==='End'?lastMidi():Math.max(48,Math.min(lastMidi(),midi+(event.key==='ArrowRight'?1:-1)))
       if(keyboardMidi!==undefined){source.attack(next,true);source.release(keyboardMidi);keyboardMidi=next;buttons.forEach((key,n)=>key.toggleAttribute('data-held',n===next))}
       focusKey(next);return
     }
@@ -127,7 +129,7 @@ export function mountKeyboard(source) {
   board.addEventListener('focusout',event=>{if(!board.contains(/** @type {Node|null} */(event.relatedTarget)))release()})
   function refreshLabels() {
     const offset = octave - (original.bass?.() ? 2 : 0)
-    board.setAttribute('aria-label', `C${3 + offset}からC${5 + offset}の鍵盤`)
+    board.setAttribute('aria-label', `C${3 + offset}からC${Math.floor(lastMidi() / 12) - 1 + offset}の鍵盤`)
     buttons.forEach((button,midi)=>{
       const label = pianoKey(midi).label.replace(/\d+$/, String(Math.floor(midi / 12) - 1 + offset))
       button.setAttribute('aria-label', label+'を鳴らす')
@@ -151,6 +153,20 @@ export function mountKeyboard(source) {
   octaveDown?.addEventListener('click', () => stepOctave(-1))
   octaveUp?.addEventListener('click', () => stepOctave(1))
   refreshLabels()
+  portrait?.addEventListener('change', () => {
+    release()
+    for (const midi of sounding.keys()) source.release(midi)
+    const active = board.querySelector('button[tabindex="0"]')
+    if (active instanceof HTMLElement && Number(active.dataset.midi) > lastMidi()) {
+      if (board.contains(document.activeElement)) focusKey(lastMidi())
+      else {
+        active.tabIndex = -1
+        const lastKey = buttons.get(lastMidi())
+        if (lastKey) lastKey.tabIndex = 0
+      }
+    }
+    refreshLabels()
+  })
   document.addEventListener('melody-timbre-change', refreshLabels)
   const magicToggle = document.querySelector('#magic-toggle')
   magicToggle?.addEventListener('click', () => {

@@ -43,8 +43,8 @@ const loopTicks = barTicks * 4
 const hitWindow = 0.12
 
 
-/** @param {HTMLElement} host @param {() => Promise<string>} connectMidi */
-export function mountSongSession(host, connectMidi) {
+/** @param {HTMLElement} host */
+export function mountSongSession(host) {
   const audio = document.createElement('audio')
   audio.src = new URL('./otto-session-demo.mp3', import.meta.url).href
   audio.loop = true
@@ -55,7 +55,6 @@ export function mountSongSession(host, connectMidi) {
   let countTimer = 0
   const countNodes = new Set()
   const error = ref('')
-  const midiStatus = ref('MIDI接続')
   const part = ref('bass')
   const position = ref(0)
   const hits = ref(new Set())
@@ -245,10 +244,6 @@ export function mountSongSession(host, connectMidi) {
     const barStart = firstTick + bar * barTicks
     const bass = part.value === 'bass'
     return [
-    h('button', { type: 'button', onClick: async () => {
-      try { midiStatus.value = await connectMidi() }
-      catch { midiStatus.value = 'MIDI接続に失敗しました' }
-    } }, midiStatus.value),
     h('div', { class: 'song-session-transport' }, [
       h('strong', '♪ 0_Otto体験用_bass抜き.mp3'),
       h('button', { type: 'button', class: 'tutorial-start', onClick: togglePlayback },
@@ -286,7 +281,16 @@ export function mountSongSession(host, connectMidi) {
       ? h('div', { class: 'song-session-parts', role: 'group', 'aria-label': 'ドラムパッド' },
         [['kick', 'キック'], ['snare', 'スネア'], ['hat', 'ハイハット']].map(([id, label]) =>
           h('button', { type: 'button', onClick: () => void playNote(id) }, label)))
-      : h('div', {
+      : h('div', { class: 'song-session-keyboard-dock' }, [
+        h('div', { class: 'keyboard-octave song-session-octave', role: 'group', 'aria-label': '鍵盤のオクターブ' }, [
+      h('span', 'Oct'),
+      h('div', { class: 'style-stepper' }, [
+      h('button', { type:'button', 'aria-label':'オクターブを下げる', disabled:octave.value <= -2, onClick:()=>shiftOctave(-1) }, '−'),
+      h('output', `${octave.value > 0 ? '+' : ''}${octave.value}`),
+      h('button', { type:'button', 'aria-label':'オクターブを上げる', disabled:octave.value >= 2, onClick:()=>shiftOctave(1) }, '＋'),
+      ]),
+    ]),
+        h('div', {
         class: 'tutorial-keyboard song-session-keys', role: 'group', 'aria-label': `C${3 + octave.value}からC${4 + octave.value}の鍵盤`,
         style: { gridTemplateColumns: `repeat(${whiteCount}, minmax(0, 1fr))` },
       }, keys.map((key, i) => h('button', {
@@ -315,14 +319,7 @@ export function mountSongSession(host, connectMidi) {
         onBlur:()=>{ if (pointer === -1) releaseKey() },
         onClick:(/** @type {MouseEvent} */ event)=>{ if (event.detail === 0 && heldKey.value === null) void playNote(key.midi + octave.value * 12) },
       }, key.black ? '' : pianoWhiteLabel(key.midi)))),
-    part.value !== 'drums' ? h('div', { class: 'keyboard-octave song-session-octave', role: 'group', 'aria-label': '鍵盤のオクターブ' }, [
-      h('span', 'Oct'),
-      h('div', { class: 'style-stepper' }, [
-      h('button', { type:'button', 'aria-label':'オクターブを下げる', disabled:octave.value <= -2, onClick:()=>shiftOctave(-1) }, '−'),
-      h('output', `${octave.value > 0 ? '+' : ''}${octave.value}`),
-      h('button', { type:'button', 'aria-label':'オクターブを上げる', disabled:octave.value >= 2, onClick:()=>shiftOctave(1) }, '＋'),
       ]),
-    ]) : null,
     error.value ? h('p', { role: 'alert' }, error.value) : null,
     ]
   } }).mount(host)

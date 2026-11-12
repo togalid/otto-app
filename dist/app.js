@@ -16,7 +16,7 @@ import { createChoiceMenu, mountSelectMenus } from './choice-menu.js'
 import { mountTransport, mountPlayhead } from './transport-view.js'
 import { mountDrumGrid } from './drum-grid.js'
 import { mountChordMonitor } from './chord-monitor.js'
-import { createMelodyView, mountMelodyPads, mountMelodyLayout, mountBuddyFeedback, mountMobileGuide, mountMobileLayout, mountModeMenu } from './melody-view.js'
+import { createMelodyView, mountMelodyPads, mountMelodyLayout, mountBuddyFeedback, mountMobileLayout, mountModeMenu } from './melody-view.js'
 import { mountReferencePlayer } from './reference-player.js'
 const playerDisplay = mountReferenceControls()
 const referenceView = playerDisplay.state
@@ -59,8 +59,6 @@ import { BassSynth, genres, genreProgressions, createPartMixer, swungBassBeat } 
 
 /** @type {ReturnType<typeof mountBuddy> | undefined} */
 let buddyController
-/** @type {ReturnType<typeof mountMobileGuide> | undefined} */
-let mobileGuide
 const instrument = new Instrument('melody')
 instrument.setTimbre('lead-round')
 const status = document.querySelector('#status')
@@ -314,15 +312,10 @@ let barPlayback = null
 const playbackHeads = new Map()
 /** @type {Map<number,number>} */
 const waveformStartBeats = new Map()
-/** @param {number} _bar @param {number} startBeat @param {number} time @param {number} beatSeconds */
-progression.onScheduleBar = (_bar, startBeat, time, beatSeconds) => {
-  playerDisplay.meter(chordInstrument.context)
-  mobileGuide?.schedule(startBeat, time, beatSeconds, progression.beatsPerBar)
-}
+progression.onScheduleBar = () => playerDisplay.meter(chordInstrument.context)
 progression.onStart = referenceTrack.startWithAccompaniment
 progression.onStop = () => {
   barPlayback = null
-  mobileGuide?.clear()
   referenceTrack.stopWithAccompaniment()
   playerDisplay.stopMeter()
   clearAccompanimentPads()
@@ -1101,12 +1094,11 @@ mountKeyboard({
   bass: () => instrument.timbre.startsWith('lead-bass-'),
   key: () => activeKey,
   ready: () => instrument.ready(),
-  attack:(midi,glide)=>{ if (!glide) mobileGuide?.hit(midi - (document.querySelector('#piano-keys')?.getAttribute('data-magic') === 'true' ? activeKey : 0)); magicVoice.attack(midi,glide,true) },
+  attack:(midi,glide)=>magicVoice.attack(midi,glide,true),
   release:midi=>magicVoice.release(midi),
   stop: () => { buddyController?.stop();instrument.silence() },
   onError: error => { if(status)status.textContent=error instanceof Error?error.message:'音を再生できませんでした。' },
 })
-mobileGuide = mountMobileGuide(() => progression.running ? chordInstrument.context?.currentTime : undefined)
 refreshMelody()
 const {element: melodyVoiceLabel} = mountMelodyVoiceChoice(melodyTimbre)
 document.querySelector('.melody-heading')?.after(melodyVoiceLabel)

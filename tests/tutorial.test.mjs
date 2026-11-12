@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {lessons,createTutorialPlayer,tutorialBeatSeconds,displayedResponseStart,displayedResponseEnd,mergePlayedSegments,responseComplete,lessonThreeChords,melodyThreeBarChords,recordTutorialSuccess,eighthNoteHit,shortNoteTarget,tutorialNotes,tutorialPentatonic,matchSlideNote,isTutorialFreePitch} from '../dist/tutorial.js'
+import {advancedStart,lessons,createTutorialPlayer,tutorialBeatSeconds,displayedResponseStart,displayedResponseEnd,mergePlayedSegments,responseComplete,lessonThreeChords,melodyThreeBarChords,recordTutorialSuccess,eighthNoteHit,shortNoteTarget,tutorialNotes,tutorialPentatonic,matchSlideNote,isTutorialFreePitch} from '../dist/tutorial.js'
 
 test('No.1 switches from a two-beat C to a two-beat E for both call and response', () => {
   for (let bar = 0; bar < 8; bar++) {
@@ -17,15 +17,65 @@ function harness(ready = async () => {}) {
   return {player,voice,context,states,notes,timers,get silenced(){return silenced},tick(time){context.currentTime=time;for(const cb of timers.values())cb()}}
 }
 
-test('ten self-contained lessons fit a one-octave keyboard and one demo bar',()=>{
-  assert.equal(lessons.length,11)
+test('tutorial lessons fit a one-octave keyboard and four-beat bars',()=>{
+  assert.equal(lessons.length - advancedStart,7)
   for(const lesson of lessons) {
     assert.ok(lesson.messages.length > 0)
     assert.ok(lesson.notes.length)
-    for(const note of (lesson.patterns ?? [lesson.notes]).flat()) {
+    for(const note of Array.from({length:lesson.session ? 16 : 8}, (_,bar)=>tutorialNotes(lesson,bar)).flat()) {
       assert.ok(note.midi>=60 && note.midi<=72)
       assert.ok(note.beat>=0 && note.duration>0 && note.beat+note.duration<=4)
     }
+  }
+})
+
+test('Mary starts with a dotted rhythm and Otto separates repeated notes', async () => {
+  const h = harness()
+  await h.player.start(advancedStart + 2)
+  const origin = 10 + 4*tutorialBeatSeconds + .05
+  for (let beat = 0; beat < 4; beat += .125) h.tick(origin + beat*tutorialBeatSeconds)
+  const [first, second, , , repeatedFirst, repeatedSecond] = h.notes
+  assert.equal(first[0][0],66)
+  assert.equal(second[0][0],64)
+  assert.ok(Math.abs(second[1] - first[1] - .75*tutorialBeatSeconds) < 1e-9)
+  assert.equal(repeatedFirst[0][0],repeatedSecond[0][0])
+  assert.ok(repeatedFirst[1] + repeatedFirst[2] < repeatedSecond[1] - .05)
+})
+
+test('advanced songs schedule accompaniment through both turns and resolve to their tonic', async () => {
+  for (const [offset, tonic] of [36,36,38,41,36,40,38].entries()) {
+    const h = harness()
+    const backing = []
+    const player = createTutorialPlayer({
+      voice:h.voice, onUpdate:state=>h.states.push(state),
+      accompaniment:{ready:async()=>{}, playAt:(...args)=>backing.push(args), silence:()=>{}},
+      setTimer:callback=>{h.timers.set(1,callback);return 1}, clearTimer:()=>h.timers.clear(),
+    })
+    await player.start(advancedStart + offset)
+    const {meter = 4, pickupBeats = 0} = lessons[advancedStart + offset]
+    const countIn = meter - pickupBeats
+    const turnBeats = meter === 3 ? 12 : 8
+    const pulseSeconds = tutorialBeatSeconds
+    const origin = 10 + countIn*pulseSeconds + .05
+    for (let beat = -countIn; beat < turnBeats*4; beat++) h.tick(origin + beat*pulseSeconds)
+    const bass = backing.filter(event=>event[4] !== undefined).map(event=>event[4])
+    const clicks = backing.filter(event=>event[0][0] >= 79).map(event=>event[0][0])
+    assert.deepEqual(clicks,[84,...Array(countIn-1).fill(79)])
+    assert.equal(bass.length,turnBeats*4)
+    assert.deepEqual(bass.slice(0,turnBeats),bass.slice(turnBeats,turnBeats*2))
+    assert.deepEqual(bass.slice(turnBeats*2,turnBeats*3),bass.slice(turnBeats*3))
+    if (offset === 3) {
+      const finalPulses = backing.filter(event=>event[4] !== undefined).slice(-12)
+      assert.deepEqual(finalPulses.slice(3).map(event=>[event[0],event[4]]), [
+        [[57,60,64],45],
+        [[58,62,65],46], [[58,62,65],46], [[58,62,65],46],
+        [[60,65,69],36], [[60,65,69],36], [[60,64,67],36],
+        [[60,65,69],41], [[60,65,69],41],
+      ])
+    }
+    assert.equal(bass.at(-1),tonic)
+    assert.ok(new Set(bass).size > 1)
+    assert.ok(h.notes.length > 0)
   }
 })
 

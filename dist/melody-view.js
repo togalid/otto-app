@@ -1,7 +1,7 @@
 import { mountSongSession } from './song-session.js'
 import { mountDrumTutorial } from './drum-tutorial.js'
 import { mountTutorial } from './tutorial-view.js'
-import { readDevelopmentScreen, saveDevelopmentScreen } from './tutorial.js'
+import { advancedStart, lessons, readDevelopmentScreen, saveDevelopmentScreen } from './tutorial.js'
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { genres } from './groove.js'
 import { presets, notes, melodyPalette, melodyRole, displayChordParts } from './music.js'
@@ -526,13 +526,13 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
   const categoryHost = categories.querySelector('.category-selection')
   if (categoryHost) mountSelectionStage(categoryHost, [
     {id:'melody-basic',title:'メロディ編・基礎',subtitle:'鍵盤で音とリズムを楽しもう',description:'ひとつの音からスライドまで。Ottoのお手本に合わせて弾いてみよう。',badge:'7 LESSONS',icon:'keys'},
-    {id:'melody-advanced',title:'メロディ編・応用',subtitle:'曲のメロディを弾こう',description:'曲を弾く練習をしよう。まずはきらきら星をベースに試作中！',badge:'試作中',icon:'keys'},
+    {id:'melody-advanced',title:'メロディ編・応用',subtitle:'曲のメロディを弾こう',description:'「ちょうちょう」から、シャープやフラットが出てくる曲まで。',badge:`${lessons.length - advancedStart} LESSONS`,icon:'keys'},
     {id:'adlib',title:'アドリブ編',subtitle:'好きな音でメロディをつくろう',description:'好きな音を選んで、その場でメロディをつくろう。Ottoとのセッションにも挑戦！',badge:'3 LESSONS',icon:'keys'},
     {id:'drum-tutorial',title:'ドラム編',subtitle:'8つのパッドでビートを刻もう',description:'左右の手で、トン、タン。基本のリズムからセッションまで、少しずつステップアップ。',badge:'10 LESSONS',icon:'drums'},
     {id:'bass',title:'ベース編',subtitle:'',description:'',badge:'',icon:'keys',disabled:true},
     {id:'chords',title:'コード編',subtitle:'',description:'',badge:'',icon:'keys',disabled:true},
   ], mode => {
-    const index = { 'melody-basic':0, 'melody-advanced':10, 'adlib':7 }[mode]
+    const index = { 'melody-basic':0, 'melody-advanced':advancedStart, 'adlib':7 }[mode]
     if (index !== undefined) { open('tutorial'); tutorialView.selectLesson(index) }
     else open(mode)
   })

@@ -2,7 +2,7 @@ import { capturePianoPointer, pianoKeyAtPointer, pianoWhiteLabel } from './keybo
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { Instrument } from './audio.js'
 import { bindTempoKnob } from './main-controls.js'
-import { lessons, createTutorialPlayer, displayedResponseStart, displayedResponseEnd, mergePlayedSegments, responseComplete, recordTutorialSuccess, shortNoteTarget, tutorialNotes, isTutorialFreePitch, matchSlideNote, isSessionSlide } from './tutorial.js'
+import { advancedStart, lessons, createTutorialPlayer, displayedResponseStart, displayedResponseEnd, mergePlayedSegments, responseComplete, recordTutorialSuccess, shortNoteTarget, tutorialNotes, isTutorialFreePitch, matchSlideNote, isSessionSlide } from './tutorial.js'
 import { genres, BassSynth } from './groove.js'
 import { DrumSynth } from './rhythm.js'
 import { readDevelopmentScreen, saveDevelopmentScreen } from './tutorial.js'
@@ -46,9 +46,9 @@ export function TutorialSelector({onBack,onSelect,index,count,label,options,onSt
   ])
 }
 
-/** @param {{value:number,onTempoUpdate:(value:number)=>void}} props */
-export function TutorialTempo({value,onTempoUpdate}) {
-  return h('div',{class:'tutorial-tempo'},[h('span','テンポ'),h('span',{class:'volume-knob',style:{'--angle':`${(value-110)*1.3}deg`}},[h('input',{type:'range',min:40,max:180,step:1,value,ref:bindTempoKnob,'aria-label':'テンポ BPM',onInput:(/** @type {Event} */ event)=>onTempoUpdate(Number(/** @type {HTMLInputElement} */(event.target).value))}),h('span',{'aria-hidden':'true'})]),h('output',String(value))])
+/** @param {{value:number,onTempoUpdate:(value:number)=>void,disabled?:boolean}} props */
+export function TutorialTempo({value,onTempoUpdate,disabled=false}) {
+  return h('div',{class:'tutorial-tempo'},[h('span','テンポ'),h('span',{class:'volume-knob',style:{'--angle':`${(value-110)*1.3}deg`}},[h('input',{type:'range',min:40,max:180,step:1,value,disabled,ref:bindTempoKnob,'aria-label':'テンポ BPM',onInput:(/** @type {Event} */ event)=>onTempoUpdate(Number(/** @type {HTMLInputElement} */(event.target).value))}),h('span',{'aria-hidden':'true'})]),h('output',String(value))])
 }
 
 /** @param {AudioContext} context @param {Set<OscillatorNode>} successSounds */
@@ -88,10 +88,14 @@ export function mountTutorial(root, navigate) {
     playAt(notes,time,duration,level = 1,bassMidi = 36) {
       backingVoice.playAt(notes,time,duration,level)
       if (notes[0] >= 79) return
-      const beat = backingBeat++ % 4
+      const lesson = lessons[selected.value]
+      const beat = backingBeat++
+      const downbeat = lesson.meter || lesson.pickupBeats
+        ? (beat - (lesson.pickupBeats ?? 0)) % (lesson.meter ?? 4) === 0
+        : beat % 2 === 0
       drums.hitAt('hat',time,.35,.08)
-      drums.hitAt(beat % 2 === 0 ? 'kick' : 'snare',time,beat % 2 === 0 ? .55 : .38)
-      if (beat % 2 === 0) bass.playAt(bassMidi,time,.52,.55)
+      drums.hitAt(downbeat ? 'kick' : 'snare',time,downbeat ? .55 : .38)
+      if (downbeat) bass.playAt(bassMidi,time,.52,.55)
     },
     silence() { backingBeat = 0; drums.silence(); bass.silence(); backingVoice.silence() },
   }
@@ -132,8 +136,10 @@ export function mountTutorial(root, navigate) {
   const isSlide = () => Boolean(lessons[selected.value].patterns)
   /** @type {ReturnType<typeof setTimeout>|undefined} */
   let clickTimer
+  const scorePreviewPage = ref(0)
   const sessionLevel = ref(0)
   const retryTempo = ref(80)
+  const resetRetryTempo = () => { retryTempo.value = selected.value === advancedStart ? 65 : selected.value === advancedStart + 1 ? 66 : 80 }
   const responseNotes = (/** @type {number} */ bar) => tutorialNotes(lessons[selected.value],bar,sessionLevel.value)
   const player = createTutorialPlayer({voice, accompaniment, onUpdate: next => {
     if (isSlide() && next.phase === 'you' && previous.phase !== 'you' && held.value >= 0 && slideBar < 0) beginSlide(held.value)
@@ -147,6 +153,7 @@ export function mountTutorial(root, navigate) {
       if (recordTutorialSuccess(successes,next.bar,true,8,selected.value >= 4)) { score.value = successes.size; playSuccess() }
     }
     previous = next; state.value = next
+    if (next.phase === 'complete' && selected.value >= advancedStart) scorePreviewPage.value = 1
     if (['complete','error'].includes(next.phase)) release()
   }})
   function release(preserveSlide = false) {
@@ -156,11 +163,13 @@ export function mountTutorial(root, navigate) {
     held.value = -1
   }
   function stop() { player.stop(); release(); userVoice.silence(); silenceSuccess() }
-  function start() { stop(); slideProgress.value = 0; slideResultBar = -1; successes.clear(); score.value = 0; played.length = 0; playedRevision.value++; dialogue.value = true; message.value = 0; feedback.value = '' }
+  function start() { stop(); scorePreviewPage.value = 0; slideProgress.value = 0; slideResultBar = -1; successes.clear(); score.value = 0; played.length = 0; playedRevision.value++; dialogue.value = true; message.value = 0; feedback.value = '' }
   /** @param {number} index */
-  function select(index) { stop(); slideProgress.value = 0; slideResultBar = -1; successes.clear(); score.value = 0; played.length = 0; playedRevision.value++; selected.value = index; saveDevelopmentScreen('melody-lesson', String(index)); sessionLevel.value = 0; retryTempo.value = 80; dialogue.value = false; feedback.value = '' }
+  function select(index) { stop(); scorePreviewPage.value = 0; slideProgress.value = 0; slideResultBar = -1; successes.clear(); score.value = 0; played.length = 0; playedRevision.value++; selected.value = index; saveDevelopmentScreen('melody-lesson', String(index)); sessionLevel.value = 0; resetRetryTempo(); dialogue.value = false; feedback.value = '' }
+  const courseStart = () => selected.value < 7 ? 0 : selected.value < advancedStart ? 7 : advancedStart
+  const courseEnd = () => selected.value < 7 ? 7 : selected.value < advancedStart ? advancedStart : lessons.length
   function nextLesson() {
-    if (selected.value >= (selected.value < 7 ? 6 : selected.value < 10 ? 9 : 10)) return
+    if (selected.value + 1 >= courseEnd()) return
     select(selected.value + 1)
     start()
   }
@@ -323,25 +332,43 @@ export function mountTutorial(root, navigate) {
     const rhythmLane = lesson.freePitch && !connectedRhythm
     const durationRow = (/** @type {number} */ duration) => duration >= 2 ? 3 : duration >= 1 ? 2 : duration >= .5 ? 0 : 1
     const visibleRows = [...new Set(notes.map(note => durationRow(note.duration)))].sort((a,b) => a-b)
-    const advanced = selected.value === 10
+    const advanced = selected.value >= advancedStart
+    const notationScale = advanced ? (lesson.meter ?? 4) / 2 : 1
+    const gridBeats = lesson.meter === 3 ? 6 : lesson.pickupBeats ? 8 : 4
+    const pickupBeats = lesson.pickupBeats ?? 0
+    const secondMeasureBeat = pickupBeats + (lesson.meter ?? 4)
     const keyboardPitches = advanced ? [60,62,64,65,67,69,71,72,74,76,77,79,81,83,84] : pitches
     const phase = state.value.phase
     const running = ['loading','countdown','otto','you'].includes(phase)
+    const firstLane = advanced && !running
+      ? scorePreviewPage.value * 4
+      : Math.floor(Math.min(state.value.bar,totalBars-1)/2)*2
+    const scorePage = firstLane >= 4 ? 1 : 0
     const beat = ((state.value.beat % 4) + 4) % 4
+    // The advanced score shows two four-beat measures per scheduled phrase.
+    const measure = (/** @type {number} */ bar, /** @type {number} */ half) =>
+      (Math.floor(bar / 4) * 2 + bar % 2) * 2 + half + 1
+    const scorePosition = advanced
+      ? `${measure(Math.min(state.value.bar,totalBars-1),beat * notationScale >= secondMeasureBeat ? 1 : 0)} / 8 小節`
+      : `${Math.min(totalBars,state.value.bar+1)} / ${totalBars} 小節`
+    const remainingCount = Math.ceil(-state.value.beat * (lesson.meter || pickupBeats ? notationScale : 1) - 1e-9)
+    const countText = pickupBeats ? `${(lesson.meter ?? 4) - pickupBeats + 1 - remainingCount} / ${lesson.meter ?? 4}` : `あと ${remainingCount} 拍`
     const line = dialogue.value ? lesson.messages[message.value]
       : phase === 'otto' ? (selected.value === 8 && state.value.bar >= 4 ? '後半はスライドも使ってみよう！' : 'まずは聴いてみよう。次はあなたの番！')
       : phase === 'you' ? (lesson.session ? 'あなたの番。伴奏に合わせて自由に弾いてみよう！' : lesson.freePitch ? '今度はあなた。リズムに合わせて、好きな音で！' : isSlide() ? '今度はあなた。押したまま、最後の音までなぞろう。' : '今度はあなた。一緒のフレーズを弾いてみよう。')
       : phase === 'countdown' ? '準備はいい？ ぼくから弾くから聞いててね。'
-      : phase === 'complete' ? (selected.value < (selected.value < 7 ? 6 : selected.value < 10 ? 9 : 10) ? '8小節できたね！ 次のレッスンへすすもう！' : 'すごい！最後まで演奏できたね！')
+      : phase === 'complete' ? (selected.value < courseEnd() - 1 ? '8小節できたね！ 次のレッスンへすすもう！' : 'すごい！最後まで演奏できたね！')
       : phase === 'error' ? state.value.error : 'このレッスンを始めよう。'
     const lastNote = notes[notes.length - 1]
     // Treble staff: E is on the bottom line, with one step per line or space.
-    const beamSlide = selected.value === 5
+    const beamSlide = selected.value === 5 || selected.value === 6
     const staffLineGap = 6
     const staffTop = (/** @type {number} */ stepsFromCenter) =>
       `calc(49% + ${stepsFromCenter * staffLineGap}px * var(--tutorial-staff-scale))`
+    const staffMidi = (/** @type {number} */ midi) => advanced && (midi === 61 || midi === 66 || midi === 70) ? midi + (midi === 70 && lesson.flatNotes ? 1 : -1) : midi
+    const accidental = (/** @type {number} */ midi) => staffMidi(midi) === midi ? '' : staffMidi(midi) > midi ? '♭' : '♯'
     const pitchTop = (/** @type {number} */ midi) =>
-      staffTop(3 - Math.max(0,pitches.indexOf(midi)) / 2)
+      staffTop(3 - Math.max(0,pitches.indexOf(staffMidi(midi))) / 2)
     /** @type {number | undefined} */
     let slidePosition
     // Show the finger while Otto plays the connected phrases.
@@ -367,11 +394,18 @@ export function mountTutorial(root, navigate) {
       return phase === 'otto' && notes.some(note => note.midi === midi && beat >= note.beat && beat < note.beat + note.duration)
     }
     const introFocus = selected.value === 0 && dialogue.value ? (message.value === 1 ? 'keyboard' : message.value === 2 ? 'navigation' : '') : ''
+    const explainingAccidental = dialogue.value && [1,2].includes(message.value)
+    const highlightedMidi = explainingAccidental
+      ? (lesson.flatNotes ? 70 : selected.value === advancedStart + 2 ? 66 : -1)
+      : -1
     const introSlide = selected.value === 5 && dialogue.value && message.value <= 1
     return [
       h(TutorialSelector,{
-        onBack:()=>navigate('menu'),onSelect:select,index:selected.value,count:selected.value < 7 ? 7 : selected.value < 10 ? 10 : 11,minIndex:selected.value < 7 ? 0 : selected.value < 10 ? 7 : 10,label:'チュートリアル番号',
-        options:selected.value === 10 ? [h('option',{value:10},'No.1 · きらきら星')] : (selected.value < 7 ? lessons.slice(0,7) : lessons.slice(7,10)).map((l,i)=>{const index=i+(selected.value < 7 ? 0 : 7);return h('option',{value:index},`No.${index+1} · ${l.title}`)}),
+        onBack:()=>navigate('menu'),onSelect:select,index:selected.value,count:courseEnd(),minIndex:courseStart(),label:'チュートリアル番号',
+        options:lessons.slice(courseStart(),courseEnd()).map((item,i)=>{
+          const index = i + courseStart()
+          return h('option',{value:index},`No.${advanced ? i+1 : index+1} · ${item.title}`)
+        }),
         onStop:running?()=>{stop();dialogue.value=false}:undefined,
       }),
       h(TutorialCompanion,{
@@ -391,11 +425,20 @@ export function mountTutorial(root, navigate) {
           h('button',{type:'button',onClick:start},'もう一度'),
           h(TutorialTempo,{value:retryTempo.value,onTempoUpdate:(/** @type {number} */ value)=>{retryTempo.value=value}}),
           lesson.session && sessionLevel.value === 0 ? h('button',{type:'button',onClick:()=>{sessionLevel.value = 1; retryTempo.value = 90; start()}},'もう少しレベルを上げる') : null,
-          selected.value<(selected.value < 7 ? 6 : selected.value < 10 ? 9 : 10)?h('button',{type:'button',class:'tutorial-next',onClick:nextLesson},'次のレッスン →'):h('button',{type:'button',class:'tutorial-next',onClick:()=>navigate('menu')},'チュートリアルへ →'),
+          selected.value<courseEnd() - 1?h('button',{type:'button',class:'tutorial-next',onClick:nextLesson},'次のレッスン →'):h('button',{type:'button',class:'tutorial-next',onClick:()=>navigate('menu')},'チュートリアルへ →'),
         ]):null,
       ]),
-      h('section',{class:['tutorial-navigation',{'tutorial-intro-highlight':introFocus === 'navigation'}],'aria-label':'演奏ナビゲーション'},[
-        h('div',{class:'tutorial-caption tutorial-navigation-header'},[h('div',{class:'tutorial-navigation-copy'},[h('div',{class:'tutorial-navigation-status'},[h('strong',phase==='countdown'?`あと ${Math.ceil(-state.value.beat)} 拍`:phase==='you'?'あなた番です...':phase==='otto'?'Otto演奏中...':''),h('span',running && phase!=='countdown' && phase!=='loading'?`${Math.min(totalBars,state.value.bar+1)} / ${totalBars} 小節`:'')]),feedback.value || phase==='loading' ? h('span',{class:'sr-only',role:'status'},phase==='loading'?'音を準備しています…':feedback.value) : null]),lesson.session ? h('div',{class:'tutorial-score tutorial-session-ring',
+      h('section',{class:['tutorial-navigation',{'tutorial-navigation-advanced':advanced,'tutorial-intro-highlight':introFocus === 'navigation'}],'aria-label':'演奏ナビゲーション'},[
+        h('div',{class:'tutorial-caption tutorial-navigation-header'},[h('div',{class:'tutorial-navigation-copy'},[h('div',{class:'tutorial-navigation-status'},[h('strong',phase==='countdown'?countText:phase==='you'?'あなた番です...':phase==='otto'?'Otto演奏中...':''),h('span',running && phase!=='countdown' && phase!=='loading'?scorePosition:'')]),feedback.value || phase==='loading' ? h('span',{class:'sr-only',role:'status'},phase==='loading'?'音を準備しています…':feedback.value) : null]),
+        advanced && ['localhost','127.0.0.1'].includes(location.hostname) && phase !== 'complete' ? h(TutorialTempo,{value:retryTempo.value,disabled:running,onTempoUpdate:(/** @type {number} */ value)=>{retryTempo.value=value}}) : null,
+        advanced ? h('div',{class:'tutorial-score-pagination','aria-label':'楽譜のページ'},[
+          h('div',{class:'part-choice-steps'},[
+            h('button',{type:'button','aria-label':'前半の楽譜',disabled:running || scorePage === 0,onClick:()=>{scorePreviewPage.value=0}},'←'),
+            h('button',{type:'button','aria-label':'後半の楽譜',disabled:running || scorePage === 1,onClick:()=>{scorePreviewPage.value=1}},'→'),
+          ]),
+          h('span',{'aria-live':running ? 'off' : 'polite'},scorePage === 0 ? '1〜4小節' : '5〜8小節'),
+        ]) : null,
+        lesson.session ? h('div',{class:'tutorial-score tutorial-session-ring',
           role:'img','aria-label':phase==='you'?'あなたの番':phase==='otto'?'Ottoの番':'2小節ずつ交代'},[
           h('svg',{viewBox:'0 0 100 100','aria-hidden':'true'},[
             h('circle',{cx:50,cy:50,r:42,stroke:'var(--oto-accent)',pathLength:100,'stroke-dasharray':'48 52',transform:'rotate(-90 50 50)'}),
@@ -414,20 +457,36 @@ export function mountTutorial(root, navigate) {
           h('text',{x:50,y:59,'text-anchor':'middle',fill:'#e23c39','font-size':12,'font-weight':'bold'},'よくできました'),
         ]) : h('span',`${score.value}/${scoreGoal}`),
       ])]),
-        h('div',{class:['tutorial-lanes','tutorial-lanes-double',{'tutorial-lanes-advanced':advanced}]},(advanced ? ((state.value.bar % 4 >= 2 && state.value.bar < totalBars) ? [2,3,6,7] : [0,1,4,5]) : [Math.floor(Math.min(state.value.bar,totalBars-1)/2)*2,Math.floor(Math.min(state.value.bar,totalBars-1)/2)*2+1]).map(laneBar=>{
+        h('div',{class:['tutorial-lanes','tutorial-lanes-double',{'tutorial-lanes-advanced':advanced && lesson.keySignature}]},[firstLane,firstLane+1].map(laneBar=>{
         const notes = tutorialNotes(lesson,laneBar,sessionLevel.value)
         const lastNote = notes[notes.length - 1]
+        const pickupPair = pickupBeats && notes[0].midi === notes[1]?.midi
+          && Math.abs(notes[0].duration * notationScale - .75) < .001
+          && Math.abs(notes[1].duration * notationScale - .25) < .001
+        const pickupBeamStyle = pickupPair ? {
+          '--beam-start':pitchTop(notes[0].midi),
+          '--beam-end':pitchTop(notes[1].midi),
+          '--pickup-stem-x':accidental(notes[0].midi) ? 'calc(var(--tutorial-stem-x) + 4px)' : 'var(--tutorial-stem-x)',
+        } : null
         const connectedRhythm = (lesson.session && isSessionSlide(laneBar)) || selected.value === 8
         const rhythmLane = lesson.freePitch && !connectedRhythm
         const visibleRows = [...new Set(notes.map(note => durationRow(note.duration)))].sort((a,b) => a-b)
-        return h('div',{class:['tutorial-note-lane',{'tutorial-rhythm-lane':rhythmLane,'tutorial-pitch-lane':!rhythmLane,'tutorial-final-bar':laneBar === totalBars - 1}],'aria-hidden':'true'},[
-          advanced ? h('span',{class:'tutorial-treble-clef'},'𝄞') : null,
+        return h('div',{class:['tutorial-note-lane',{'tutorial-rhythm-lane':rhythmLane,'tutorial-pitch-lane':!rhythmLane,'tutorial-final-bar':advanced ? measure(laneBar,1) === 8 : laneBar === totalBars - 1}],'aria-hidden':'true'},[
           advanced && lesson.keySignature ? h('span',{class:'tutorial-key-signature'},lesson.keySignature) : null,
           !rhythmLane ? h('div',{class:'tutorial-staff-overlay'},[0,1,2,3,4].map(i=>h('span',{class:'tutorial-staff-line',style:{top:staffTop(2-i)}}))) : null,
-          ...[0,1,2,3].map(b=>h('span',{class:'tutorial-beat-grid',style:{left:`${b*25}%`}},String(b+1))),
-          ...Array.from({length:12},(_,i)=>{
+          ...Array.from({length:gridBeats},(_,b)=>{
+            const beatsPerMeasure = gridBeats / 2
+            const measureOffset = b - pickupBeats
+            const label = advanced
+              ? (measureOffset >= 0 && measureOffset % beatsPerMeasure === 0 ? String(measure(laneBar,measureOffset / beatsPerMeasure)) : '')
+              : String(b+1)
+            return h('span',{class:'tutorial-beat-grid',style:{left:`${b*100/gridBeats}%`,width:`${100/gridBeats}%`}},label)
+          }),
+          ...(advanced ? (pickupBeats ? [pickupBeats, secondMeasureBeat] : [gridBeats / 2]).map(position =>
+            h('span',{class:'tutorial-measure-divider',style:{left:`${position*100/gridBeats}%`}})) : []),
+          ...Array.from({length:gridBeats*3},(_,i)=>{
             const subdivision = i + 1 + Math.floor(i / 3)
-            return h('span',{class:['tutorial-subdivision',{'tutorial-subdivision-eighth':subdivision % 2 === 0}],style:{left:`${subdivision*6.25}%`}})
+            return h('span',{class:['tutorial-subdivision',{'tutorial-subdivision-eighth':subdivision % 2 === 0}],style:{left:`${subdivision*25/gridBeats}%`}})
           }),
           ...(isSlide() ? [h('div',{
             class:'tutorial-slide-track',
@@ -440,42 +499,58 @@ export function mountTutorial(root, navigate) {
           },h('div',{class:'tutorial-slide-fill',style:{
             width:`${(successes.has(laneBar) ? 1 : slideResultBar === laneBar ? slideProgress.value : 0)*100}%`,
           }}))] : []),
-          ...(beamSlide ? notes.slice(1,-1).map((note,index)=>{
-            const previousNote = notes[index]
-            return h('span',{class:'tutorial-slide-beam',style:{
-              left:`calc(${previousNote.beat*25}% + var(--tutorial-stem-x))`,
-              width:`calc(${(note.beat-previousNote.beat)*25}% + 1px)`,
-              '--beam-start':pitchTop(previousNote.midi),
-              '--beam-end':pitchTop(note.midi),
-            }})
+          ...(beamSlide ? notes.flatMap((note,index)=>{
+            if (index === 0 || (selected.value === 5 && index === notes.length-1) || (selected.value === 6 && index === 4)) return []
+            const previousNote = notes[index-1]
+            const beamStyle = {left:`calc(${previousNote.beat*25}% + var(--tutorial-stem-x))`,width:`calc(${(note.beat-previousNote.beat)*25}% + 1px)`,'--beam-start':pitchTop(previousNote.midi),'--beam-end':pitchTop(note.midi)}
+            return [h('span',{class:'tutorial-slide-beam',style:beamStyle}), ...(selected.value === 6 && previousNote.duration < .5 && note.duration < .5 ? [h('span',{class:'tutorial-slide-beam tutorial-slide-beam-secondary',style:beamStyle})] : [])]
           }) : []),
-          ...notes.map((n,index)=>h('span',{class:['tutorial-note',{'tutorial-slide-note':isSlide(), 'tutorial-pitch-note':!lesson.freePitch, 'tutorial-connected-note':connectedRhythm, 'tutorial-connected-first':connectedRhythm && (index === 0 || notes[index-1].beat + notes[index-1].duration < n.beat - .001), 'tutorial-connected-last':connectedRhythm && (index === notes.length - 1 || n.beat + n.duration < notes[index+1].beat - .001)}],style:{left:`${n.beat*25}%`,width:isSlide() ? undefined : `${n.duration*25}%`,top:rhythmOnlyGuide ? 'calc(49% - 14px)' : rhythmLane ? `${35+visibleRows.indexOf(durationRow(n.duration))*34}px` : pitchTop(n.midi)}},[
+          ...(pickupBeamStyle ? [
+            h('span',{class:'tutorial-slide-beam',style:{
+              ...pickupBeamStyle, left:'var(--pickup-stem-x)', width:`calc(${notes[1].beat*25}% + 1px)`,
+            }}),
+            h('span',{class:'tutorial-slide-beam tutorial-slide-beam-secondary',style:{
+              ...pickupBeamStyle, left:`calc(${notes[1].beat*25}% + var(--pickup-stem-x) - 7px)`, width:'8px',
+            }}),
+          ] : []),
+          ...notes.map((n,index)=>{
+            const hasBeam = beamSlide || (pickupPair && index < 2)
+            const notationBeat = Math.round(n.beat * notationScale * 4) / 4
+            const notationDuration = Math.round(n.duration * notationScale * 4) / 4
+            const beatInMeasure = notationBeat - pickupBeats
+            const measureIndex = Math.floor(beatInMeasure / (lesson.meter ?? 4))
+            const dotY = pitches.indexOf(staffMidi(n.midi)) % 2 === 0 ? 15 : 19
+            const sign = accidental(n.midi)
+            const showSign = sign && !notes.slice(0,index).some(previous =>
+              previous.midi === n.midi && Math.floor((Math.round(previous.beat * notationScale * 4) / 4 - pickupBeats) / (lesson.meter ?? 4)) === measureIndex)
+            return h('span',{class:['tutorial-note',{'tutorial-slide-note':isSlide(), 'tutorial-pitch-note':!lesson.freePitch, 'tutorial-accidental-note':!!accidental(n.midi), 'tutorial-connected-note':connectedRhythm, 'tutorial-connected-first':connectedRhythm && (index === 0 || notes[index-1].beat + notes[index-1].duration < n.beat - .001), 'tutorial-connected-last':connectedRhythm && (index === notes.length - 1 || n.beat + n.duration < notes[index+1].beat - .001)}],style:{left:`${n.beat*25}%`,width:isSlide() ? undefined : `${n.duration*25}%`,top:rhythmOnlyGuide ? 'calc(49% - 14px)' : rhythmLane ? `${35+visibleRows.indexOf(durationRow(n.duration))*34}px` : pitchTop(n.midi)}},[
             ...mergePlayedSegments(played.filter(p=>p.bar===laneBar && p.midi===n.midi && p.end>n.beat && p.start<n.beat+n.duration)).map(p=>{const start=Math.max(displayedResponseStart(p.start,n.beat),n.beat);return h('i',{class:'tutorial-played',style:{left:`${(start-n.beat)/n.duration*100}%`,width:`${Math.max(0,(Math.min(displayedResponseEnd(p.end,n.beat+n.duration,n.duration),n.beat+n.duration)-start)/n.duration)*100}%`}})}),
+            showSign ? h('span',{class:'tutorial-accidental'},sign) : null,
             (isSlide() || !lesson.freePitch) ? h('span',{class:'tutorial-slide-symbol','data-ledger':n.midi === 60 ? '' : undefined},
               h('svg',{class:'tutorial-note-symbol',viewBox:'0 0 16 24','aria-hidden':'true'},[
-                h('ellipse',{cx:5,cy:19,rx:4,ry:2.8,transform:`rotate(${n.midi >= 62 ? -28 : -18} 5 19)`,fill:n.duration >= 2 ? 'none' : 'currentColor',stroke:'currentColor','stroke-width':1.5}),
-                h('path',{d:'M8.8 19V2',fill:'none',stroke:'currentColor','stroke-width':1.5}),
-                !beamSlide && n.duration <= .5 ? h('path',{d:'M9 2c1.4 2.4 5 3 4.2 7',fill:'none',stroke:'currentColor','stroke-width':1.5,'stroke-linecap':'round'}) : null,
-                n.duration < .5 && !n.staccato ? h('path',{d:'M9 6c1.4 2.4 5 3 4.2 7',fill:'none',stroke:'currentColor','stroke-width':1.5,'stroke-linecap':'round'}) : null,
+                h('ellipse',{cx:5,cy:19,rx:4,ry:2.8,transform:`rotate(${n.midi >= 62 ? -28 : -18} 5 19)`,fill:notationDuration >= 2 ? 'none' : 'currentColor',stroke:'currentColor','stroke-width':1.5}),
+                notationDuration < 4 ? h('path',{d:'M8.8 19V2',fill:'none',stroke:'currentColor','stroke-width':1.5}) : null,
+                !hasBeam && notationDuration <= .75 ? h('path',{d:'M9 2c1.4 2.4 5 3 4.2 7',fill:'none',stroke:'currentColor','stroke-width':1.5,'stroke-linecap':'round'}) : null,
+                notationDuration < .5 && !n.staccato && !hasBeam ? h('path',{d:'M9 6c1.4 2.4 5 3 4.2 7',fill:'none',stroke:'currentColor','stroke-width':1.5,'stroke-linecap':'round'}) : null,
                 n.staccato ? h('circle',{cx:5,cy:25,r:1.3,fill:'currentColor'}) : null,
-                n.duration === 1.5 ? h('circle',{cx:13,cy:19,r:1.3,fill:'currentColor'}) : null,
+                (notationDuration === 1.5 || notationDuration === .75 || notationDuration === 3) ? h('circle',{cx:13,cy:dotY,r:1.3,fill:'currentColor'}) : null,
               ])) : null,
-            rhythmOnlyGuide ? null : h('span',{class:'tutorial-note-label'},lesson.freePitch && (n.duration >= 2 || n.duration < .5)
+            rhythmOnlyGuide || (advanced && (beatInMeasure < 0 ? index > 0 : beatInMeasure % (lesson.meter ?? 4) >= 1)) ? null : h('span',{class:['tutorial-note-label',{'tutorial-note-label-fa':!lesson.freePitch && n.midi % 12 === 5}]},lesson.freePitch && (n.duration >= 2 || n.duration < .5)
               ? h('svg',{class:'tutorial-note-symbol',viewBox:'0 0 16 24','aria-hidden':'true'},[
                 h('ellipse',{cx:5,cy:19,rx:4,ry:2.8,transform:'rotate(-20 5 19)',fill:n.duration >= 2 ? 'none' : 'currentColor',stroke:'currentColor','stroke-width':1.5}),
                 h('path',{d:'M8.8 19V2',fill:'none',stroke:'currentColor','stroke-width':1.5}),
                 n.duration < .5 ? h('path',{d:'M9 2c1.4 2.4 5 3.4 4.2 7M9 6c1.4 2.4 5 3.4 4.2 7',fill:'none',stroke:'currentColor','stroke-width':1.5,'stroke-linecap':'round'}) : null,
               ])
-              : lesson.freePitch ? (n.duration >= 1 ? '♩' : '♪') : names[pitches.indexOf(n.midi)]),
-          ])),
+              : lesson.freePitch ? (n.duration >= 1 ? '♩' : '♪') : `${names[pitches.indexOf(staffMidi(n.midi))]}${accidental(n.midi)}`),
+          ])}),
           ['otto','you'].includes(phase) && laneBar === state.value.bar?h('span',{class:'tutorial-playhead',style:{left:`${beat*25}%`}}):null,
         ])})),
       ]),
       ]),
       h('section',{class:['tutorial-user',{'tutorial-intro-focus':introFocus === 'keyboard'}],'aria-label':'あなたのけんばん'},[
-        h('div',{class:'tutorial-keyboard',style:{gridTemplateColumns:`repeat(${keyboardPitches.length},1fr)`}},[
-          ...keyboardPitches.map((m)=>h('button',{class:['tutorial-white',{active:held.value===m || noteActive(m)}], 'data-midi':m, 'aria-label':`${pianoWhiteLabel(m)} ${m===84?'高いド':''}`,...keyEvents(m)},pianoWhiteLabel(m))),
-          ...keyboardPitches.map((m,i)=>({m,i})).filter(({m,i})=>i<keyboardPitches.length-1 && [0,2,5,7,9].includes(m%12)).map(({m,i})=>h('button',{class:['tutorial-black',{active:held.value===m+1 || noteActive(m+1)}],'data-midi':m+1,style:{left:`${(i+1)*100/keyboardPitches.length}%`,width:`${56/keyboardPitches.length}%`},'aria-label':`${pianoWhiteLabel(m)} シャープ`,...keyEvents(m+1)})),
+        h('div',{class:['tutorial-keyboard',{'tutorial-keyboard-advanced':advanced}]},[
+          ...keyboardPitches.map((m,i)=>h('button',{class:['tutorial-white',{'tutorial-upper-key':advanced && i>7,active:held.value===m || noteActive(m)}], 'data-midi':m, 'aria-label':`${pianoWhiteLabel(m)} ${m===84?'高いド':''}`,...keyEvents(m)},pianoWhiteLabel(m))),
+          ...keyboardPitches.map((m,i)=>({m,i})).filter(({m,i})=>i<keyboardPitches.length-1 && [0,2,5,7,9].includes(m%12)).map(({m,i})=>h('button',{class:['tutorial-black',{'tutorial-upper-key':advanced && i>=7,active:held.value===m+1 || noteActive(m+1) || highlightedMidi===m+1}],'data-midi':m+1,style:{left:`calc(${i+1} * 100% / var(--tutorial-key-count))`,width:'calc(56% / var(--tutorial-key-count))'},'aria-label':lesson.flatNotes && m === 69 ? 'シ フラット' : `${pianoWhiteLabel(m)} シャープ`,...keyEvents(m+1)})),
           introSlide ? h('div',{class:['tutorial-slide-finger','tutorial-slide-intro',{'tutorial-slide-intro-down':message.value === 1}],key:message.value,'aria-hidden':'true'},'👆') : slidePosition === undefined ? null : h('div',{class:'tutorial-slide-finger',style:{left:`${(slidePosition + .5) * 12.5}%`},'aria-hidden':'true'},'👆'),
         ]),
       ]),
@@ -523,7 +598,7 @@ export function mountTutorial(root, navigate) {
     },
     advanceMessage(){ if (visible) advance() },
     selectLesson(/** @type {number} */ index){ select(index); start() },
-    open(restore = false){visible=true;const saved=readDevelopmentScreen('melody-lesson');const index=saved === null ? 0 : Number(saved);selected.value=restore && Number.isInteger(index) && index>=0 && index<lessons.length ? index : 0;saveDevelopmentScreen('melody-lesson',String(selected.value));sessionLevel.value=0;retryTempo.value=80;start()},
+    open(restore = false){visible=true;const saved=readDevelopmentScreen('melody-lesson');const index=saved === null ? 0 : Number(saved);selected.value=restore && Number.isInteger(index) && index>=0 && index<lessons.length ? index : 0;saveDevelopmentScreen('melody-lesson',String(selected.value));sessionLevel.value=0;resetRetryTempo();start()},
     close(){visible=false;midiHeld.clear();stop()},
   }
 }

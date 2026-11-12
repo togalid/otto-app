@@ -3152,12 +3152,19 @@ body[data-app-mode='tutorial'] > .shell,
   height:calc(24px * var(--tutorial-staff-scale)); z-index:3; pointer-events:none;
   border-left:2px solid var(--oto-ink); border-right:2px solid var(--oto-ink); opacity:.8;
 }
+.tutorial-score-pagination { display:flex; align-items:center; gap:8px; font-size:12px; }
+.tutorial-score-pagination .part-choice-steps { display:flex; }
+.tutorial-score-pagination .part-choice-steps > button { min-width:32px; min-height:32px; padding:0; }
+.tutorial-measure-divider {
+  position:absolute; left:50%; top:calc(49% - 12px * var(--tutorial-staff-scale));
+  height:calc(24px * var(--tutorial-staff-scale)); border-left:1px solid var(--oto-ink);
+  z-index:3; pointer-events:none;
+}
 .tutorial-lanes-double .tutorial-final-bar::after { border-right:4px double var(--oto-ink); }
 .tutorial-lanes-double .tutorial-note-lane:first-child::after { border-right-width:1px; }
 .tutorial-lanes-double .tutorial-note-lane:last-child::after { border-left-width:1px; }
 .tutorial-lanes-advanced { padding-left:38px; }
 .tutorial-lanes-advanced .tutorial-note-lane { overflow:visible; min-height:140px; }
-.tutorial-treble-clef { position:absolute; left:-34px; top:49%; transform:translateY(-50%); font-family:serif; font-size:54px; line-height:1; color:var(--oto-ink); pointer-events:none; }
 .tutorial-key-signature { position:absolute; left:-13px; top:49%; transform:translateY(-50%); font-size:18px; color:var(--oto-ink); pointer-events:none; }
 .tutorial-staff-line { position:absolute; left:0; right:0; border-top:1px solid var(--oto-seam); opacity:.35; pointer-events:none; }
 .tutorial-subdivision { position:absolute; top:0; bottom:0; border-left:1px dotted var(--oto-seam); opacity:.35; pointer-events:none; }
@@ -3172,6 +3179,9 @@ body[data-app-mode='tutorial'] > .shell,
 .tutorial-complete { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 4px; }
 .tutorial-screen .tutorial-complete button { min-height:44px; padding:8px 12px; font-size:13px; }
 .tutorial-user { margin-top:auto; padding-top:20px; padding-bottom:env(safe-area-inset-bottom); position:sticky; bottom:0; background:var(--oto-case); }
+@media (orientation:landscape) and (max-height:500px) {
+  .tutorial-user:has(.tutorial-keyboard-advanced) { position:relative; bottom:auto; }
+}
 .tutorial-lesson-area { position:relative; flex:1; display:flex; flex-direction:column; gap:16px; }
 .tutorial-guide-area { flex:1; display:flex; flex-direction:column; gap:16px; }
 .tutorial-lesson-area:has(.tutorial-demo-complete) { margin-top:-4px; }
@@ -3183,7 +3193,12 @@ body[data-app-mode='tutorial'] > .shell,
 @media (prefers-reduced-motion: reduce) {
   .tutorial-navigation { transition:none; }
 }
-.tutorial-keyboard { position:relative; display:grid; grid-template-columns:repeat(8,1fr); gap:4px; padding-bottom:6px; }
+.tutorial-keyboard { --tutorial-key-count:8; position:relative; display:grid; grid-template-columns:repeat(var(--tutorial-key-count),1fr); gap:4px; padding-bottom:6px; }
+.tutorial-keyboard-advanced { --tutorial-key-count:15; }
+@media (max-width:600px) and (orientation:portrait) {
+  .tutorial-keyboard-advanced { --tutorial-key-count:8; }
+  .tutorial-screen .tutorial-keyboard-advanced .tutorial-upper-key { display:none; }
+}
 .tutorial-keyboard, .tutorial-keyboard button, .tutorial-keyboard button * {
   -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
 }
@@ -3312,6 +3327,7 @@ body[data-app-mode='tutorial'] > .shell,
   --tutorial-stem-rise:calc(12.75px * var(--tutorial-staff-scale));
   --tutorial-notehead-offset:calc(14.25px * var(--tutorial-staff-scale));
 }
+.tutorial-navigation-advanced .tutorial-pitch-lane { --tutorial-pitch-half-height:calc(10px * var(--tutorial-staff-scale)); }
 .tutorial-slide-beam {
   position:absolute; inset-block:0; z-index:2; pointer-events:none;
   background:var(--oto-ink);
@@ -3322,12 +3338,18 @@ body[data-app-mode='tutorial'] > .shell,
     0 calc(var(--beam-start) - var(--tutorial-stem-rise) + 3px)
   );
 }
+.tutorial-slide-beam-secondary { transform:translateY(5px); }
 .tutorial-note.tutorial-pitch-note {
   height:calc(2 * var(--tutorial-pitch-half-height)); min-height:0;
   margin-top:calc(-1 * var(--tutorial-pitch-half-height)); overflow:visible; transform:none;
 }
 .tutorial-pitch-note .tutorial-slide-symbol {
   position:absolute; top:calc(50% - var(--tutorial-notehead-offset)); left:8px; z-index:2;
+}
+.tutorial-pitch-note.tutorial-accidental-note .tutorial-slide-symbol { left:12px; }
+.tutorial-accidental {
+  position:absolute; left:0; width:12px; top:50%; transform:translateY(-50%);
+  text-align:right; font-size:16px; line-height:1; z-index:4;
 }
 .tutorial-pitch-note .tutorial-slide-symbol,
 .tutorial-pitch-note .tutorial-note-symbol {
@@ -3342,9 +3364,12 @@ body[data-app-mode='tutorial'] > .shell,
 }
 .tutorial-pitch-note .tutorial-note-symbol { position:relative; overflow:visible; }
 .tutorial-pitch-note .tutorial-note-label {
-  position:absolute; top:calc(100% + 3px); left:5px; min-width:1.4em;
+  position:absolute; top:calc(100% + 3px); left:2px; min-width:1.4em;
   text-align:center; line-height:1; font-size:calc(12px * var(--tutorial-staff-scale));
 }
+.tutorial-navigation-advanced .tutorial-pitch-note .tutorial-note-label { font-size:calc(11px * var(--tutorial-staff-scale)); }
+.tutorial-pitch-note .tutorial-note-label-fa { font-size:calc(10px * var(--tutorial-staff-scale)); }
+.tutorial-navigation-advanced .tutorial-pitch-note .tutorial-note-label-fa { font-size:calc(9px * var(--tutorial-staff-scale)); }
 .tutorial-staff-overlay {
   position:absolute; inset:0; z-index:3; pointer-events:none;
 }
@@ -3689,3 +3714,7 @@ main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody { m
 .tutorial-companion .tutorial-complete { align-items:center; gap:8px; }
 .tutorial-screen .tutorial-complete > button { min-height:44px; padding:6px 10px; font-size:12px; }
 .tutorial-complete .tutorial-tempo { margin:0; }
+
+.tutorial-navigation-header > .tutorial-tempo { padding:4px; gap:4px; }
+.tutorial-navigation-header > .tutorial-tempo output { min-width:2em; }
+@media(max-width:600px) { .tutorial-navigation-header:has(> .tutorial-tempo) { flex-wrap:wrap; } .tutorial-navigation-header > .tutorial-tempo { margin-left:auto; } }

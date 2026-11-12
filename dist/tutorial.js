@@ -1,5 +1,5 @@
 /** @typedef {{beat:number,midi:number,duration:number,staccato?:boolean}} TutorialNote */
-/** @typedef {{title:string,messages:readonly string[],notes:readonly TutorialNote[],patterns?:readonly (readonly TutorialNote[])[],freePitch?:boolean,session?:boolean,keySignature?:string,earlyPhrases?:readonly (readonly TutorialNote[])[],laterPhrases?:readonly (readonly TutorialNote[])[]}} TutorialLesson */
+/** @typedef {{title:string,messages:readonly string[],notes:readonly TutorialNote[],patterns?:readonly (readonly TutorialNote[])[],freePitch?:boolean,session?:boolean,keySignature?:string,chords?:readonly (readonly TutorialChordName[])[],flatNotes?:boolean,meter?:3,pickupBeats?:1|3,earlyPhrases?:readonly (readonly TutorialNote[])[],laterPhrases?:readonly (readonly TutorialNote[])[]}} TutorialLesson */
 
 // Development navigation is scoped to the current tab.
 const developmentScreen = typeof location !== 'undefined' && ['localhost', '127.0.0.1'].includes(location.hostname)
@@ -16,7 +16,7 @@ export function saveDevelopmentScreen(key, value) {
 /** @typedef {{phase:'idle'|'loading'|'countdown'|'otto'|'you'|'complete'|'error',beat:number,bar:number,error:string}} TutorialState */
 /** @typedef {{ready:()=>Promise<void>,context?:{currentTime:number},playAt:(notes:readonly number[],time:number,duration:number,level?:number)=>void,silence:()=>void}} TutorialVoice */
 
-/** @typedef {{ready:()=>Promise<void>,context?:{currentTime:number},playAt:(notes:readonly number[],time:number,duration:number,level?:number,bassMidi?:number)=>void,silence:()=>void}} TutorialAccompaniment */
+/** @typedef {{ready:()=>Promise<void>,context?:{currentTime:number},playAt:(notes:readonly number[],time:number,duration:number,level?:number,bassMidi?:number,pulseSeconds?:number)=>void,silence:()=>void}} TutorialAccompaniment */
 
 /** @param {readonly number[]} pitches @param {number} spacing */
 const slide = (pitches,spacing) => pitches.map((midi,i)=>({beat:i*spacing,midi,duration:.25}))
@@ -99,14 +99,118 @@ export const lessons = [
     messages:['ドラム、ベース、コードの伴奏に乗って、Ottoと16小節のセッション！','2小節ずつ交代で弾こう。ナビのリズムに合わせて弾いてみよう！']},
 ]
 
-// An independent starting point for the advanced course, initially based on No.5.
-lessons.push({
-  title:'きらきら星',
-  messages:['きらきら星を弾いてみよう！','Ottoのお手本を聴いて、同じフレーズを弾いてね。'],
-  notes:lessons[4].notes.map(note=>({...note})),
-  earlyPhrases:lessons[4].earlyPhrases?.map(phrase=>phrase.map(note=>({...note}))),
-  laterPhrases:lessons[4].laterPhrases?.map(phrase=>phrase.map(note=>({...note}))),
-})
+/** @typedef {'C'|'G7'|'F'|'F/C'|'Am'|'C7'|'Bb'|'D'|'G'|'A7'|'Dm'|'Em'|'E5'} TutorialChordName */
+
+/** @type {Record<TutorialChordName,{notes:number[],bass:number}>} */
+const songChords = {
+  C: {notes:[60,64,67],bass:36},
+  G7: {notes:[59,62,65,67],bass:43},
+  G: {notes:[59,62,67],bass:43},
+  F: {notes:[60,65,69],bass:41},
+  'F/C': {notes:[60,65,69],bass:36},
+  Am: {notes:[57,60,64],bass:45},
+  C7: {notes:[60,64,67,70],bass:36},
+  Bb: {notes:[58,62,65],bass:46},
+  D: {notes:[62,66,69],bass:38},
+  A7: {notes:[61,64,67,69],bass:45},
+  Dm: {notes:[62,65,69],bass:38},
+  Em: {notes:[59,64,67],bass:40},
+  E5: {notes:[59,64],bass:40},
+}
+
+/**
+ * @param {string} title
+ * @param {number[][]} phrases Four bars of alternating MIDI notes and durations.
+ * @param {TutorialLesson['chords']} chords One chord per beat.
+ * @param {boolean} [flatNotes]
+ * @param {string[]} [intro]
+ * @param {3} [meter]
+ * @param {1|3} [pickupBeats]
+ * @returns {TutorialLesson}
+ */
+function advancedSong(title, phrases, chords, flatNotes = false, intro = [], meter, pickupBeats) {
+  const unitsPerBeat = meter === 3 ? 2 / 3 : 1
+  const bars = phrases.map(phrase => {
+    let beat = 0
+    const notes = []
+    for (let i = 0; i < phrase.length; i += 2) {
+      const [midi, duration] = [phrase[i], phrase[i + 1]]
+      notes.push({beat:beat * unitsPerBeat, midi, duration:duration * unitsPerBeat})
+      beat += duration
+    }
+    return notes
+  })
+  return {
+    title, chords, flatNotes, meter, pickupBeats,
+    messages:[`${title}を弾いてみよう！`,...intro,'Ottoのお手本を聴いて、同じフレーズを弾いてね。'],
+    notes:bars[0], earlyPhrases:bars.slice(0,2), laterPhrases:bars.slice(2),
+  }
+}
+
+export const advancedStart = lessons.length
+lessons.push(
+  advancedSong('ちょうちょう', [
+    [67,.5,64,.5,64,1,65,.5,62,.5,62,1],
+    [60,.5,62,.5,64,.5,65,.5,67,.5,67,.5,67,1],
+    [67,.5,64,.5,64,.5,64,.5,65,.5,62,.5,62,1],
+    [60,.5,64,.5,67,.5,67,.5,64,.5,64,.5,64,1],
+  ], [['C','C','G7','G7'],['C','C','C','C'],['C','C','G7','G7'],['C','C','C','C']]),
+  advancedSong('歓喜の歌', [
+    [64,.5,64,.5,65,.5,67,.5,67,.5,65,.5,64,.5,62,.5],
+    [60,.5,60,.5,62,.5,64,.5,64,.75,62,.25,62,1],
+    [64,.5,64,.5,65,.5,67,.5,67,.5,65,.5,64,.5,62,.5],
+    [60,.5,60,.5,62,.5,64,.5,62,.75,60,.25,60,1],
+  ], [['C','C','G','G'],['C','C','C','G7'],['C','C','C','G7'],['C','C','G7','C']]),
+  advancedSong('メリーさんのひつじ', [
+    [66,.75,64,.25,62,.5,64,.5,66,.5,66,.5,66,1],
+    [64,.5,64,.5,64,1,66,.5,69,.5,69,1],
+    [66,.75,64,.25,62,.5,64,.5,66,.5,66,.5,66,1],
+    [64,.5,64,.5,66,.75,64,.25,62,2],
+  ], [['D','D','D','D'],['A7','A7','D','D'],['D','D','D','D'],['A7','A7','D','D']], false, [
+    '♯（シャープ）が付くと、音が半音高くなるよ。ファ♯は、ファのすぐ右にある光った黒鍵だよ。',
+    '同じ小節のファ♯は、最初の音にだけ♯が付くよ。次のファ♯も同じ黒鍵で弾こう。',
+  ]),
+  // Each two-measure exchange includes its own pair of pickup notes.
+  advancedSong('ハッピー・バースデー', [
+    [60,.75,60,.25,62,1,60,1,65,1,64,2],
+    [60,.75,60,.25,62,1,60,1,67,1,65,2],
+    [60,.75,60,.25,72,1,69,1,65,1,64,1,62,1],
+    [70,.75,70,.25,69,1,65,1,67,1,65,2],
+  ], [
+    ['F','F','F','F','C7','C7'],
+    ['C7','C7','C7','C7','F','F'],
+    // The next row opens with the pickup on beat 3 of measure 6.
+    ['F','F','F','Am','Bb','Bb'],
+    ['Bb','F/C','F/C','C','F','F'],
+  ], true, [
+    '♭（フラット）が付くと、音が半音低くなるよ。シ♭は、シのすぐ左にある光った黒鍵だよ。',
+    '同じ小節では、次のシにも♭が効くよ。続けて同じ黒鍵を弾こう。',
+  ], 3, 1),
+  // Spring Brook: the first eight measures in C.
+  advancedSong('春の小川', [
+    [64,.5,67,.5,69,.5,67,.5,64,.5,67,.5,72,.5,72,.5],
+    [69,.5,69,.5,67,.5,64,.5,62,.5,64,.5,67,1],
+    [64,.5,67,.5,69,.5,67,.5,64,.5,67,.5,72,.5,72,.5],
+    [69,.5,69,.5,67,.5,64,.5,62,.5,64,.5,60,1],
+  ], [['C','F','C','C'],['F','C','G7','G7'],['C','F','C','C'],['F','C','G7','C']]),
+  // Sakura: opening, first melodic phrase, then the traditional closing phrase.
+  advancedSong('さくら さくら', [
+    [69,.5,69,.5,71,1,69,.5,69,.5,71,1],
+    [69,.5,71,.5,72,.5,71,.5,69,.5,71,.25,69,.25,65,1],
+    [64,.5,60,.5,64,.5,65,.5,64,.5,64,.25,60,.25,71,1],
+    [64,.5,65,.5,71,.25,69,.25,65,.5,64,2],
+  ], [['Am','E5','Am','E5'],['Am','Em','Am','F'],['E5','F','E5','E5'],['E5','F','F','E5']]),
+  // Greensleeves: opening verse in D minor, adapted to the two-measure practice rows.
+  advancedSong('グリーンスリーブス', [
+    [62,1,65,.5,67,.5,69,.75,70,.25,69,.5,67,1,64,.5,60,.75,62,.25],
+    [65,1,62,.5,62,.75,61,.25,62,.5,64,1,61,.5,69,1,62,.5],
+    [65,1,67,.5,69,.75,70,.25,69,.5,67,1,64,.5,60,.75,62,.25,64,.5],
+    [65,.75,64,.25,62,.5,61,.75,70,.25,60,.5,62,3],
+  ], [
+    ['Dm','Dm','F','C','C','C'], ['Dm','Dm','A7','A7','A7','Dm'],
+    ['Dm','Dm','F','C','C','C'], ['Dm','Dm','A7','Dm','Dm','Dm'],
+  ], true, [], 3, 1),
+)
 
 /** The Otto bar and following user bar share the same phrase.
  * @param {TutorialLesson} lesson @param {number} bar @param {number} [level] @returns {readonly TutorialNote[]} */
@@ -263,13 +367,18 @@ export function createTutorialPlayer({voice,onUpdate,accompaniment,setTimer = (c
     const lesson = lessons[index]
     if (!Number.isInteger(index) || !lesson) { publish('error',0,'チュートリアルを選び直してください。'); return }
     beatSeconds = bpm && Number.isFinite(bpm) ? 60 / Math.max(40,Math.min(180,bpm)) : lesson.session && level > 0 ? 60 / 90 : tutorialBeatSeconds
+    const triple = lesson.meter === 3
+    const pickupBeats = lesson.pickupBeats ?? 0
+    const pulse = triple ? 2 / 3 : pickupBeats ? .5 : 1
+    const countIn = (lesson.meter ?? 4) - pickupBeats
+    if (triple) beatSeconds /= pulse
     const totalBeats = lesson.session ? 64 : 32
     publish('loading')
     try {
       await Promise.all([voice.ready(), accompaniment?.ready()])
       if (token !== generation) return
       if (!voice.context) throw new Error('音声を開始できませんでした。もう一度スタートを押してください。')
-      const startTime = voice.context.currentTime + 4 * beatSeconds + .05
+      const startTime = voice.context.currentTime + countIn * pulse * beatSeconds + .05
       origin = startTime
       const events = Array.from({length:totalBeats / 4}, (_, bar) => {
         if (index >= 4 ? bar % 4 >= 2 : bar % 2 !== 0) return []
@@ -278,25 +387,32 @@ export function createTutorialPlayer({voice,onUpdate,accompaniment,setTimer = (c
           const next = phrase[noteIndex + 1]
           // Keep the mono voice held until the next key takes over.
           const connected = (lesson.patterns || (lesson.session && isSessionSlide(bar)) || ((index === 7 || index === 8) && bar >= 4 && next && note.beat + note.duration >= next.beat - .001)) && next
+          const writtenSeconds = note.duration * beatSeconds
+          const separation = index >= advancedStart
+            ? Math.min(writtenSeconds * .2, next && next.midi !== note.midi ? .045 : .09)
+            : 0
           const duration = connected
             ? (next.beat - note.beat) * beatSeconds + (next.midi === note.midi ? -.025 : .01)
-            : note.duration * beatSeconds * ((index === 4 || index === 10) && note.duration === 1 ? .8 : 1)
+            : index === 4 && note.duration === 1 ? writtenSeconds * .8 : writtenSeconds - separation
           return {midi:note.midi, time:startTime + (bar * 4 + note.beat) * beatSeconds, duration}
         })
       }).flat()
-      const backing = Array.from({length:totalBeats + 4},(_,i) => ({beat:i-4,time:startTime+(i-4)*beatSeconds}))
+      const backing = Array.from({length:totalBeats / pulse + countIn}, (_, i) => {
+        const slot = i - countIn
+        return {slot, beat:slot * pulse, time:startTime + slot * pulse * beatSeconds}
+      })
       let backingCursor = 0
       let cursor = 0
       const tick = () => {
         if (token !== generation || !voice.context) return
         try {
           const now = voice.context.currentTime
-          const beat = Math.max(-4,(now - startTime) / beatSeconds)
+          const beat = Math.max(-countIn * pulse,(now - startTime) / beatSeconds)
           if (now >= startTime + totalBeats * beatSeconds) { cancel(); publish('complete',totalBeats); return }
           while (backingCursor < backing.length && backing[backingCursor].time < now + .12) {
             const event = backing[backingCursor++]
             if (event.time >= now - .08 && accompaniment) {
-              if (event.beat < 0) accompaniment.playAt([event.beat === -4 ? 84 : 79],event.time,.12,.45)
+              if (event.beat < 0) accompaniment.playAt([event.slot === -countIn ? 84 : 79],event.time,.12,.45)
               else if (lesson.session) {
                 const chord = lessonThreeChords[[0,3,2,4][Math.floor(event.beat / 4) % 4]]
                 accompaniment.playAt(chord.notes,event.time,.52,event.beat % 2 === 0 ? .35 : .22,chord.bass)
@@ -304,12 +420,15 @@ export function createTutorialPlayer({voice,onUpdate,accompaniment,setTimer = (c
               else if (index === 1) {
                 const chord = lessonThreeChords[Math.floor(event.beat / 2) % lessonThreeChords.length]
                 accompaniment.playAt(chord.notes,event.time,.35,event.beat % 4 === 0 ? .32 : .18,chord.bass)
-              } else if (index === 4 || index === 10) {
+              } else if (lesson.chords || index === 4) {
                 const bar = Math.floor(event.beat / 4)
                 const phraseIndex = Math.floor(bar / 4) * 2 + bar % 2
-                const chordIndex = [[0,0],[4,0],[4,0],[3,0]][phraseIndex][Math.floor(event.beat % 4 / 2)]
-                const chord = lessonThreeChords[chordIndex]
-                accompaniment.playAt(chord.notes,event.time,.35,event.beat % 4 === 0 ? .32 : .18,chord.bass)
+                const beatInBar = event.slot % (4 / pulse)
+                const chord = lesson.chords
+                  ? songChords[lesson.chords[phraseIndex][beatInBar]]
+                  : lessonThreeChords[[[0,0],[4,0],[4,0],[3,0]][phraseIndex][Math.floor(beatInBar / 2)]]
+                const downbeat = (beatInBar - pickupBeats) % (lesson.meter ?? 4) === 0
+                accompaniment.playAt(chord.notes,event.time,.35,downbeat ? .32 : .18,chord.bass,pulse * beatSeconds)
               } else if (index === 5 || index === 6) {
                 const bar = Math.floor(event.beat / 4)
                 const chord = bar < 4 ? lessonThreeChords[[4,3,5,2][bar]] : bar === 7 ? {name:'CM7',notes:[60,64,67,71],bass:36} : lessonThreeChords[[6,3,0][bar - 4]]

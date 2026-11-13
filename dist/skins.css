@@ -4346,19 +4346,6 @@ main:not([data-mixer-part='drums']) [data-studio-part='drums'] { display:none; }
 .arrange-drum-flag-second { bottom: 11px; }
 .studio-accompaniment-pads .accompaniment-play { margin:12px 0 0; }
 
-.drum-samples { margin-block-start: 8px; }
-.drum-samples summary { cursor: pointer; }
-.drum-sample-slots { display: grid; gap: 8px; margin-block-start: 8px; }
-.drum-sample-slot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.drum-sample-slot > input { max-width: 100%; }
-.drum-sample-slot > span { min-width: 0; overflow-wrap: anywhere; }
-
 @font-face {
   font-family: 'Bravura';
   src: url('./vendor/Bravura.otf') format('opentype');

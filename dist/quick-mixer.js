@@ -1,4 +1,3 @@
-import { studioDrumLayout } from './rhythm.js'
 import { bindSynthKnob } from './main-controls.js'
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { mountAccompanimentPlay, selectStepperView } from './part-steppers.js'
@@ -507,63 +506,4 @@ export function mountQuickMixer({
     showPadHit,
     trackGrid,
   }
-}
-
-
-/** @param {HTMLElement} host @param {import('./rhythm.js').DrumSynth} drums
- * @param {(index: number) => void} audition */
-export function mountDrumSamples(host, drums, audition) {
-  const enabled = ref(false)
-  const names = ref(Array.from({length:8}, () => ''))
-  const busy = ref(Array.from({length:8}, () => false))
-  const messages = ref(Array.from({length:8}, () => ''))
-
-  /** @param {number} index @param {Event} event */
-  async function load(index, event) {
-    const input = /** @type {HTMLInputElement} */ (event.currentTarget)
-    const file = input.files?.[0]
-    input.value = ''
-    if (!file || busy.value[index]) return
-    busy.value[index] = true
-    messages.value[index] = '読み込み中'
-    try {
-      await drums.instrument.ready()
-      drums.samples.set(index, await drums.decodePadSample(index, file))
-      names.value[index] = file.name
-      messages.value[index] = '読み込み完了'
-    } catch (error) {
-      messages.value[index] = error instanceof DOMException
-        ? 'WAVを読み込めませんでした。'
-        : String(error instanceof Error ? error.message : error)
-    } finally {
-      busy.value[index] = false
-    }
-  }
-
-  createApp({render: () => h('details', {class:'drum-samples'}, [
-    h('summary', 'ドラムキット'),
-    h('div', {class:'segmented-control', role:'group', 'aria-label':'ドラム音源'},
-      [false, true].map(value => h('label', [
-        h('input', {type:'radio', name:'drum-source', checked:enabled.value === value,
-          onChange: () => { enabled.value = value; drums.samplesEnabled = value },
-        }),
-        h('span', value ? 'WAV' : '合成音'),
-      ]))),
-    enabled.value ? h('div', {class:'drum-sample-slots'}, [
-      h('p', '未設定のパッドは合成音。WAVの割り当てはこの画面を開いている間だけ有効です。'),
-      ...studioDrumLayout.map(({id:index, name:label}) => {
-        const name = names.value[index]
-        return h('div', {class:'drum-sample-slot', key:index}, [
-          h('button', {type:'button', class:'drum-tutorial-pad', onClick:() => audition(index)}, label),
-          h('input', {type:'file', accept:'.wav,audio/wav,audio/x-wav', 'aria-label':label + 'のWAV',
-            disabled:busy.value[index], onChange:(/** @type {Event} */ event) => void load(index, event),
-          }),
-          name ? h('button', {type:'button', disabled:busy.value[index], 'aria-label':label + 'のWAVを外す',
-            onClick:() => { drums.samples.delete(index); names.value[index] = ''; messages.value[index] = 'WAVを外しました' },
-          }, '外す') : null,
-          h('span', {role:'status'}, [name, messages.value[index]].filter(Boolean).join(' · ')),
-        ])
-      }),
-    ]) : null,
-  ])}).mount(host)
 }

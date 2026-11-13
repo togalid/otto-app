@@ -162,28 +162,13 @@ export class DrumSynth {
   }
   timbre = 'acoustic'
   samplesEnabled = false
+  sampleReady = Promise.resolve()
   /** @type {Map<number, AudioBuffer>} */
   samples = new Map()
   /** @type {Set<AudioBufferSourceNode>} */
   sampleVoices = new Set()
   /** @type {GainNode | undefined} */
   sampleGain
-
-  /** @param {number} index @param {File} file */
-  async decodePadSample(index, file) {
-    if (!Number.isInteger(index) || index < 0 || index >= 8 || file.size > 4 * 1024 * 1024)
-      throw new Error('4 MB以下のWAVを選んでください。')
-    const bytes = await file.arrayBuffer()
-    const header = new TextDecoder()
-    if (header.decode(bytes.slice(0, 4)) !== 'RIFF' || header.decode(bytes.slice(8, 12)) !== 'WAVE')
-      throw new Error('WAVファイルを選んでください。')
-    const context = this.instrument.context
-    if (!context) throw new Error('音声を準備できませんでした。')
-    const buffer = await context.decodeAudioData(bytes)
-    if (buffer.duration > 5 || buffer.numberOfChannels > 2)
-      throw new Error('5秒以下のモノラルまたはステレオWAVを選んでください。')
-    return buffer
-  }
 
   /** @param {number} index @param {number} time @param {number} velocity */
   playSample(index, time, velocity) {
@@ -212,7 +197,7 @@ export class DrumSynth {
 
   /** @param {number} index @param {number} time @param {number} velocity @param {number} [pitchOffset] */
   hitPadAt(index, time, velocity, pitchOffset = 0) {
-    if (this.playSample(index, time, velocity)) return
+    if (this.samplesEnabled) { this.playSample(index, time, velocity); return }
     const pad = drumPadSound(index)
     if (!pad) return
     const [, sound, pitch, duration] = pad
@@ -231,7 +216,7 @@ export class DrumSynth {
   /** @param {string} sound @param {number} time @param {number} [velocity] @param {number} [duration] @param {number} [pitch] @param {boolean} [accent] @param {boolean} [useSamples] */
   hitAt(sound, time, velocity, duration, pitch, accent, useSamples = true) {
     const index = sound === 'kick' ? 0 : sound === 'snare' ? 1 : sound === 'hat' ? ((duration ?? 0) >= .2 ? 3 : 2) : -1
-    if (useSamples && this.playSample(index, time, velocity ?? .6)) return
+    if (useSamples && this.samplesEnabled) { this.playSample(index, time, velocity ?? .6); return }
     const tone = this.instrument.engine?.drums
     if (!tone || !['kick', 'snare', 'hat'].includes(sound)) return
     tone.timbre = this.timbre

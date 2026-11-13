@@ -2,7 +2,7 @@ import { applySavedControl, arrangementControlRules } from './arrangement-contro
 import { decodeStudioStyle } from './studio-style.js'
 import { mountStudioEditors } from './studio-editors.js'
 import { createPartSettings } from './part-settings.js'
-import { mountQuickMixer, mountDrumSamples, bassPadNotes } from './quick-mixer.js'
+import { mountQuickMixer, bassPadNotes } from './quick-mixer.js'
 import { mountReferenceTiming } from './reference-timing-view.js'
 import { padChordNotes } from './music.js'
 import { createBackingDetail } from './backing-detail.js'
@@ -13,7 +13,7 @@ import { mountBassDetail } from './bass-detail.js'
 import { mountStyleChoices, mountPresetChoices } from './arrangement-selects.js'
 import { mountBasicParts, mountReferenceControls, mountReferenceDetail, bindKnobDrag, bindTempoKnob, mountPartIcons, mountSectionControls } from './main-controls.js'
 import { ref } from './vendor/vue.runtime.esm-browser.prod.js'
-import { mountMelodyVoiceChoice, mountPartSteppers, mountTimbreSteppers } from './part-steppers.js'
+import { drumPadNames, mountMelodyVoiceChoice, mountPartSteppers, mountTimbreSteppers } from './part-steppers.js'
 import { mountChordGrid, mountScoreContext, mountScoreBarCount, mountScorePaging, mountMobileScoreTools } from './chord-grid.js'
 import { createChoiceMenu, mountSelectMenus } from './choice-menu.js'
 import { mountTransport, mountPlayhead } from './transport-view.js'
@@ -55,7 +55,7 @@ import {
 } from './music.js'
 import { timbres, melodyTimbres, melodyTimbreFor } from './timbres.js'
 import { chordBackingPatterns } from './backing.js'
-import { Instrument, chordWeights } from './audio.js'
+import { Instrument, audioContext, chordWeights } from './audio.js'
 import { DrumSynth, rhythmPatterns } from './rhythm.js'
 import { Progression, maxChordBeats } from './progression.js'
 import { BassSynth, genres, genreProgressions, createPartMixer, swungBassBeat } from './groove.js'
@@ -985,10 +985,91 @@ partSettings.bind(bassPattern, () => {
 const drumTimbre = /** @type {HTMLSelectElement} */ (
   document.querySelector('#drum-timbre')
 )
-partSettings.bind(drumTimbre, () => {
-  drums.timbre = drumTimbre.value
+/** @typedef {{id:string, name:string, samples:{id:number,label:string,file:string}[], skipped:number}} DrumKit */
+/** @type {DrumKit[]} */
+let drumKits = []
+let drumKitGeneration = 0
+let drumKitCatalogGeneration = 0
+const drumKitHeaders = {'X-Otto-Local':'1'}
+async function refreshDrumKits() {
+  const ticket = ++drumKitCatalogGeneration
+  try {
+    const response = await fetch('./api/drum-kits', {headers:drumKitHeaders})
+    if (!response.ok) return
+    /** @type {DrumKit[]} */
+    const kits = await response.json()
+    if (ticket !== drumKitCatalogGeneration) return
+    const previous = drumTimbre.value
+    drumKits = kits
+    for (const option of Array.from(drumTimbre.options)) if (option.dataset.drumKit !== undefined) option.remove()
+    const alreadyNumbered = /^\d+: /.test(drumTimbre.options[0]?.textContent ?? '')
+    for (const [index, kit] of kits.entries()) {
+      const option = document.createElement('option')
+      option.value = 'sample:' + kit.id
+      option.dataset.drumKit = ''
+      const label = kit.name.replace(/^(\d+)[_ -]+/, '')
+      option.textContent = alreadyNumbered ? `${String(index + 4).padStart(2, '0')}: ${label}` : label
+      drumTimbre.append(option)
+    }
+    if (previous.startsWith('sample:') && !kits.some(kit => 'sample:' + kit.id === previous)) {
+      const unavailable = document.createElement('option')
+      unavailable.value = previous
+      unavailable.dataset.drumKit = ''
+      unavailable.disabled = true
+      unavailable.textContent = previous.slice(7) + '（見つかりません）'
+      drumTimbre.append(unavailable)
+      if (progressionStatus) progressionStatus.textContent = 'ドラムキットが見つかりません: ' + previous.slice(7)
+    }
+    if (Array.from(drumTimbre.options).some(option => option.value === previous)) drumTimbre.value = previous
+    drumTimbre.dispatchEvent(new Event('part-sync', {bubbles:true}))
+  } catch {
+    // The app can also run as a static site without local sample access.
+  }
+}
+
+function selectDrumTimbre() {
+  const selected = drumTimbre.value
+  const ticket = ++drumKitGeneration
+  const kit = drumKits.find(item => 'sample:' + item.id === selected)
+  if (!kit) {
+    drums.samplesEnabled = false
+    drums.sampleReady = Promise.resolve()
+    drumPadNames.value = {}
+    drums.timbre = selected
+    updatePartIcons()
+    return
+  }
+  drums.samplesEnabled = true
+  drums.samples.clear()
+  drumPadNames.value = Object.fromEntries(kit.samples.map(sample => [sample.id, sample.label]))
+  if (progressionStatus) progressionStatus.textContent = kit.name + 'を読み込み中'
+  const context = audioContext()
+  drums.sampleReady = Promise.all(kit.samples.map(async sample => {
+    const url = new URL('./api/drum-kit-sample', location.href)
+    url.searchParams.set('kit', kit.id)
+    url.searchParams.set('file', sample.file)
+    const response = await fetch(url, {headers:drumKitHeaders})
+    if (!response.ok) throw new Error('WAVを読み込めませんでした')
+    const bytes = await response.arrayBuffer()
+    const header = new TextDecoder()
+    if (header.decode(bytes.slice(0,4)) !== 'RIFF' || header.decode(bytes.slice(8,12)) !== 'WAVE')
+      throw new Error('WAV形式を確認してください')
+    const buffer = await context.decodeAudioData(bytes)
+    if (buffer.duration > 5 || buffer.numberOfChannels > 2) throw new Error('WAVは5秒以下のモノラルまたはステレオにしてください')
+    return [sample.id, buffer]
+  })).then(entries => {
+    if (ticket !== drumKitGeneration) return
+    drums.samples = new Map(/** @type {[number,AudioBuffer][]} */ (entries))
+    if (progressionStatus) progressionStatus.textContent = kit.skipped ? '8個を超えるWAVは読み込んでいません' : ''
+  }).catch(error => {
+    if (ticket === drumKitGeneration && progressionStatus) progressionStatus.textContent = kit.name + 'を読み込めませんでした: ' + String(error)
+  })
   updatePartIcons()
-})
+}
+await refreshDrumKits()
+partSettings.bind(drumTimbre, selectDrumTimbre)
+window.addEventListener('focus', () => { void refreshDrumKits() })
+
 
 const wholeScorePanel=document.getElementById('detail-chord')
 if(wholeScorePanel){wholeScorePanel.classList.add('whole-song-score');document.querySelector('main')?.append(wholeScorePanel)}
@@ -1034,17 +1115,9 @@ const {updateQuickMixer, syncBackingPad, clearAccompanimentPads, trackGrid, show
   progression, mixer, workspace, genreSelect, keySelect, bass, playAccompanimentPad, previewChord, togglePlayback: () => startButton.click(), animatePartChange: button => animatePartChange(button),
 })
 progression.onPadHit = showPadHit
-const drumSamplesHost = document.getElementById('drum-samples')
-if (drumSamplesHost) mountDrumSamples(drumSamplesHost, drums, async index => {
-  try {
-    await chordInstrument.ready()
-    const context = chordInstrument.context
-    if (context) drums.hitPadAt(index, context.currentTime + .01, .85)
-  } catch (error) {
-    if (progressionStatus) progressionStatus.textContent = String(error)
-  }
+trackGrid.addEventListener('click', event => {
+  if (event.target instanceof Element && event.target.closest('[data-track="drums"]')) void refreshDrumKits()
 })
-
 /** @param {'drums'|'bass'|'chord'} part @param {number} index */
 async function playAccompanimentPad(part, index) {
   if (part === 'drums') studioAccompanimentEditors.drums?.recordStep([index])
@@ -1053,6 +1126,7 @@ async function playAccompanimentPad(part, index) {
     const time = chordInstrument.context?.currentTime
     if (time === undefined) return
     if (part === 'drums') {
+      await drums.sampleReady
       drums.hitPadAt(index, time + .01, .85)
     } else if (part === 'bass') {
       bass.playAt(bassPadNotes[index], time + .01, .35, .85)

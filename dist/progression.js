@@ -94,7 +94,7 @@ export class Progression {
     if (this.accompanimentModes[hit.part] !== 'manual') this.pendingPadHits.push({time, hit})
   }
 
-  /** @param {import('./audio.js').Instrument} instrument @param {(index: number, chord: string, key: number, beat: number, section: number) => void} onStep @param {(message: string) => void} onError @param {{hitAt(sound: string, time: number, velocity?: number, duration?: number, pitch?: number, accent?: boolean): void, hitPadAt?(index: number, time: number, velocity: number, pitchOffset?: number): void, silence(): void} | undefined} [drums] @param {{playAt(midi: number, time: number, duration: number, velocity?: number, slideFrom?: number): void, silence(): void} | undefined} [bass] */
+  /** @param {import('./audio.js').Instrument} instrument @param {(index: number, chord: string, key: number, beat: number, section: number) => void} onStep @param {(message: string) => void} onError @param {{hitAt(sound: string, time: number, velocity?: number, duration?: number, pitch?: number, accent?: boolean): void, sampleReady?: Promise<void>, hitPadAt?(index: number, time: number, velocity: number, pitchOffset?: number): void, silence(): void} | undefined} [drums] @param {{playAt(midi: number, time: number, duration: number, velocity?: number, slideFrom?: number): void, silence(): void} | undefined} [bass] */
   constructor(instrument, onStep, onError, drums, bass) {
     this.instrument = instrument
     this.onStep = onStep
@@ -395,6 +395,7 @@ export class Progression {
     this.running = true
     try {
       await this.instrument.ready()
+      await this.drums?.sampleReady
       if (this.melody) await this.melody.ready()
       await Promise.all(this.ornaments.map(track => track.voice.ready()))
       if (generation !== this.generation) return

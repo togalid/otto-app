@@ -3,6 +3,7 @@ export { drumPadSound } from './rhythm.js'
 import { padIcon } from './drum-tutorial.js'
 import * as Vue from './vendor/vue.runtime.esm-browser.prod.js'
 const {createApp, h, ref} = Vue
+export const drumPadNames = ref(/** @type {Record<number,string>} */ ({}))
 const Teleport = Reflect.get(Vue, 'Teleport')
 
 export function mountPartSteppers() {
@@ -145,10 +146,10 @@ export function mountAccompanimentPlay(part, initialMode, face, setMode, play, o
     headingHost ? h(Teleport, {to:headingHost}, heading()) : heading(),
     part === 'drums'
       ? h('div', {class:'drum-pad-grid', role:'group', 'aria-label':'ドラムキット'}, studioDrumLayout.map((pad) =>
-        h('button', {type:'button', class:'drum-tutorial-pad', 'data-pad-index':String(pad.id), 'aria-label':`${pad.name} ${pad.key}キー`,
+        h('button', {type:'button', class:'drum-tutorial-pad', 'data-pad-index':String(pad.id), 'aria-label':`${drumPadNames.value[pad.id] ?? pad.name} ${pad.key}キー`,
           onPointerdown:(/** @type {PointerEvent} */ event) => { if(event.button!==0)return; event.preventDefault(); play(pad.id) },
           onClick:(/** @type {MouseEvent} */ event) => { if(event.detail===0)play(pad.id) },
-        }, [h('span',{class:'drum-pad-name'},[padIcon(pad.sound),h('strong',pad.name)]), h('kbd',pad.key.toUpperCase())])))
+        }, [h('span',{class:'drum-pad-name'},[padIcon(pad.sound),h('strong',drumPadNames.value[pad.id] ?? pad.name)]), h('kbd',pad.key.toUpperCase())])))
       : part === 'chord'
       ? h('iframe', { class: 'backing-chord-pads', title: 'バッキングのコードパッド', src: './chord-pad.html?embedded=1&backing=1', onLoad: onFrameLoad })
       : h('div', { class: 'accompaniment-pads', role: 'group', 'aria-label': '演奏パッド' },

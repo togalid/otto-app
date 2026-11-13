@@ -8,7 +8,7 @@ import { DrumSynth, drumPadSound } from './rhythm.js'
 import { genres } from './groove.js'
 import { midiKey, pianoWhiteLabel } from './keyboard.js'
 import { bindTempoKnob } from './main-controls.js'
-import { octaveControl } from './part-steppers.js'
+import { drumPadNames, octaveControl } from './part-steppers.js'
 import { scoreNavigation, scorePagination, scoreNote, scoreAccidental, scoreAccidentalGlyph, scoreAccidentalForNote, scoreKeyFifths, scoreKeySignature, scoreKeyedNotes, scoreRhythmGroups, scoreBeamLayout, scoreTrebleTop, scoreStaffStep, scoreStemDown, scoreLedgerOffsets, tutorialStaffLines, tutorialSubdivisions, tutorialPitchSymbol } from './score-navigation.js'
 
 /**
@@ -582,7 +582,7 @@ function dragEvents(index, axis) {
 }
 
 /** @param {number} midi */
-const noteName = midi => isDrums ? drumPadSound(midi)[0] : ((midi % 12 === 3 || midi % 12 === 10) ? pianoWhiteLabel(midi + 1) + '♭' : pianoWhiteLabel(midi) || pianoWhiteLabel(midi - 1) + '♯') + Math.floor(midi / 12 - 1)
+const noteName = midi => isDrums ? (drumPadNames.value[midi] ?? drumPadSound(midi)[0]) : ((midi % 12 === 3 || midi % 12 === 10) ? pianoWhiteLabel(midi + 1) + '♭' : pianoWhiteLabel(midi) || pianoWhiteLabel(midi - 1) + '♯') + Math.floor(midi / 12 - 1)
 
 const noteKeys = 'QWERTYU'
 const restKeys = 'ASDFGHJ'

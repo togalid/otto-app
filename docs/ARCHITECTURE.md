@@ -161,3 +161,5 @@ The Studio places part settings and pickup above the shared score and accompanim
 The Studio drum kit UI lives in `quick-mixer.js`. `DrumSynth` in `rhythm.js` owns the eight decoded WAV slots and uses the existing drum mixer and audio clock. Slots are session-only; version-1 arrangements retain pad indices. Unassigned pads use the synthesized sound.
 
 Studio drum display order and WAV slot labels share the layout in `rhythm.js`. Display positions are separate from the pad IDs stored in version-1 scores.
+
+Local drum kits are discovered from folders under `~/Desktop/Otto用素材/電子ドラムサンプル/` by `server/drum-kits.mjs`. The existing drum timbre control selects a kit. `app.js` loads and decodes the files together, with a generation guard for changes while loading. Arrangement settings store the folder name, not audio files; static hosting does not expose local kits.

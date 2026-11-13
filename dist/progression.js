@@ -2,7 +2,7 @@ import { melodyPresets } from './melody-presets.js'
 import { chordWeights } from './audio.js'
 import { planBassPattern, bassToneOffset, bassArticulation, swungBassBeat } from './groove.js'
 import { backingEvents, planBackingBar, backingAttacks } from './backing.js'
-import { rhythmPatterns } from './rhythm.js'
+import { rhythmPatterns, drumPadSound } from './rhythm.js'
 import { ornamentEvents } from './ornaments.js'
 import { bassHarmonyNotes, voicePhrase, chordNotes, defaultProgression } from './music.js'
 
@@ -94,7 +94,7 @@ export class Progression {
     if (this.accompanimentModes[hit.part] !== 'manual') this.pendingPadHits.push({time, hit})
   }
 
-  /** @param {import('./audio.js').Instrument} instrument @param {(index: number, chord: string, key: number, beat: number, section: number) => void} onStep @param {(message: string) => void} onError @param {{hitAt(sound: string, time: number, velocity?: number, duration?: number, pitch?: number, accent?: boolean): void, silence(): void} | undefined} [drums] @param {{playAt(midi: number, time: number, duration: number, velocity?: number, slideFrom?: number): void, silence(): void} | undefined} [bass] */
+  /** @param {import('./audio.js').Instrument} instrument @param {(index: number, chord: string, key: number, beat: number, section: number) => void} onStep @param {(message: string) => void} onError @param {{hitAt(sound: string, time: number, velocity?: number, duration?: number, pitch?: number, accent?: boolean): void, hitPadAt?(index: number, time: number, velocity: number, pitchOffset?: number): void, silence(): void} | undefined} [drums] @param {{playAt(midi: number, time: number, duration: number, velocity?: number, slideFrom?: number): void, silence(): void} | undefined} [bass] */
   constructor(instrument, onStep, onError, drums, bass) {
     this.instrument = instrument
     this.onStep = onStep
@@ -272,6 +272,10 @@ export class Progression {
   studioMelody = () => undefined
   /** @type {Progression['studioMelody']} */
   studioBass = () => undefined
+  /** @type {Progression['studioMelody']} */
+  studioBacking = () => undefined
+  /** @type {Progression['studioMelody']} */
+  studioDrums = () => undefined
   /** @type {{id:string,pattern:string,voice:{ready():Promise<void>,silence():void,schedule(event:import('./ornaments.js').OrnamentEvent,time:number,seconds:number):void}}[]} */
   ornaments = []
   running = false
@@ -349,6 +353,34 @@ export class Progression {
     }
   }
 
+  /**
+   * @param {NonNullable<ReturnType<Progression['studioMelody']>>} notes
+   * @param {number} gridStart @param {number} gridEnd
+   * @param {number} secondsPerGridBeat
+   */
+  scheduleStudioAccompaniment(notes, gridStart, gridEnd, secondsPerGridBeat, percussion = false) {
+    const events = new Map()
+    for (const note of notes) {
+      if (note.beat < gridStart || note.beat >= gridEnd) continue
+      const time = this.nextTime + (note.beat - gridStart) * secondsPerGridBeat
+      if (percussion) {
+        const [, sound, pitch, duration] = drumPadSound(note.midi)
+        this.queuePadHit(time, {part:'drums', sound, duration})
+        const pitchOffset = this.drumPitch[sound] ?? 0
+        if (this.drums?.hitPadAt) this.drums.hitPadAt(note.midi, time, note.velocity, pitchOffset)
+        else this.drums?.hitAt(sound, time, note.velocity, duration, pitch + pitchOffset, note.midi === 7)
+      } else {
+        const key = `${note.beat}:${note.duration}`
+        const event = events.get(key)
+        if (event) event.notes.push(note.midi)
+        else events.set(key, {notes:[note.midi], time, duration:note.duration * secondsPerGridBeat, velocity:note.velocity})
+      }
+    }
+    for (const {notes, time, duration, velocity} of events.values()) {
+      this.instrument.playAt(notes, time, duration, velocity)
+    }
+  }
+
   /** @param {number} [bar] @param {number} [beat] @param {number} [startTime] AudioContext time, for a synchronized count-in. */
   async start(bar = 0, beat = 0, startTime = 0) {
     if (!Number.isInteger(bar) || bar < 0 || bar >= this.barCount() || !Number.isFinite(beat) || (beat < 0 && !(bar === 0 && beat === -1)) || beat >= this.meterForBar(bar))
@@ -380,6 +412,12 @@ export class Progression {
           if (note.beat >= 0 || note.beat < -1) continue
           this.bass?.playAt(note.midi, this.nextTime + (note.beat + 1) * secondsPerBeat,
             note.duration * secondsPerBeat, note.velocity)
+        }
+        if (this.accompanimentModes.chord !== 'manual') {
+          this.scheduleStudioAccompaniment(this.studioBacking() ?? [], -1, 0, secondsPerBeat)
+        }
+        if (this.accompanimentModes.drums !== 'manual') {
+          this.scheduleStudioAccompaniment(this.studioDrums() ?? [], -1, 0, secondsPerBeat, true)
         }
         this.nextTime += secondsPerBeat
         beat = 0
@@ -483,13 +521,20 @@ export class Progression {
         const touch = chordMode === 'otto' ? 'strum' : expression?.touch
         for(const attack of backingAttacks(notes,touch))originalInstrument.playAt(attack.notes,time+attack.delay,Math.max(.01,length-attack.delay),level*attack.gain,attack.notes.map(note=>weights[notes.indexOf(note)]))
       }
-      for (const event of planBackingBar({
-        changes, startBeat, beatsPerBar:this.beatsPerBar, bpm:this.bpm, duration,
-        swing:this.swing, pattern:this.backing, steps:customBacking, expression,
-        eventsFor:(notes, pattern, root) => this.backingEvents(notes, pattern, root),
-      })) {
-        playBacking(event.notes, this.nextTime + event.offset, event.length, event.level,
-          chordWeights(event.notes, event.chord, barKey), event.chord)
+      const gridStart = this.nextStep * 4 + startBeat * 4 / this.beatsPerBar
+      const gridEnd = (this.nextStep + 1) * 4
+      const recordedBacking = this.studioBacking()
+      if (recordedBacking !== undefined) {
+        if (chordMode !== 'manual') this.scheduleStudioAccompaniment(recordedBacking, gridStart, gridEnd, duration / 4)
+      } else {
+        for (const event of planBackingBar({
+          changes, startBeat, beatsPerBar:this.beatsPerBar, bpm:this.bpm, duration,
+          swing:this.swing, pattern:this.backing, steps:customBacking, expression,
+          eventsFor:(notes, pattern, root) => this.backingEvents(notes, pattern, root),
+        })) {
+          playBacking(event.notes, this.nextTime + event.offset, event.length, event.level,
+            chordWeights(event.notes, event.chord, barKey), event.chord)
+        }
       }
       this.scheduleStudioMelody(score.style ?? this.genre, startBeat, duration)
       if (this.melody && this.melodyPattern) {
@@ -512,7 +557,10 @@ export class Progression {
           track.voice.schedule(event, this.nextTime + (from - startBeat) * duration / this.beatsPerBar, (to - from) * duration / this.beatsPerBar)
         }
       }
-      if (!ottoDrumPattern && score.performance?.drums) {
+      const recordedDrums = this.studioDrums()
+      if (recordedDrums !== undefined) {
+        if (drums) this.scheduleStudioAccompaniment(recordedDrums, gridStart, gridEnd, duration / 4, true)
+      } else if (!ottoDrumPattern && score.performance?.drums) {
         const hits = drumEventsAtRate(score.performance.drums, this.beatsPerBar * 8, this.nextStep, this.beatsPerBar, this.drumRate)
         for (const hit of hits) {
           const beat = hit.beat

@@ -115,3 +115,13 @@ test('backing expression round trips and rejects invalid values', () => {
   assert.equal(decode().sections[1].backingExpression,undefined)
   for (const value of [-1,101,NaN]) { f.sections[0].backingExpression.length=value; assert.throws(decode) }
 })
+
+test('version 1 arrangement round-trips both Studio accompaniment tracks', () => {
+  const {controls, mix, score, rules} = fixture()
+  assert.deepEqual(decodeArrangement(encodeArrangement(controls, mix, score), rules).score.studioAccompaniment, {backing:[], drums:[]})
+  score.studioAccompaniment = {
+    backing:[{beat:4, duration:1, midi:33}, {beat:4, duration:1, midi:60}],
+    drums:[{beat:4.5, duration:.5, midi:3}],
+  }
+  assert.deepEqual(decodeArrangement(encodeArrangement(controls, mix, score), rules).score.studioAccompaniment, score.studioAccompaniment)
+})

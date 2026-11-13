@@ -2,7 +2,7 @@ import { applySavedControl, arrangementControlRules } from './arrangement-contro
 import { decodeStudioStyle } from './studio-style.js'
 import { mountStudioEditors } from './studio-editors.js'
 import { createPartSettings } from './part-settings.js'
-import { mountQuickMixer, bassPadNotes } from './quick-mixer.js'
+import { mountQuickMixer, mountDrumSamples, bassPadNotes } from './quick-mixer.js'
 import { mountReferenceTiming } from './reference-timing-view.js'
 import { padChordNotes } from './music.js'
 import { createBackingDetail } from './backing-detail.js'
@@ -13,7 +13,7 @@ import { mountBassDetail } from './bass-detail.js'
 import { mountStyleChoices, mountPresetChoices } from './arrangement-selects.js'
 import { mountBasicParts, mountReferenceControls, mountReferenceDetail, bindKnobDrag, bindTempoKnob, mountPartIcons, mountSectionControls } from './main-controls.js'
 import { ref } from './vendor/vue.runtime.esm-browser.prod.js'
-import { drumPadSound, mountMelodyVoiceChoice, mountPartSteppers, mountTimbreSteppers } from './part-steppers.js'
+import { mountMelodyVoiceChoice, mountPartSteppers, mountTimbreSteppers } from './part-steppers.js'
 import { mountChordGrid, mountScoreContext, mountScoreBarCount, mountScorePaging, mountMobileScoreTools } from './chord-grid.js'
 import { createChoiceMenu, mountSelectMenus } from './choice-menu.js'
 import { mountTransport, mountPlayhead } from './transport-view.js'
@@ -315,6 +315,14 @@ let barPlayback = null
 const playbackHeads = new Map()
 /** @type {Map<number,number>} */
 const waveformStartBeats = new Map()
+let studioEditor = /** @type {ReturnType<typeof import('./melody-arrange.js').mountMelodyEditor> | undefined} */ (undefined)
+
+let studioBassEditor = /** @type {typeof studioEditor} */ (undefined)
+
+/** @type {Partial<Record<'backing'|'drums', NonNullable<typeof studioEditor>>>} */
+const studioAccompanimentEditors = {}
+let studioAccompanimentLoad = /** @type {ReturnType<typeof import('./studio-style.js').decodeStudioAccompaniment> | undefined} */ (undefined)
+
 progression.onScheduleBar = (/** @type {number} */ bar, /** @type {number} */ beat, /** @type {number} */ time, /** @type {number} */ secondsPerBeat) => {
   playerDisplay.meter(chordInstrument.context)
   const context = chordInstrument.context
@@ -322,11 +330,13 @@ progression.onScheduleBar = (/** @type {number} */ bar, /** @type {number} */ be
   const meter = progression.meterForBar(bar)
   studioEditor?.schedulePlaybackBar(bar, beat, time, secondsPerBeat, meter, context)
   studioBassEditor?.schedulePlaybackBar(bar, beat, time, secondsPerBeat, meter, context)
+  for (const editor of Object.values(studioAccompanimentEditors)) editor.schedulePlaybackBar(bar, beat, time, secondsPerBeat, meter, context)
 }
 progression.onStart = referenceTrack.startWithAccompaniment
 progression.onStop = () => {
   studioEditor?.stopPlaybackPosition()
   studioBassEditor?.stopPlaybackPosition()
+  for (const editor of Object.values(studioAccompanimentEditors)) editor.stopPlaybackPosition()
   barPlayback = null
   referenceTrack.stopWithAccompaniment()
   playerDisplay.stopMeter()
@@ -358,11 +368,13 @@ mountSelectMenus()
 /** @param {number} bar @param {number} beat @param {string} chord @param {boolean} [replace] */
 async function previewChord(bar, beat, chord, replace = false) {
   try {
+    const key = progression.keyForBar(bar)
+    const notes = replace ? padChordNotes(chord, key) : progression.notesForBar(chord, bar, beat)
+    const recorded = replace && studioAccompanimentEditors.backing?.recordStep(notes)
     await chordInstrument.ready()
     if (chordInstrument.context) {
-      const notes = replace ? padChordNotes(chord, progression.keyForBar(bar)) : progression.notesForBar(chord, bar, beat)
       if (replace) {
-        chordInstrument.silence()
+        if (!recorded || !progression.running) chordInstrument.silence()
         if (progression.running && progression.accompanimentModes.chord === 'manual') {
           const barDuration = progression.meterForBar(bar) * 60 / progression.bpmForBar(bar)
           progression.followBackingPad(chord, progression.keyForBar(bar), chordInstrument.context.currentTime + barDuration)
@@ -1022,16 +1034,26 @@ const {updateQuickMixer, syncBackingPad, clearAccompanimentPads, trackGrid, show
   progression, mixer, workspace, genreSelect, keySelect, bass, playAccompanimentPad, previewChord, togglePlayback: () => startButton.click(), animatePartChange: button => animatePartChange(button),
 })
 progression.onPadHit = showPadHit
+const drumSamplesHost = document.getElementById('drum-samples')
+if (drumSamplesHost) mountDrumSamples(drumSamplesHost, drums, async index => {
+  try {
+    await chordInstrument.ready()
+    const context = chordInstrument.context
+    if (context) drums.hitPadAt(index, context.currentTime + .01, .85)
+  } catch (error) {
+    if (progressionStatus) progressionStatus.textContent = String(error)
+  }
+})
 
 /** @param {'drums'|'bass'|'chord'} part @param {number} index */
 async function playAccompanimentPad(part, index) {
+  if (part === 'drums') studioAccompanimentEditors.drums?.recordStep([index])
   try {
     await chordInstrument.ready()
     const time = chordInstrument.context?.currentTime
     if (time === undefined) return
     if (part === 'drums') {
-      const [, sound, pitch, duration] = drumPadSound(index)
-      drums.hitAt(sound, time + .01, .85, duration, pitch, index === 7)
+      drums.hitPadAt(index, time + .01, .85)
     } else if (part === 'bass') {
       bass.playAt(bassPadNotes[index], time + .01, .35, .85)
     } else {
@@ -1168,9 +1190,12 @@ const midiInput = mountMidiInput({
     else {
       const gm = /** @type {Record<number,number>} */ ({36:4,38:5,42:6,46:7,35:0,40:1,45:2,44:3})
       const index=gm[midi] ?? ((midi%8)+8)%8
-      const [, sound, pitch, duration]=drumPadSound(index)
+      if (workspace.dataset.workspaceView === 'mixer' && workspace.dataset.mixerPart === 'drums') {
+        void playAccompanimentPad('drums', index)
+        return
+      }
       const time=chordInstrument.context?.currentTime
-      if(time!==undefined)drums.hitAt(sound,time+.01,.85,duration,pitch,index===7)
+      if(time!==undefined)drums.hitPadAt(index,time+.01,.85)
     }
   },
   release:midi=>{const part=midiDestinations.get(midi);midiDestinations.delete(midi);if(part==='tutorial')tutorialView?.midiRelease(midi);else if(part==='song-session')tutorialView?.songMidiRelease(midi);else if(part==='studio-melody')studioEditor?.midiRelease(midi);else if(part==='studio-bass')studioBassEditor?.midiRelease(midi);else if(part==='melody')magicVoice.release(midi);else if(part==='chord')chordInstrument.release(midi)},
@@ -1356,12 +1381,12 @@ function captureArrangement() {
   const {slots, beatSlots, modulation} = progression.sections[0]
   const {bassFeel, bassTones, drumSteps, drumAccents, drumPitch, sections, drumRate, barSettings} = progression
   const beatsPerBar = Number(meterInput.value)
-  return encodeArrangement(controls, mix, {slots, beatSlots, modulation, bassFeel, bassTones, drumSteps, drumAccents, drumPitch, beatsPerBar, drumRate, barSettings}, sections)
+  const studioAccompaniment = {
+    backing: studioAccompanimentEditors.backing?.getNotes() ?? [],
+    drums: studioAccompanimentEditors.drums?.getNotes() ?? [],
+  }
+  return encodeArrangement(controls, mix, {studioAccompaniment, slots, beatSlots, modulation, bassFeel, bassTones, drumSteps, drumAccents, drumPitch, beatsPerBar, drumRate, barSettings}, sections)
 }
-
-let studioEditor = /** @type {ReturnType<typeof import('./melody-arrange.js').mountMelodyEditor> | undefined} */ (undefined)
-
-let studioBassEditor = /** @type {typeof studioEditor} */ (undefined)
 
 function captureStudioStyle() {
   return JSON.stringify({arrangement:captureArrangement(), melody:studioEditor?.getNotes() ?? [], bass:studioBassEditor?.getNotes() ?? []})
@@ -1430,6 +1455,11 @@ async function applyArrangementJson(json, selectedStyle = false) {
       scorePage.value=0
       progression.bassFeel = score.bassFeel
       progression.bassTones = score.bassTones
+      if (!selectedStyle) {
+        studioAccompanimentLoad = score.studioAccompaniment
+        studioAccompanimentEditors.backing?.setNotes(studioAccompanimentLoad?.backing ?? [])
+        studioAccompanimentEditors.drums?.setNotes(studioAccompanimentLoad?.drums ?? [])
+      }
       progression.drumSteps = score.drumSteps
       progression.drumAccents = score.drumAccents ?? []
       progression.drumPitch = score.drumPitch ?? {}
@@ -1608,4 +1638,12 @@ mountStudioEditors({
   },
   onMelodyMounted: editor => { studioEditor = editor },
   onBassMounted: editor => { studioBassEditor = editor },
+  onAccompanimentMounted(part, editor) {
+    studioAccompanimentEditors[part] = editor
+    editor.setNotes(studioAccompanimentLoad?.[part] ?? [])
+    progression[part === 'backing' ? 'studioBacking' : 'studioDrums'] = () => {
+      const notes = editor.getNotes()
+      return notes.length ? notes : undefined
+    }
+  },
 })

@@ -3931,36 +3931,36 @@ main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody { m
 /* The Studio uses the melody editor keyboard. */
 #detail-melody > .melody-view,
 #detail-melody > .piano-scroll { display:none; }
-:is(#detail-melody, #detail-bass) .studio-melody-editor {
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor {
   width:100%; min-height:0; margin:16px 0 0; padding:0;
   background:transparent;
 }
-:is(#detail-melody, #detail-bass) .studio-melody-editor:has(.arrange-step-controls) { padding:0; }
-:is(#detail-melody, #detail-bass) .studio-melody-editor .selection-header { display:none; }
-:is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-input-dock {
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor:has(.arrange-step-controls) { padding:0; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .selection-header { display:none; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-input-dock {
   position:static; padding:0; background:transparent;
 }
-:is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-step-row {
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-step-row {
   flex-wrap:wrap;
 }
 #detail-melody .melody-top-row .buddy-inline { min-width:0; }
 
-:is(#detail-melody, #detail-bass) .arrange-keyboard-toolbar { flex-wrap:wrap; justify-content:flex-start; }
-:is(#detail-melody, #detail-bass) .arrange-keyboard-toolbar > button:last-child { margin-left:auto; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .arrange-keyboard-toolbar { flex-wrap:wrap; justify-content:flex-start; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .arrange-keyboard-toolbar > button:last-child { margin-left:auto; }
 .arrange-keyboard-toolbar .arrange-bar-toggle[aria-pressed="true"] { background:var(--oto-secondary); color:var(--oto-key); }
 .melody-arrange .arrange-hide-note-bars .arrange-note { background:transparent; border-right-color:transparent; }
-:is(#detail-melody, #detail-bass) .arrange-octave-width { display:flex; }
-:is(#detail-melody, #detail-bass) .arrange-octave-width label { cursor:pointer; }
-:is(#detail-melody, #detail-bass) .arrange-octave-width input { position:absolute; opacity:0; }
-:is(#detail-melody, #detail-bass) .arrange-octave-width span { display:block; padding:8px; }
-:is(#detail-melody, #detail-bass) .arrange-octave-width input:checked + span { background:var(--oto-key); box-shadow:var(--oto-raised); border-radius:5px; }
-:is(#detail-melody, #detail-bass) .arrange-octave-width input:focus-visible + span { outline:2px solid var(--oto-accent); }
-:is(#detail-melody, #detail-bass) .arrange-keyboard .tutorial-black { width:calc(0.56 * 100% / var(--tutorial-key-count)); }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .arrange-octave-width { display:flex; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .arrange-octave-width label { cursor:pointer; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .arrange-octave-width input { position:absolute; opacity:0; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .arrange-octave-width span { display:block; padding:8px; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .arrange-octave-width input:checked + span { background:var(--oto-key); box-shadow:var(--oto-raised); border-radius:5px; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .arrange-octave-width input:focus-visible + span { outline:2px solid var(--oto-accent); }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .arrange-keyboard .tutorial-black { width:calc(0.56 * 100% / var(--tutorial-key-count)); }
 
 /* Studio uses its transport tempo and keeps the editor focused on the score. */
 #detail-melody .buddy-inline,
-:is(#detail-melody, #detail-bass) .studio-melody-editor > button:first-child,
-:is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-tempo { display:none; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor > button:first-child,
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-tempo { display:none; }
 
 /* Keep the Studio's mobile transport available when it moves into this row. */
 #detail-melody .otto-mode-field,
@@ -3982,7 +3982,7 @@ main:is([data-workspace-view='mixer']:is([data-mixer-part='melody'], [data-mixer
   margin-bottom:0;
   padding-bottom:0;
 }
-main[data-workspace-view='mixer'] > :is(#detail-melody, #detail-bass):not([hidden]) {
+main[data-workspace-view='mixer'] > :is(#detail-melody, #detail-bass, .mixer-quick-edit):not([hidden]) {
   margin-top:0;
   border-radius:0 0 18px 18px;
   padding-top:8px;
@@ -4011,8 +4011,8 @@ main[data-workspace-view='mixer'] > :is(#detail-melody, #detail-bass):not([hidde
 .mixer-layout-tools > .part-bank { display:inline-flex; align-items:center; }
 
 /* Keep the melody controls close to the part selector. */
-:is(#detail-melody, #detail-bass) .melody-choice-row > .section-style-choice > span:first-child { display:none; }
-:is(#detail-melody, #detail-bass) .melody-choice-row { margin-top:0; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .melody-choice-row > .section-style-choice > span:first-child { display:none; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .melody-choice-row { margin-top:0; }
 
 
 /* The score sits next to melody in the shared part grid. */
@@ -4046,7 +4046,7 @@ main {
 .studio-melody-editor .arrange-chord-strip {
   background: var(--studio-score-heading);
 }
-:is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-score {
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-score {
   --tutorial-background: var(--oto-key);
 }
 .studio-melody-editor .arrange-note {
@@ -4121,7 +4121,7 @@ main[data-workspace-view='score'] .backing-display { display:none; }
 .score-length input::-webkit-inner-spin-button, .score-length input::-webkit-outer-spin-button { appearance:none; margin:0; }
 .score-length input:focus-visible { outline:2px solid var(--oto-secondary); outline-offset:-2px; }
 
-:is(#detail-melody, #detail-bass) .melody-choice-row .arrange-pickup {
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .melody-choice-row .arrange-pickup {
   min-height: 32px;
   padding: 4px 10px;
   border: 0;
@@ -4133,17 +4133,17 @@ main[data-workspace-view='score'] .backing-display { display:none; }
   font-size: 12px;
   cursor: pointer;
 }
-:is(#detail-melody, #detail-bass) .melody-choice-row .arrange-pickup:focus-visible { outline:2px solid var(--oto-secondary); outline-offset:2px; }
-:is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-controls { display:none; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .melody-choice-row .arrange-pickup:focus-visible { outline:2px solid var(--oto-secondary); outline-offset:2px; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-controls { display:none; }
 
 @media (min-width: 701px) {
-  :is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-step-row button {
+  :is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-step-row button {
     width: 36px;
     min-width: 36px;
     min-height: 36px;
     padding: 3px;
   }
-  :is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-rhythm-icon { width: 18px; height: 25px; }
+  :is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-rhythm-icon { width: 18px; height: 25px; }
 }
 
 #detail-melody .melody-notation { order:2; margin:0 0 0 auto; flex:none; }
@@ -4177,13 +4177,13 @@ input:focus-visible + span {
 .arrange-record .mix-button { display:flex; gap:4px; width:auto; min-width:52px; padding:0 9px; }
 
 /* Extend the score background to the edges of the Studio panel. */
-:is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-score {
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-score {
   margin-inline: -24px;
   padding-inline: 40px;
   border-radius: 0;
 }
 @media (max-width: 700px) {
-  :is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-score {
+  :is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-score {
     margin-inline: 0;
     padding-inline: 34px 8px;
   }
@@ -4249,7 +4249,7 @@ input:focus-visible + span {
 }
 .arrange-entry-actions .score-page-label { width:auto; }
 .arrange-entry-actions .tutorial-score-pagination { flex-wrap:nowrap; }
-:is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-step-row { flex-wrap:nowrap; }
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-step-row { flex-wrap:nowrap; }
 
 .arrange-octave-display { display:flex; align-items:center; gap:8px; }
 .arrange-octave-display-label { font-size:12px; white-space:nowrap; }
@@ -4290,3 +4290,38 @@ body[data-app-mode='free'] main > .groove.progression {
   pointer-events:none;
   color:var(--oto-ink);
 }
+
+main:not([data-workspace-view='mixer']) [data-studio-part],
+main:not([data-mixer-part='chord']) [data-studio-part='backing'],
+main:not([data-mixer-part='drums']) [data-studio-part='drums'] { display:none; }
+.studio-melody-editor .arrange-drum-lane.tutorial-pitch-lane {
+  margin-inline-start: 7.5rem;
+  height: 152px;
+}
+.arrange-drum-line {
+  position:absolute; left:0; right:0;
+  border-bottom:1px solid var(--oto-seam);
+  color:var(--oto-ink);
+  text-indent:-7.25rem; font-size:10px; line-height:1;
+  pointer-events:none;
+}
+.arrange-drum-hit { color:var(--oto-ink); font-size:10px; }
+@media(max-width:600px) {
+  .studio-melody-editor .arrange-drum-lane.tutorial-pitch-lane { margin-inline-start:5rem; }
+  .arrange-drum-line { text-indent:-4.9rem; font-size:8px; }
+}
+
+.studio-accompaniment-pads .accompaniment-play { margin:12px 0 0; }
+
+.drum-samples { margin-block-start: 8px; }
+.drum-samples summary { cursor: pointer; }
+.drum-sample-slots { display: grid; gap: 8px; margin-block-start: 8px; }
+.drum-sample-slot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.drum-sample-slot > input { max-width: 100%; }
+.drum-sample-slot > span { min-width: 0; overflow-wrap: anywhere; }

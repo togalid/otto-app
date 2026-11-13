@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {drumPads,drumLessonPattern,matchDrumHit,matchDrumSessionHit,DRUM_LESSON_BPM,isDrumMetronomeBeat,drumUserHitPosition,drumSessionHitPosition} from '../dist/drum-tutorial.js'
+import {drumKitEightBeat,drumPads,drumLessonPattern,matchDrumHit,matchDrumSessionHit,DRUM_LESSON_BPM,isDrumMetronomeBeat,drumUserHitPosition,drumSessionHitPosition} from '../dist/drum-tutorial.js'
 
 test('first beat accepts slightly early input at both turn changes without accepting Otto’s other beats',()=>{
   const pattern=drumLessonPattern(0)
@@ -128,4 +128,11 @@ test('advanced exercises build on their first-half patterns and use playable gri
   }
   assert.deepEqual(drumSessionHitPosition(3.75,.125),{bar:0,local:3.75})
   assert.equal(drumSessionHitPosition(3.94,.125)?.bar,1)
+})
+
+test('kit 8-beat uses the three lower pads with simultaneous hits on each quarter', () => {
+  const pattern = drumKitEightBeat()
+  assert.deepEqual(pattern.filter(hit => hit.pad === 6).map(hit => hit.beat), [0,.5,1,1.5,2,2.5,3,3.5])
+  assert.deepEqual(pattern.filter(hit => hit.pad === 4).map(hit => hit.beat), [0,2])
+  assert.deepEqual(pattern.filter(hit => hit.pad === 5).map(hit => hit.beat), [1,3])
 })

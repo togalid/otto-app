@@ -1,3 +1,5 @@
+import { partMeter } from './tone-engine.js'
+
 /** @typedef {{ pulse: number, sound: string, velocity?: number, duration?: number }} DrumHit */
 /** @param {number[]} levels */
 function sixteenHats(levels) {
@@ -159,6 +161,63 @@ export class DrumSynth {
     this.instrument = instrument
   }
   timbre = 'acoustic'
+  samplesEnabled = false
+  /** @type {Map<number, AudioBuffer>} */
+  samples = new Map()
+  /** @type {Set<AudioBufferSourceNode>} */
+  sampleVoices = new Set()
+  /** @type {GainNode | undefined} */
+  sampleGain
+
+  /** @param {number} index @param {File} file */
+  async decodePadSample(index, file) {
+    if (!Number.isInteger(index) || index < 0 || index >= 8 || file.size > 4 * 1024 * 1024)
+      throw new Error('4 MB以下のWAVを選んでください。')
+    const bytes = await file.arrayBuffer()
+    const header = new TextDecoder()
+    if (header.decode(bytes.slice(0, 4)) !== 'RIFF' || header.decode(bytes.slice(8, 12)) !== 'WAVE')
+      throw new Error('WAVファイルを選んでください。')
+    const context = this.instrument.context
+    if (!context) throw new Error('音声を準備できませんでした。')
+    const buffer = await context.decodeAudioData(bytes)
+    if (buffer.duration > 5 || buffer.numberOfChannels > 2)
+      throw new Error('5秒以下のモノラルまたはステレオWAVを選んでください。')
+    return buffer
+  }
+
+  /** @param {number} index @param {number} time @param {number} velocity */
+  playSample(index, time, velocity) {
+    const buffer = this.samplesEnabled && this.samples.get(index)
+    const context = this.instrument.context
+    if (!buffer || !context) return false
+    if (!this.sampleGain) {
+      this.sampleGain = context.createGain()
+      this.sampleGain.gain.value = this.volume * .35
+      this.sampleGain.connect(partMeter(context, 'drum'))
+    }
+    const source = context.createBufferSource()
+    const gain = context.createGain()
+    source.buffer = buffer
+    gain.gain.value = Math.max(0, Math.min(1, velocity))
+    source.connect(gain).connect(this.sampleGain)
+    this.sampleVoices.add(source)
+    source.onended = () => {
+      this.sampleVoices.delete(source)
+      source.disconnect()
+      gain.disconnect()
+    }
+    source.start(time)
+    return true
+  }
+
+  /** @param {number} index @param {number} time @param {number} velocity @param {number} [pitchOffset] */
+  hitPadAt(index, time, velocity, pitchOffset = 0) {
+    if (this.playSample(index, time, velocity)) return
+    const pad = drumPadSound(index)
+    if (!pad) return
+    const [, sound, pitch, duration] = pad
+    this.hitAt(sound, time, velocity, duration, pitch + pitchOffset, index === 7, false)
+  }
   pitchBend = 0
   /** @param {number} value */
   setPitchBend(value) { this.pitchBend = Math.max(-1, Math.min(1, value)) }
@@ -167,9 +226,12 @@ export class DrumSynth {
   setVolume(value) {
     this.volume = Math.max(0, Math.min(1, value))
     this.instrument.engine?.drums.setVolume(this.volume)
+    if (this.sampleGain) this.sampleGain.gain.value = this.volume * .35
   }
-  /** @param {string} sound @param {number} time @param {number} [velocity] @param {number} [duration] @param {number} [pitch] @param {boolean} [accent] */
-  hitAt(sound, time, velocity, duration, pitch, accent) {
+  /** @param {string} sound @param {number} time @param {number} [velocity] @param {number} [duration] @param {number} [pitch] @param {boolean} [accent] @param {boolean} [useSamples] */
+  hitAt(sound, time, velocity, duration, pitch, accent, useSamples = true) {
+    const index = sound === 'kick' ? 0 : sound === 'snare' ? 1 : sound === 'hat' ? ((duration ?? 0) >= .2 ? 3 : 2) : -1
+    if (useSamples && this.playSample(index, time, velocity ?? .6)) return
     const tone = this.instrument.engine?.drums
     if (!tone || !['kick', 'snare', 'hat'].includes(sound)) return
     tone.timbre = this.timbre
@@ -177,6 +239,20 @@ export class DrumSynth {
     tone.hitAt(sound, time, velocity, duration, (pitch ?? 0) + this.pitchBend * 2, accent)
   }
   silence() {
+    for (const source of this.sampleVoices) source.stop()
+    this.sampleVoices.clear()
     this.instrument.engine?.drums.silence()
   }
+}
+
+const studioDrumPads = [
+  ['キック', 'kick', 0, .18], ['スネア', 'snare', 0, .12],
+  ['クローズハット', 'hat', 0, .045], ['オープンハット', 'hat', 0, .22],
+  ['ローキック', 'kick', -5, .24], ['ハイスネア', 'snare', 5, .08],
+  ['ロータム風', 'kick', 7, .13], ['ハイハット強', 'hat', 4, .08],
+]
+
+/** @param {number} index */
+export function drumPadSound(index) {
+  return /** @type {[string,string,number,number]} */ (studioDrumPads[index])
 }

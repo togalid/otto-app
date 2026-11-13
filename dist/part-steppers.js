@@ -1,5 +1,9 @@
+import { drumPadSound } from './rhythm.js'
+export { drumPadSound } from './rhythm.js'
 import { drumPads, padIcon } from './drum-tutorial.js'
-import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
+import * as Vue from './vendor/vue.runtime.esm-browser.prod.js'
+const {createApp, h, ref} = Vue
+const Teleport = Reflect.get(Vue, 'Teleport')
 
 export function mountPartSteppers() {
   for (const [id, label] of [
@@ -96,28 +100,23 @@ export function mountTimbreSteppers() {
     }).mount(arrows)
   }
 }
-const drums = [
-  ['キック', 'kick', 0, .18], ['スネア', 'snare', 0, .12],
-  ['クローズハット', 'hat', 0, .045], ['オープンハット', 'hat', 0, .22],
-  ['ローキック', 'kick', -5, .24], ['ハイスネア', 'snare', 5, .08],
-  ['ロータム風', 'kick', 7, .13], ['ハイハット強', 'hat', 4, .08],
-]
 const notes = ['C', 'D', 'E', 'F', 'G', 'A', 'B', 'C']
 
 /** Mount the accompaniment surface with the same shared controls as the mixer.
  * @param {'drums'|'bass'|'chord'} part @param {'auto'|'manual'|'otto'} initialMode
  * @param {SVGElement|null} face @param {(mode:'auto'|'manual'|'otto')=>void} setMode
  * @param {(index:number)=>void} play @param {()=>void} [onFrameLoad]
+ * @param {HTMLElement} [headingHost]
  */
-export function mountAccompanimentPlay(part, initialMode, face, setMode, play, onFrameLoad) {
+export function mountAccompanimentPlay(part, initialMode, face, setMode, play, onFrameLoad, headingHost) {
   const element = document.createElement('div')
   element.className = 'accompaniment-play'
   const mode = ref(initialMode)
-  const labels = part === 'drums' ? drums.map(([label]) => String(label)) : notes.map((note, index) => note + (index === 7 ? '3' : '2'))
+  const labels = part === 'drums' ? Array.from({length:8}, (_, index) => drumPadSound(index)[0]) : notes.map((note, index) => note + (index === 7 ? '3' : '2'))
   const padOrder = labels.map((_, index) => index)
-  const drumSoundIndices = [2, 1, 5, 7, 3, 4, 0, 3]
+  const drumSoundIndices = [2, 1, 5, 7, 3, 4, 0, 6]
   const onDrumKey = (/** @type {KeyboardEvent} */ event) => {
-    if (part !== 'drums' || !element.isConnected || event.repeat || event.ctrlKey || event.metaKey || event.altKey || document.body.dataset.appMode !== 'free') return
+    if (part !== 'drums' || !element.getClientRects().length || event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || document.body.dataset.appMode !== 'free') return
     const target = /** @type {HTMLElement|null} */ (event.target)
     if (target?.closest('input, select, textarea, [contenteditable=true]')) return
     const index = drumPads.findIndex(pad => pad.key === event.key.toLowerCase())
@@ -130,8 +129,7 @@ export function mountAccompanimentPlay(part, initialMode, face, setMode, play, o
   }
   if (part === 'drums') document.addEventListener('keydown', onDrumKey)
   const modes = /** @type {const} */ ([['auto', 'パターン'], ['manual', '自分が弾く'], ['otto', 'Ottoが弾く']])
-  const app = createApp({ render: () => [
-    h('div', { class: 'accompaniment-play-heading' }, [
+  const heading = () => h('div', { class: 'accompaniment-play-heading' }, [
       h('div', { class: 'talk-companion' }, [
         h('div', { class: 'talk-avatar', 'aria-hidden': 'true', 'data-look': face?.parentElement?.getAttribute('data-look') ?? '', innerHTML: face?.outerHTML ?? '' }),
         h('p', { class: 'talk-bubble' }, '一緒に弾こう'),
@@ -143,7 +141,9 @@ export function mountAccompanimentPlay(part, initialMode, face, setMode, play, o
             onChange: () => { mode.value = value; setMode(value) },
           }), h('span', label)]))),
       ]),
-    ]),
+  ])
+  const app = createApp({ render: () => [
+    headingHost ? h(Teleport, {to:headingHost}, heading()) : heading(),
     part === 'drums'
       ? h('div', {class:'drum-pad-grid', role:'group', 'aria-label':'左右のドラムパッド'}, drumPads.map((pad,index) =>
         h('button', {type:'button', class:'drum-tutorial-pad', 'aria-label':`${pad.hand}手 ${pad.finger} ${pad.name} ${pad.key}キー`,
@@ -166,11 +166,6 @@ export function mountAccompanimentPlay(part, initialMode, face, setMode, play, o
  * @param {(index:number)=>void} play */
 export function accompanimentPlay(part, mode, face, setMode, play) {
   return mountAccompanimentPlay(part, mode, face, setMode, play).element
-}
-
-/** @param {number} index */
-export function drumPadSound(index) {
-  return /** @type {[string,string,number,number]} */ (drums[index])
 }
 
 /** @param {Element} element @returns {import('vue').VNode} */

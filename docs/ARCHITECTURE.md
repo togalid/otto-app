@@ -32,7 +32,7 @@ The browser loads authored native ES modules from `dist/`. The transport, score,
 | --- | --- | --- |
 | Shared score navigation, lanes, note rendering and editing adapters | `score-navigation.js`, `tutorial-view.js`, `melody-arrange.js` | `score-navigation`, `tutorial`, browser |
 | Tutorial curriculum, eight-bar clock, dedicated lesson UI | `tutorial.js`, `tutorial-view.js`; mode lifecycle in `melody-view.js` | `tests/tutorial.test.mjs`, browser |
-| Drum tutorial, mirrored pads, staged rhythm practice and sessions | `drum-tutorial.js`; category navigation in `melody-view.js` | `drum-tutorial`, browser |
+| Drum tutorial, mirrored Beat course, eight-instrument Drum course, staged rhythm practice and sessions | `drum-tutorial.js`; category navigation in `melody-view.js` | `drum-tutorial`, browser |
 | Shared tutorial score, stamp and count label | `tutorial-view.js`; count sound in `tutorial.js` | `tests/tutorial.test.mjs`, browser |
 | Instrument and chord choice menus | `choice-menu.js`, `part-steppers.js` | browser |
 | Song session and melody arrangement octave control | `part-steppers.js` (`octaveControl`), `song-session.js`, `melody-arrange.js` | browser |
@@ -49,7 +49,7 @@ The browser loads authored native ES modules from `dist/`. The transport, score,
 | Basic accompaniment | `backing.js`, `groove.js`, `rhythm.js` | matching tests |
 | Ornament arrangement | `ornaments.js`, `ornament-audio.js`, `style-ornaments.js` | matching tests |
 | Style and progression selectors | `arrangement-selects.js`, arrangement handlers in `app.js` | browser |
-| Studio melody and bass editor mounting, step entry and playback | `studio-editors.js`, `melody-arrange.js`, `progression.js` | `melody-arrange`, `progression`, browser |
+| Studio melody, bass, backing and drum editor mounting, step entry and playback | `studio-editors.js`, `melody-arrange.js`, `progression.js` | `melody-arrange`, `progression`, browser |
 | Studio style envelope and shared pitch bounds | `studio-style.js`; apply order in `app.js` | `studio-style`, `app-settings` |
 | Basic parts, section knobs and reference header | `main-controls.js` | browser |
 | Phone tempo entry and shared knob handling | `main-controls.js`, `reference-timing-view.js` | `tempo-entry`, browser |
@@ -155,3 +155,7 @@ Mode and tutorial-instrument selection use the shared Vue selector in `melody-vi
 `arrangement-selects.js` owns the style list, selected-detail preview and explicit application through the existing `chooseStyle` path. `selection-browser.css` supplies its responsive appearance. The song/settings dialog remains JSON save/load. Validate preview/cancel without changing active music, confirmation, keyboard focus, and narrow screens.
 
 スタイルのメロディプリセットは `scripts/set-melody-preset.mjs` でMIDIから登録し、`dist/melody-presets.js` のノートを `progression.js` が伴奏と一緒に予約します。
+
+The Studio places part settings and pickup above the shared score and accompaniment pads below the entry controls. Studio backing and drum pads write into the shared four-beat score grid. Backing stores the voiced pitches at each step and drums store the pad index. Recorded tracks replace their generated patterns during playback, and the optional `studioAccompaniment` field carries both tracks in version-1 arrangement files.
+
+The Studio drum kit UI lives in `quick-mixer.js`. `DrumSynth` in `rhythm.js` owns the eight decoded WAV slots and uses the existing drum mixer and audio clock. Slots are session-only; version-1 arrangements retain pad indices. Unassigned pads use the synthesized sound.

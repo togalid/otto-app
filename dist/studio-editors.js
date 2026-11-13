@@ -16,11 +16,12 @@ import { mountMelodyVoiceChoice } from './part-steppers.js'
  *   bassTimbre: HTMLSelectElement,
  *   onMelodyMounted: (editor: StudioEditor) => void,
  *   onBassMounted: (editor: StudioEditor) => void,
+ *   onAccompanimentMounted: (part:'backing'|'drums', editor:StudioEditor) => void,
  * }} options
  */
 export function mountStudioEditors({
   progression, seekMelodyBar, togglePlayback, readChordRevision, displayParts,
-  previewTimbre, previewBass, bassTimbre, onMelodyMounted, onBassMounted,
+  previewTimbre, previewBass, bassTimbre, onMelodyMounted, onBassMounted, onAccompanimentMounted,
 }) {
   const studioMelodyHost = document.createElement('section')
   studioMelodyHost.className = 'melody-arrange tutorial-screen studio-melody-editor'
@@ -55,6 +56,19 @@ export function mountStudioEditors({
     progression.studioMelody = () => {
       const notes = editor.getNotes()
       return notes.length ? notes : melodyPresets[progression.genre] ?? []
+    }
+    for (const [part, label] of /** @type {const} */ ([['backing', 'バッキング'], ['drums', 'ドラム']])) {
+      const host = document.createElement('section')
+      host.className = studioMelodyHost.className
+      host.dataset.studioPart = part
+      host.setAttribute('aria-label', label + 'を編集')
+      document.querySelector('.studio-accompaniment-scores')?.append(host)
+      const editor = mountMelodyEditor(host, {
+        ...editorOptions, part,
+        pickupTarget:`.accompaniment-choice-row[data-studio-part="${part}"]`,
+        keyForBar:part === 'drums' ? undefined : editorOptions.keyForBar,
+      })
+      onAccompanimentMounted(part, editor)
     }
     const bassDetail = document.querySelector('#detail-bass')
     if (!bassDetail) return

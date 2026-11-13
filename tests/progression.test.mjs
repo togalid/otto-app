@@ -1003,3 +1003,17 @@ test('Studio bass starts silent and schedules only entered notes', async () => {
   player.stop()
   assert.deepEqual(bassCalls, [[36, .05, .5, .8]])
 })
+
+test('Studio backing voices and drum pads replace patterns on the shared score grid', async () => {
+  const {player, calls} = fixture()
+  const drums = []
+  player.drums = {hitPadAt(...args) { drums.push(args) }, silence() {}}
+  player.bpm = 120
+  player.beatsPerBar = 3
+  player.studioBacking = () => [33, 60, 64].map(midi => ({beat:2, midi, duration:1, velocity:.8}))
+  player.studioDrums = () => [{beat:2, midi:3, duration:.5, velocity:.8}]
+  await player.start(0, 1.5)
+  player.stop()
+  assert.deepEqual(calls, [[[33, 60, 64], .05, .375, .8]])
+  assert.deepEqual(drums, [[3, .05, .8, 0]])
+})

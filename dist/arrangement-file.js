@@ -1,4 +1,5 @@
 import { barMeters, maxChordBeats } from './progression.js'
+import { decodeStudioAccompaniment } from './studio-style.js'
 import { chordConfig } from './music.js'
 import { genres } from './groove.js'
 
@@ -23,7 +24,7 @@ export const arrangementMixIds = partControls.flatMap(([id]) => [`${id}-mute`, `
 
 /** @typedef {{id:string, value:string, checked:boolean}} Control */
 /** @typedef {{id:string, pressed:boolean}} Mix */
-/** @typedef {Pick<import('./progression.js').Progression, 'slots'|'beatSlots'|'modulation'|'bassFeel'|'bassTones'|'drumSteps'> & Partial<Pick<import('./progression.js').Progression, 'drumAccents'|'drumPitch'|'beatsPerBar'|'drumRate'|'barSettings'>>} Score */
+/** @typedef {Pick<import('./progression.js').Progression, 'slots'|'beatSlots'|'modulation'|'bassFeel'|'bassTones'|'drumSteps'> & Partial<Pick<import('./progression.js').Progression, 'drumAccents'|'drumPitch'|'beatsPerBar'|'drumRate'|'barSettings'>> & {studioAccompaniment?:ReturnType<typeof decodeStudioAccompaniment>}} Score */
 /** @typedef {{id:string, options?:string[], range?:[number,number]}} ControlRule */
 
 /** @typedef {import('./progression.js').Progression['sections'][number]} Section */
@@ -175,12 +176,13 @@ export function decodeArrangement(text, rules) {
       throw new Error('Invalid bar settings')
   }
 
+  const studioAccompaniment = decodeStudioAccompaniment(data.studioAccompaniment)
   return {
     style: /** @type {string} */ (style),
     controls: [...controls.values()].filter(item => item.id !== 'genre' && item.id !== 'genre-group'),
     mix,
     sections,
-    score: /** @type {Score} */ ({slots, beatSlots, modulation, bassFeel, bassTones, drumSteps, drumAccents, drumPitch, beatsPerBar, drumRate, barSettings}),
+    score: /** @type {Score} */ ({slots, beatSlots, modulation, bassFeel, bassTones, drumSteps, drumAccents, drumPitch, beatsPerBar, drumRate, barSettings, studioAccompaniment}),
   }
 }
 

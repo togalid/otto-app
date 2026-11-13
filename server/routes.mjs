@@ -1,5 +1,9 @@
 // Explicit public files: server code, configuration, and user files are never exposed.
 export const routes = new Map([
+  ['/arrangement-controls.js', ['arrangement-controls.js', 'text/javascript']],
+  ['/score-midi.js', ['score-midi.js', 'text/javascript']],
+  ['/studio-editors.js', ['studio-editors.js', 'text/javascript']],
+  ['/studio-style.js', ['studio-style.js', 'text/javascript']],
   ['/melody-arrange.js', ['melody-arrange.js', 'text/javascript']],
   ['/connect-sky-demo.mid', ['connect-sky-demo.mid', 'audio/midi']],
   ['/song-session.js', ['song-session.js', 'text/javascript']],

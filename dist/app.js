@@ -1,11 +1,13 @@
-import { melodyPresets } from './melody-presets.js'
+import { applySavedControl, arrangementControlRules } from './arrangement-controls.js'
+import { decodeStudioStyle } from './studio-style.js'
+import { mountStudioEditors } from './studio-editors.js'
 import { createPartSettings } from './part-settings.js'
 import { mountQuickMixer, bassPadNotes } from './quick-mixer.js'
 import { mountReferenceTiming } from './reference-timing-view.js'
 import { padChordNotes } from './music.js'
 import { createBackingDetail } from './backing-detail.js'
 import { performanceMatch } from './buddy.js'
-import { migrateSongSections } from './song-score.js'
+import { restoreSongSections } from './song-score.js'
 import { sectionControlIds, arrangementControlIds, arrangementMixIds, styleDefaultJson, decodeArrangement, encodeArrangement, restoreArrangement } from './arrangement-file.js'
 import { mountBassDetail } from './bass-detail.js'
 import { mountStyleChoices, mountPresetChoices } from './arrangement-selects.js'
@@ -315,11 +317,16 @@ const playbackHeads = new Map()
 const waveformStartBeats = new Map()
 progression.onScheduleBar = (/** @type {number} */ bar, /** @type {number} */ beat, /** @type {number} */ time, /** @type {number} */ secondsPerBeat) => {
   playerDisplay.meter(chordInstrument.context)
-  if (chordInstrument.context) studioEditor?.schedulePlaybackBar(bar, beat, time, secondsPerBeat, progression.meterForBar(bar), chordInstrument.context)
+  const context = chordInstrument.context
+  if (!context) return
+  const meter = progression.meterForBar(bar)
+  studioEditor?.schedulePlaybackBar(bar, beat, time, secondsPerBeat, meter, context)
+  studioBassEditor?.schedulePlaybackBar(bar, beat, time, secondsPerBeat, meter, context)
 }
 progression.onStart = referenceTrack.startWithAccompaniment
 progression.onStop = () => {
   studioEditor?.stopPlaybackPosition()
+  studioBassEditor?.stopPlaybackPosition()
   barPlayback = null
   referenceTrack.stopWithAccompaniment()
   playerDisplay.stopMeter()
@@ -1149,6 +1156,11 @@ const midiInput = mountMidiInput({
       studioEditor.midiAttack(midi)
       return
     }
+    if (workspace.dataset.workspaceView === 'mixer' && workspace.dataset.mixerPart === 'bass' && studioBassEditor) {
+      midiDestinations.set(midi, 'studio-bass')
+      studioBassEditor.midiAttack(midi)
+      return
+    }
     midiDestinations.set(midi,part)
     if(part==='melody') magicVoice.attack(midi)
     else if(part==='chord') chordInstrument.attack(midi)
@@ -1161,7 +1173,7 @@ const midiInput = mountMidiInput({
       if(time!==undefined)drums.hitAt(sound,time+.01,.85,duration,pitch,index===7)
     }
   },
-  release:midi=>{const part=midiDestinations.get(midi);midiDestinations.delete(midi);if(part==='tutorial')tutorialView?.midiRelease(midi);else if(part==='song-session')tutorialView?.songMidiRelease(midi);else if(part==='studio-melody')studioEditor?.midiRelease(midi);else if(part==='melody')magicVoice.release(midi);else if(part==='chord')chordInstrument.release(midi)},
+  release:midi=>{const part=midiDestinations.get(midi);midiDestinations.delete(midi);if(part==='tutorial')tutorialView?.midiRelease(midi);else if(part==='song-session')tutorialView?.songMidiRelease(midi);else if(part==='studio-melody')studioEditor?.midiRelease(midi);else if(part==='studio-bass')studioBassEditor?.midiRelease(midi);else if(part==='melody')magicVoice.release(midi);else if(part==='chord')chordInstrument.release(midi)},
 })
 buddyController = mountBuddy({
   progression, instrument, drums,
@@ -1208,11 +1220,17 @@ buddyController = mountBuddy({
 
 let restoringSectionParts = false
 
+/** @param {HTMLInputElement | HTMLSelectElement} control */
+function savedControlValue(control) {
+  if (control.id === 'rhythm-pattern') return progression.rhythm
+  if (control.id === 'bass-pattern') return progression.bassPattern
+  return control.value
+}
+
 function readSectionParts() {
   return Object.fromEntries(sectionControlIds.map(id => {
     const control = /** @type {HTMLSelectElement} */ (document.getElementById(id))
-    return [id, id === 'rhythm-pattern' ? progression.rhythm :
-      id === 'bass-pattern' ? progression.bassPattern : control.value]
+    return [id, savedControlValue(control)]
   }))
 }
 
@@ -1332,7 +1350,7 @@ const savedMix = new Map(arrangementMixIds.map(id =>
 function captureArrangement() {
   tempoNumber.blur()
   const controls = [...savedControls.values()].map(el => ({
-    id: el.id, value: el.id === 'rhythm-pattern' ? progression.rhythm : el.id === 'bass-pattern' ? progression.bassPattern : el.value, checked: el instanceof HTMLInputElement && el.checked,
+    id: el.id, value: savedControlValue(el), checked: el instanceof HTMLInputElement && el.checked,
   }))
   const mix = [...savedMix.values()].map(el => ({id: el.id, pressed: el.getAttribute('aria-pressed') === 'true'}))
   const {slots, beatSlots, modulation} = progression.sections[0]
@@ -1343,21 +1361,18 @@ function captureArrangement() {
 
 let studioEditor = /** @type {ReturnType<typeof import('./melody-arrange.js').mountMelodyEditor> | undefined} */ (undefined)
 
+let studioBassEditor = /** @type {typeof studioEditor} */ (undefined)
+
 function captureStudioStyle() {
-  return JSON.stringify({arrangement:captureArrangement(), melody:studioEditor?.getNotes() ?? []})
+  return JSON.stringify({arrangement:captureArrangement(), melody:studioEditor?.getNotes() ?? [], bass:studioBassEditor?.getNotes() ?? []})
 }
 
 /** @param {string} json */
 async function restoreStudioStyle(json) {
-  const {arrangement, melody} = JSON.parse(json)
-  if (typeof arrangement !== 'string' || !Array.isArray(melody) ||
-      melody.some(note => !note || !Number.isFinite(note.beat) || note.beat < -1 ||
-        !Number.isFinite(note.duration) || note.duration <= 0 ||
-        !Number.isInteger(note.midi) || note.midi < 53 || note.midi > 84)) {
-    throw new Error('Invalid Studio style')
-  }
+  const {arrangement, melody, bass: bassNotes} = decodeStudioStyle(json)
   await applyArrangementJson(arrangement)
   studioEditor?.setNotes(melody)
+  studioBassEditor?.setNotes(bassNotes)
 }
 
 function saveArrangement() {
@@ -1383,35 +1398,21 @@ async function loadArrangement(file) {
 
 /** @param {string} json */
 async function applyArrangementJson(json, selectedStyle = false) {
-  const rules = [...savedControls.values()].map(el => {
-    if (el instanceof HTMLSelectElement && el.id !== 'genre') {
-      const options = Array.from(el.options, option => option.value)
-      if (el.id === 'bass-pattern') options.push('')
-      return {id: el.id, options}
-    }
-    if (el instanceof HTMLInputElement && (el.type === 'range' || el.type === 'number')) {
-      return {id: el.id, range: /** @type {[number,number]} */ ([Number(el.min), Number(el.max)])}
-    }
-    return {id: el.id}
-  })
-  const arrangement = decodeArrangement(json, rules)
+  const arrangement = decodeArrangement(json, arrangementControlRules(savedControls.values()))
   await restoreArrangement(arrangement, {
     stop() { buddyController?.stop(); progression.stop() },
     chooseStyle: selectedStyle ? async () => {} : async id => {
       restoringArrangementStyle = true
       try { await chooseStyle(id) } finally { restoringArrangementStyle = false }
     },
-    applyControl({id, value, checked}) {
-      const el = savedControls.get(id)
+    applyControl(saved) {
+      const el = savedControls.get(saved.id)
       if (!el) return
-      if (el instanceof HTMLSelectElement && partSettings.apply(el, value)) {
+      if (el instanceof HTMLSelectElement && partSettings.apply(el, saved.value)) {
         rememberSectionParts()
         return
       }
-      el.value = value
-      if (el instanceof HTMLInputElement) el.checked = checked
-      const eventType = el.type === 'range' || el.type === 'number' ? 'input' : 'change'
-      el.dispatchEvent(new Event(eventType, {bubbles: true}))
+      applySavedControl(el, saved)
     },
     applyMix({id, pressed}) {
       const el = savedMix.get(id)
@@ -1424,9 +1425,7 @@ async function applyArrangementJson(json, selectedStyle = false) {
       if (selectedRate) selectedRate.checked = true
       progression.beatsPerBar = score.beatsPerBar ?? 4
       refreshMeter()
-      const fallbackParts = readSectionParts()
-      for (const section of sections) section.partSettings ??= {...fallbackParts}
-      progression.sections = migrateSongSections(sections)
+      progression.sections = restoreSongSections(sections, readSectionParts())
       progression.songMode = true
       scorePage.value=0
       progression.bassFeel = score.bassFeel
@@ -1596,38 +1595,17 @@ const tutorialView = mountModeMenu(() => {
 }, () => midiInput.connect(), () => partSettings.apply(melodyMode, 'session'))
 
 
-// Both Studio and the prototype mount the same melody editor.
-const studioMelodyHost = document.createElement('section')
-studioMelodyHost.className = 'melody-arrange tutorial-screen studio-melody-editor'
-studioMelodyHost.setAttribute('aria-label', 'メロディを編集')
-document.querySelector('#detail-melody')?.append(studioMelodyHost)
-void import('./melody-arrange.js').then(({mountMelodyEditor}) => {
-  const editor = mountMelodyEditor(studioMelodyHost, {
-    empty:true,
-    defaultKeyboardOctaves:window.matchMedia('(min-width: 701px)').matches ? 2 : 1,
-    barCount:()=>progression.barCount(),
-    selectBar:seekMelodyBar,
-    previewTimbre:()=>instrument.timbre,
-    keyForBar:bar=>{
-      melodyChordsRevision.value
-      return progression.keyForBar(bar)
+mountStudioEditors({
+  progression, seekMelodyBar, togglePlayback, displayParts, bassTimbre,
+  readChordRevision: () => melodyChordsRevision.value,
+  previewTimbre: () => instrument.timbre,
+  previewBass: {
+    ready: async () => {
+      await chordInstrument.ready()
+      return chordInstrument.context
     },
-    chordChanges(bar) {
-      melodyChordsRevision.value
-      if (bar >= progression.barCount()) return []
-      const key = progression.keyForBar(bar)
-      return Array.from({length: Math.min(4 / progression.chordBeatLength(bar), progression.chordBeatsForBar(bar))}, (_, beat) => {
-        const id = beat === 0 ? progression.slots[bar] : progression.beatSlots[bar]?.[beat]
-        if (!id) return null
-        const {main, suffix} = displayParts(id, key)
-        return {beat, position: beat * progression.chordBeatLength(bar), label: main + suffix}
-      }).filter(change => change !== null)
-    },
-    togglePlayback,
-  })
-  studioEditor = editor
-  progression.studioMelody = () => {
-    const notes = editor.getNotes()
-    return notes.length ? notes : melodyPresets[progression.genre] ?? []
-  }
+    playAt: (midi, time) => bass.playAt(midi, time, .24, .85),
+  },
+  onMelodyMounted: editor => { studioEditor = editor },
+  onBassMounted: editor => { studioBassEditor = editor },
 })

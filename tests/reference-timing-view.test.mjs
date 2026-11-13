@@ -96,9 +96,12 @@ test('reference alignment keeps source timing, seeking and key controls connecte
     assert.equal(host.querySelector('.reference-timing-control output').textContent, '1.25 秒')
     assert.equal(host.querySelectorAll('.reference-timing-row').length, 1)
     const navigation = host.querySelector('.reference-playhead-host')
-    assert.equal(navigation.querySelector('input').value, '5')
-    for (const label of ['1小節目に戻る', '前の小節へ', '次の小節へ']) {
-      navigation.querySelector(`button[aria-label="${label}"]`).click()
+    const barInput = navigation.querySelector('input[aria-label="移動する小節"]')
+    assert.equal(barInput.value, '5')
+    navigation.querySelector('button[aria-label="1小節目に戻る"]').click()
+    for (const bar of ['4', '6']) {
+      barInput.value = bar
+      barInput.dispatchEvent(new Event('change', {bubbles:true}))
     }
     assert.deepEqual(seeks, [0, 3, 5])
     assert.equal(timing, 1.25)

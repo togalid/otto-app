@@ -2555,7 +2555,9 @@ main[data-mixer-layout='simple'] .groove .mixer-banks #track-grid .part-mix { di
 main[data-mixer-layout] .groove .mixer-banks #track-grid .awaiting-file .part-mix { display:none; }
 main:not([data-workspace-view='mixer']) > .mixer-quick-edit,
 main[data-mixer-layout='detail'] > .mixer-quick-edit { display:none !important; }
-main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody { display:block !important; width:100%; box-sizing:border-box; }
+main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody,
+main[data-workspace-view='mixer'][data-mixer-part='bass'] > #detail-bass:not([hidden]) { display:block !important; width:100%; box-sizing:border-box; }
+main:not([data-workspace-view='mixer']) > #detail-bass { display:none !important; }
 .mixer-quick-edit { margin-top:16px; }
 @media (max-width:600px) {
   main:is([data-workspace-view='mixer'], [data-workspace-view='score']) .groove.progression { grid-template-columns:minmax(0,1fr); }
@@ -3874,16 +3876,8 @@ main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody { m
 .arrange-input-dock { display:grid; gap:6px; }
 .arrange-step-controls { display:grid; gap:4px; }
 .arrange-step-status { font-size:12px; }
-.arrange-step-row { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; }
 .melody-arrange .arrange-step-row button { min-height:38px; padding:4px 1px; font-size:12px; }
 .melody-arrange .arrange-step-row button[aria-pressed='true'] { background:var(--oto-secondary); color:var(--oto-key); }
-@media (max-width:600px), (orientation:landscape) and (max-height:500px) {
-  .melody-arrange:has(.arrange-step-controls) { padding-bottom:calc(var(--oto-key-height) + 145px + env(safe-area-inset-bottom)); }
-  .melody-arrange .arrange-input-dock { position:fixed; z-index:5; inset:auto 0 0; padding:6px 12px calc(8px + env(safe-area-inset-bottom)); background:var(--oto-case); }
-  .melody-arrange .arrange-input-dock .arrange-keyboard { position:relative; inset:auto; padding:0 0 6px; background:transparent; }
-  .melody-arrange .arrange-input-dock .arrange-keyboard .tutorial-black { top:0; }
-}
-
 .arrange-step-row { display:flex; gap:4px; }
 .melody-arrange .arrange-step-row button { display:grid; place-items:center; flex:none; width:44px; min-width:44px; min-height:44px; padding:4px; }
 .arrange-rhythm-icon { width:22px; height:30px; display:block; }
@@ -3937,36 +3931,36 @@ main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody { m
 /* The Studio uses the melody editor keyboard. */
 #detail-melody > .melody-view,
 #detail-melody > .piano-scroll { display:none; }
-#detail-melody .studio-melody-editor {
+:is(#detail-melody, #detail-bass) .studio-melody-editor {
   width:100%; min-height:0; margin:16px 0 0; padding:0;
   background:transparent;
 }
-#detail-melody .studio-melody-editor:has(.arrange-step-controls) { padding:0; }
-#detail-melody .studio-melody-editor .selection-header { display:none; }
-#detail-melody .studio-melody-editor .arrange-input-dock {
+:is(#detail-melody, #detail-bass) .studio-melody-editor:has(.arrange-step-controls) { padding:0; }
+:is(#detail-melody, #detail-bass) .studio-melody-editor .selection-header { display:none; }
+:is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-input-dock {
   position:static; padding:0; background:transparent;
 }
-#detail-melody .studio-melody-editor .arrange-step-row {
+:is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-step-row {
   flex-wrap:wrap;
 }
 #detail-melody .melody-top-row .buddy-inline { min-width:0; }
 
-#detail-melody .arrange-keyboard-toolbar { flex-wrap:wrap; justify-content:flex-start; }
-#detail-melody .arrange-keyboard-toolbar > button:last-child { margin-left:auto; }
+:is(#detail-melody, #detail-bass) .arrange-keyboard-toolbar { flex-wrap:wrap; justify-content:flex-start; }
+:is(#detail-melody, #detail-bass) .arrange-keyboard-toolbar > button:last-child { margin-left:auto; }
 .arrange-keyboard-toolbar .arrange-bar-toggle[aria-pressed="true"] { background:var(--oto-secondary); color:var(--oto-key); }
 .melody-arrange .arrange-hide-note-bars .arrange-note { background:transparent; border-right-color:transparent; }
-#detail-melody .arrange-octave-width { display:flex; }
-#detail-melody .arrange-octave-width label { cursor:pointer; }
-#detail-melody .arrange-octave-width input { position:absolute; opacity:0; }
-#detail-melody .arrange-octave-width span { display:block; padding:8px; }
-#detail-melody .arrange-octave-width input:checked + span { background:var(--oto-key); box-shadow:var(--oto-raised); border-radius:5px; }
-#detail-melody .arrange-octave-width input:focus-visible + span { outline:2px solid var(--oto-accent); }
-#detail-melody .arrange-keyboard .tutorial-black { width:calc(0.56 * 100% / var(--tutorial-key-count)); }
+:is(#detail-melody, #detail-bass) .arrange-octave-width { display:flex; }
+:is(#detail-melody, #detail-bass) .arrange-octave-width label { cursor:pointer; }
+:is(#detail-melody, #detail-bass) .arrange-octave-width input { position:absolute; opacity:0; }
+:is(#detail-melody, #detail-bass) .arrange-octave-width span { display:block; padding:8px; }
+:is(#detail-melody, #detail-bass) .arrange-octave-width input:checked + span { background:var(--oto-key); box-shadow:var(--oto-raised); border-radius:5px; }
+:is(#detail-melody, #detail-bass) .arrange-octave-width input:focus-visible + span { outline:2px solid var(--oto-accent); }
+:is(#detail-melody, #detail-bass) .arrange-keyboard .tutorial-black { width:calc(0.56 * 100% / var(--tutorial-key-count)); }
 
 /* Studio uses its transport tempo and keeps the editor focused on the score. */
 #detail-melody .buddy-inline,
-#detail-melody .studio-melody-editor > button:first-child,
-#detail-melody .studio-melody-editor .arrange-tempo { display:none; }
+:is(#detail-melody, #detail-bass) .studio-melody-editor > button:first-child,
+:is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-tempo { display:none; }
 
 /* Keep the Studio's mobile transport available when it moves into this row. */
 #detail-melody .otto-mode-field,
@@ -3982,16 +3976,16 @@ main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody { m
 }
 
 /* Join the selected Studio editor to the mixer. */
-main:is([data-workspace-view='mixer'][data-mixer-part='melody'], [data-workspace-view='score']) > .groove.progression {
+main:is([data-workspace-view='mixer']:is([data-mixer-part='melody'], [data-mixer-part='bass']), [data-workspace-view='score']) > .groove.progression {
   border-radius:18px 18px 0 0;
   box-shadow:none;
   margin-bottom:0;
   padding-bottom:0;
 }
-main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody {
+main[data-workspace-view='mixer'] > :is(#detail-melody, #detail-bass):not([hidden]) {
   margin-top:0;
   border-radius:0 0 18px 18px;
-  padding-top:16px;
+  padding-top:8px;
 }
 
 @media (max-width:600px) {
@@ -4017,9 +4011,8 @@ main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody {
 .mixer-layout-tools > .part-bank { display:inline-flex; align-items:center; }
 
 /* Keep the melody controls close to the part selector. */
-#detail-melody .melody-choice-row > .section-style-choice > span:first-child { display:none; }
-#detail-melody .melody-choice-row { margin-top:0; }
-main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody { padding-top:0; }
+:is(#detail-melody, #detail-bass) .melody-choice-row > .section-style-choice > span:first-child { display:none; }
+:is(#detail-melody, #detail-bass) .melody-choice-row { margin-top:0; }
 
 
 /* The score sits next to melody in the shared part grid. */
@@ -4044,9 +4037,6 @@ main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody { p
   }
   .mixer-layout-tools { min-width:0; }
 }
-main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody {
-  padding-top:8px;
-}
 
 /* Match the chord grid and melody staff surfaces in Studio. */
 main {
@@ -4056,7 +4046,7 @@ main {
 .studio-melody-editor .arrange-chord-strip {
   background: var(--studio-score-heading);
 }
-#detail-melody .studio-melody-editor .arrange-score {
+:is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-score {
   --tutorial-background: var(--oto-key);
 }
 .studio-melody-editor .arrange-note {
@@ -4131,7 +4121,7 @@ main[data-workspace-view='score'] .backing-display { display:none; }
 .score-length input::-webkit-inner-spin-button, .score-length input::-webkit-outer-spin-button { appearance:none; margin:0; }
 .score-length input:focus-visible { outline:2px solid var(--oto-secondary); outline-offset:-2px; }
 
-#detail-melody .melody-choice-row .arrange-pickup {
+:is(#detail-melody, #detail-bass) .melody-choice-row .arrange-pickup {
   min-height: 32px;
   padding: 4px 10px;
   border: 0;
@@ -4143,17 +4133,17 @@ main[data-workspace-view='score'] .backing-display { display:none; }
   font-size: 12px;
   cursor: pointer;
 }
-#detail-melody .melody-choice-row .arrange-pickup:focus-visible { outline:2px solid var(--oto-secondary); outline-offset:2px; }
-#detail-melody .studio-melody-editor .arrange-controls { display:none; }
+:is(#detail-melody, #detail-bass) .melody-choice-row .arrange-pickup:focus-visible { outline:2px solid var(--oto-secondary); outline-offset:2px; }
+:is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-controls { display:none; }
 
 @media (min-width: 701px) {
-  #detail-melody .studio-melody-editor .arrange-step-row button {
+  :is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-step-row button {
     width: 36px;
     min-width: 36px;
     min-height: 36px;
     padding: 3px;
   }
-  #detail-melody .studio-melody-editor .arrange-rhythm-icon { width: 18px; height: 25px; }
+  :is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-rhythm-icon { width: 18px; height: 25px; }
 }
 
 #detail-melody .melody-notation { order:2; margin:0 0 0 auto; flex:none; }
@@ -4187,13 +4177,13 @@ input:focus-visible + span {
 .arrange-record .mix-button { display:flex; gap:4px; width:auto; min-width:52px; padding:0 9px; }
 
 /* Extend the score background to the edges of the Studio panel. */
-#detail-melody .studio-melody-editor .arrange-score {
+:is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-score {
   margin-inline: -24px;
   padding-inline: 40px;
   border-radius: 0;
 }
 @media (max-width: 700px) {
-  #detail-melody .studio-melody-editor .arrange-score {
+  :is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-score {
     margin-inline: 0;
     padding-inline: 34px 8px;
   }
@@ -4259,7 +4249,7 @@ input:focus-visible + span {
 }
 .arrange-entry-actions .score-page-label { width:auto; }
 .arrange-entry-actions .tutorial-score-pagination { flex-wrap:nowrap; }
-#detail-melody .studio-melody-editor .arrange-step-row { flex-wrap:nowrap; }
+:is(#detail-melody, #detail-bass) .studio-melody-editor .arrange-step-row { flex-wrap:nowrap; }
 
 .arrange-octave-display { display:flex; align-items:center; gap:8px; }
 .arrange-octave-display-label { font-size:12px; white-space:nowrap; }

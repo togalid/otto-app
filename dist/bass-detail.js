@@ -108,6 +108,6 @@ export function mountBassDetail(progression) {
         range('bassDynamics', 'bass-dynamics', '強弱'),
       ]),
     ],
-  }).mount('#detail-bass')
+  }).mount('#bass-pattern-detail')
   return refresh
 }

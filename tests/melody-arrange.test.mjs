@@ -35,6 +35,22 @@ test('a half note entered on beat four displays tied quarter notes and stays one
     host.querySelector('[aria-label="2分休符"]').click()
     command('KeyY')
     assert.deepEqual(editor.getNotes(), [])
+
+    const bassHost = document.createElement('section')
+    document.body.append(bassHost)
+    const bassEditor = mountMelodyEditor(bassHost, {empty:true, part:'bass', defaultKeyboardOctaves:2})
+    try {
+      assert.deepEqual(bassEditor.getNotes(), [])
+      assert.ok(bassHost.querySelector('.arrange-keyboard [aria-label="C2"]'))
+      bassEditor.midiAttack(27)
+      bassEditor.midiAttack(28)
+      bassEditor.midiAttack(60)
+      bassEditor.midiAttack(61)
+      await nextTick()
+      assert.deepEqual(bassEditor.getNotes().map(note => note.midi), [28, 60])
+    } finally {
+      bassEditor.destroy()
+    }
   } finally {
     editor?.destroy()
     globals.forEach((name, index) => {

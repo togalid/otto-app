@@ -1,11 +1,11 @@
 # oto 開発引き継ぎ
 
-更新: 2026-11-12。このファイルは引き継ぎ時点の案内です。作業開始時には実装とGitの状態も確認し、変更したらこの内容を更新してください。
+更新: 2026-11-13。このファイルは引き継ぎ時点の案内です。作業開始時には実装とGitの状態も確認し、変更したらこの内容を更新してください。
 
 ## 最初に読むもの
 
 1. このディレクトリの `AGENTS.md`（親の研究アプリとは別の、oto専用ルール）
-2. `README.md`、`docs/ARCHITECTURE.md`。UIを変更する際は `docs/DESIGN_SYSTEM.md` も読む。
+2. `README.md`、`docs/ARCHITECTURE.md`、`docs/RELEASE_STRATEGY.md`。UIを変更する際は `docs/DESIGN_SYSTEM.md` も読む。
 3. `git status --short` と、依頼対象のコード・テスト。未コミット変更はユーザーの作業として保持する。
 
 READMEのチュートリアルの節には、現在の画面分けや交代の仕様と異なる記述があるため、現行コードを優先して確認すること。
@@ -14,9 +14,13 @@ READMEのチュートリアルの節には、現在の画面分けや交代の�
 
 Node.js 22以降。`sound-playground` で `npm run dev` を実行し、`http://localhost:4175/` を開く。サーバー停止中は接続できない。ローカル開発中の画面とレッスンはセッションストレージに保存され、リロード時に復元する。
 
-`dist/` は生成物ではなく編集対象のソース。影響箇所の `node --test tests/tutorial.test.mjs`、統合時は `npm run typecheck` と `npm test` を実行する。UI・音声の変更はブラウザーで実際の操作を確認し、未確認は明記する。実際のユーザーデータをテストで変更しない。
+`dist/` は生成物ではなく編集対象のソース。影響箇所の `node --test tests/<対象>.test.mjs`、統合時は `npm run typecheck` と `npm test` を実行する。UI・音声の変更はブラウザーで実際の操作を確認し、未確認は明記する。実際のユーザーデータをテストで変更しない。
 
 ## 現在の方向性
+
+- `docs/ARCHITECTURE.md` は独立したメロディアレンジ画面を終了し、譜面編集をスタジオのメロディパートへ統合する方針を記載。ライブ専用画面への発展は今後の項目。直近のコミットは `7205cef`「メロディのシーケンサー作成」。
+- 作業ツリーにはスタジオのベース譜面・ステップ入力・再生に関する未コミット変更がある。`melody-arrange.js` でベース用の音域・鍵盤・試聴を扱い、`progression.js` で入力されたベース音を再生する変更と対応テストが含まれる。完成・動作確認済みとは判断しない。
+- 以下のチュートリアルに関する情報は従来の引き継ぎから維持したもの。今回すべての仕様を実機確認したわけではない。
 
 - 最初の選択画面は音楽ゲームらしい親しみやすい見た目。スマホ対応を大切にし、既存のMilk UI／スキンを維持する。
 - チュートリアル選択は「メロディ編・基礎」（No.1〜7）、「メロディ編・応用」、「アドリブ編」（従来No.8〜10）、「ドラム編」。ベース・コード編は準備中。選択画面に階層を増やさない。
@@ -29,6 +33,7 @@ Node.js 22以降。`sound-playground` で `npm run dev` を実行し、`http://l
 
 ## 主な実装場所
 
+- `dist/melody-arrange.js`、`dist/app.js`、`dist/progression.js`: スタジオの譜面編集、アプリ連携、再生。対応テストは `tests/melody-arrange.test.mjs`、`tests/progression.test.mjs`。
 - `dist/melody-view.js`: モード・チュートリアル選択画面と遷移。
 - `dist/tutorial.js`: レッスンデータ、演奏・伴奏スケジュール、判定。
 - `dist/tutorial-view.js`: メロディのチュートリアル画面、入力、ナビ表示。
@@ -38,7 +43,7 @@ Node.js 22以降。`sound-playground` で `npm run dev` を実行し、`http://l
 
 ## 直近の状態・注意
 
-- 直近の依頼は、基礎No.7のスライドを4音ずつ連桁にする変更。16分音符のまとまりは二重の連桁。型チェックとチュートリアルテスト38件は通過したが、実画面の見た目は未確認。
-- 応用編の4段表示、2オクターブ鍵盤、ト音記号も、型チェックとテストは通過しているが、実画面やiPhone/iPadのタッチ操作は未確認。とくに狭い画面での収まり・入力・記号の表示を確認する。
-- 2026-11-12の引き継ぎ作成時点で `dist/skins.css` と `dist/tutorial-view.js` に未コミット変更がある。作業前に現状を再確認し、巻き戻さない。
-- 次の作業内容はユーザーの依頼を待つ。応用編を「曲を通して弾く」専用の動作へ発展させる構想はあるが、具体的な進行・判定は未確定。
+- 2026-11-13の確認時、未コミット変更は `dist/app.js`、`dist/bass-detail.js`、`dist/index.html`、`dist/keyboard.js`、`dist/melody-arrange.js`、`dist/melody-view.js`、`dist/part-steppers.js`、`dist/progression.js`、`dist/quick-mixer.js`、`dist/score-navigation.js`、`dist/skins.css`、`docs/ARCHITECTURE.md`、`tests/melody-arrange.test.mjs`、`tests/progression.test.mjs`。作業前に `git status --short` と差分を再確認し、ユーザーの変更を保持する。
+- このチャットでは引き継ぎ資料の更新にあたり、Git状態、差分の一部、起動手順を確認した。テストやブラウザー操作は実行していない。ベース編集・再生やスマホでの表示・入力の現状は未検証。
+- 前回記録された基礎No.7の連桁、応用編の表示・鍵盤について、以前の型チェックとテストの通過記録はあるが、現行の変更を含む実画面・iPhone/iPad操作は未確認。
+- 次の作業はユーザーの依頼を待つ。着手時は該当差分とテストを読み、必要な範囲で検証する。

@@ -215,11 +215,11 @@ export function mountQuickMixer({
       document.querySelector('#track-grid .track-select[aria-pressed="true"]')
     )
     const part = selected?.dataset.track
-    playable = accompanimentParts.find((name) => name === part)
+    playable = accompanimentParts.find((name) => name === part && name !== 'bass')
     startFilterAnimation()
     const simple = workspace.dataset.mixerLayout === 'simple'
     workspace.dataset.mixerPart = part ?? ''
-    quickEdit.hidden = (!simple && !playable) || !part || part === 'melody'
+    quickEdit.hidden = (!simple && !playable) || !part || part === 'melody' || part === 'bass'
     quickEdit.classList.toggle('has-accompaniment-play', Boolean(playable))
     workspace.classList.toggle(
       'hide-accompaniment-detail',
@@ -454,7 +454,7 @@ export function mountQuickMixer({
       const details = /** @type {HTMLElement} */ (
         document.querySelector('.track-details')
       )
-      details.hidden = selected === 'melody'
+      details.hidden = selected === 'melody' || selected === 'bass'
       for (const name of ['reference', 'drums', 'bass', 'chord', 'melody']) {
         const panel = /** @type {HTMLElement} */ (
           document.querySelector(

@@ -49,7 +49,8 @@ The browser loads authored native ES modules from `dist/`. The transport, score,
 | Basic accompaniment | `backing.js`, `groove.js`, `rhythm.js` | matching tests |
 | Ornament arrangement | `ornaments.js`, `ornament-audio.js`, `style-ornaments.js` | matching tests |
 | Style and progression selectors | `arrangement-selects.js`, arrangement handlers in `app.js` | browser |
-| Bass detail and phrase preview | `bass-detail.js`, `groove.js` | browser |
+| Studio melody and bass editor mounting, step entry and playback | `studio-editors.js`, `melody-arrange.js`, `progression.js` | `melody-arrange`, `progression`, browser |
+| Studio style envelope and shared pitch bounds | `studio-style.js`; apply order in `app.js` | `studio-style`, `app-settings` |
 | Basic parts, section knobs and reference header | `main-controls.js` | browser |
 | Phone tempo entry and shared knob handling | `main-controls.js`, `reference-timing-view.js` | `tempo-entry`, browser |
 | Quick mixer, accompaniment pads and shared choice fields | `quick-mixer.js`, `part-steppers.js` | `part-steppers`, browser |
@@ -59,7 +60,8 @@ The browser loads authored native ES modules from `dist/`. The transport, score,
 | Reference import processing and PCM encoding | `reference-import.js`, analysis worker modules | `reference-import`, `reference-player` |
 | File serving/stems | `server.mjs`, `server/` | server tests |
 | Appearance | `appearance-dialog.js`, `skins.js`, `style.css`, `skins.css` | browser |
-| Portable settings | `arrangement-file.js`, UI adapter at the end of `app.js`, and `scripts/set-style-default.mjs` for packaged defaults | temporary JSON round trip |
+| Portable settings | `arrangement-file.js`, browser control rules and events in `arrangement-controls.js`, application order in `app.js`, legacy section migration and defaults in `song-score.js` | `arrangement-file`, `app-settings`, `song-score` |
+| Score MIDI encoding and download | `score-midi.js`, download wiring in `melody-arrange.js` | `score-midi` |
 
 Test names are `tests/<name>.test.mjs`. Sources referenced above live under `dist/` unless noted. Keep public analysis exports compatible with existing consumers.
 
@@ -139,6 +141,10 @@ Prioritize further work by coupling, not line count:
 2. Chord backing attacks are planned in `backing.js` and authored bass pulses in `groove.js`. `Progression.tick` owns the single look-ahead clock, scheduling and cancellation. Live chord-pad overrides are still resolved just before bass playback. Use these boundaries when extracting further part planning.
 3. `buddy-view.js` owns the session view, lab controls, and phrase history, including export and audition. `buddy.js` supplies capture metadata and handles session scheduling.
 4. Removed legacy Buddy selectors and a superseded session spacing declaration. For broader CSS consolidation, compare computed styles across skins, selection states and viewport widths because historical overrides are order-sensitive.
+
+The Studio editor mounting, style envelope validation and scheduling now have separate entry points. Edited melody and bass still have distinct meter conversions: melody clips the four-beat grid to the current meter, while bass scales that grid across the bar. Empty edited bass means silence. Preserve both contracts when changing scheduling.
+
+Version-1 control rules are read from the current browser controls before decoding. The application still applies style, controls, mixer and score in the existing order. Score MIDI encoding is independent of the browser download; the MIDI reader verifies pickups and note boundaries. The score input dock uses its later shared CSS rules. Broader CSS consolidation needs computed-style comparison across skins and viewport sizes.
 
 Large preset/timbre tables are mostly data and are lower priority. Do not migrate frameworks, introduce global state infrastructure, or split data files solely to reduce line counts. Free/Full still share one implementation.
 

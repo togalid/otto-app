@@ -987,3 +987,19 @@ test('Otto drum attacks illuminate pads at the scheduled time', async () => {
   assert.ok(hits.some(hit => hit.part === 'drums' && hit.sound === 'kick'))
   player.stop()
 })
+
+test('Studio bass starts silent and schedules only entered notes', async () => {
+  const {player} = fixture()
+  const bassCalls = []
+  player.bass = {playAt(...args) { bassCalls.push(args) }, silence() {}}
+  player.bpm = 120
+  player.studioBass = () => []
+  await player.start()
+  player.stop()
+  assert.deepEqual(bassCalls, [])
+
+  player.studioBass = () => [{beat:0, midi:36, duration:1, velocity:.8}]
+  await player.start()
+  player.stop()
+  assert.deepEqual(bassCalls, [[36, .05, .5, .8]])
+})

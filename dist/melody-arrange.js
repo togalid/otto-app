@@ -1,17 +1,19 @@
+import { encodeScoreMidi } from './score-midi.js'
+import { studioPitchRange } from './studio-style.js'
 import * as Vue from './vendor/vue.runtime.esm-browser.prod.js'
 const {createApp, h, ref} = Vue
 const Teleport = Reflect.get(Vue, 'Teleport')
 import { Instrument, audioContext } from './audio.js'
 import { DrumSynth } from './rhythm.js'
 import { genres } from './groove.js'
-import { pianoKey, pianoWhiteLabel } from './keyboard.js'
+import { midiKey, pianoWhiteLabel } from './keyboard.js'
 import { bindTempoKnob } from './main-controls.js'
 import { octaveControl } from './part-steppers.js'
 import { scoreNavigation, scorePagination, scoreNote, scoreAccidental, scoreAccidentalGlyph, scoreAccidentalForNote, scoreKeyFifths, scoreKeySignature, scoreKeyedNotes, scoreRhythmGroups, scoreBeamLayout, scoreTrebleTop, scoreTrebleClefGlyph, scoreStaffStep, scoreStemDown, scoreLedgerOffsets, tutorialStaffLines, tutorialSubdivisions, tutorialPitchSymbol } from './score-navigation.js'
 
 /**
  * @param {HTMLElement} host
- * @param {{empty?:boolean, defaultKeyboardOctaves?:1|2, barCount?:()=>number, previewTimbre?:()=>string, keyForBar?:(bar:number)=>number, chordChanges?:(bar:number)=>{beat:number,position:number,label:string}[], togglePlayback?:()=>void, selectBar?:(bar:number, pickup?:boolean, beat?:number)=>void}} [options]
+ * @param {{empty?:boolean, defaultKeyboardOctaves?:1|2, barCount?:()=>number, previewTimbre?:()=>string, part?:'bass', previewBass?:{ready:()=>Promise<AudioContext|undefined>,playAt:(midi:number,time:number)=>void}, keyForBar?:(bar:number)=>number, chordChanges?:(bar:number)=>{beat:number,position:number,label:string}[], togglePlayback?:()=>void, selectBar?:(bar:number, pickup?:boolean, beat?:number)=>void}} [options]
  */
 export function mountMelodyEditor(host, options = {}) {
 // [beat, length in beats, MIDI pitch]
@@ -23,7 +25,12 @@ const original = [
 ]
 const style = genres.find(genre => genre.id === 'vocal_sky')
 const bpm = ref(style?.bpm ?? 128)
-const octave = ref(4)
+const isBass = options.part === 'bass'
+const partLabel = isBass ? 'ベース' : 'メロディ'
+const baseOctave = isBass ? 3 : 4
+const minOctaveOffset = isBass ? -2 : -1
+const {min: minMidi, max: maxMidi} = studioPitchRange[isBass ? 'bass' : 'melody']
+const octave = ref(baseOctave + (isBass ? -1 : 0))
 const keyboardOctaves = ref(/** @type {number} */ (options.defaultKeyboardOctaves ?? 1))
 const scorePage = ref(0)
 const clefs = [
@@ -32,7 +39,7 @@ const clefs = [
   {label:'ヘ音記号', bass:true, octave:false, stepOffset:12},
   {label:'ヘ音記号 8vb', bass:true, octave:true, stepOffset:19},
 ]
-const clefIndex = ref(0)
+const clefIndex = ref(isBass ? 2 : 0)
 const totalBars = () => Math.max(4, options.barCount?.() ?? 4)
 const totalBeats = () => totalBars() * 4
 const chords = [[53,57,60,64],[55,59,62],[52,55,59],[57,60,64]]
@@ -119,7 +126,7 @@ function cancelSelection(event) {
 function canTransposeSelection(delta) {
   return selection.value.length > 0 && selection.value.every(index => {
     const midi = notes.value[index].midi + delta
-    return midi >= 53 && midi <= 84
+    return midi >= minMidi && midi <= maxMidi
   })
 }
 
@@ -168,23 +175,7 @@ const history = ref(/** @type {EditSnapshot[]} */ ([]))
 const redoHistory = /** @type {EditSnapshot[]} */ ([])
 
 function exportMidi() {
-  const offset = notes.value.some(note => note.beat < 0) ? -pickupStart : 0
-  const events = notes.value.flatMap(note => [
-    {tick:Math.round((note.beat + offset) * 480), bytes:[0x90,note.midi,100]},
-    {tick:Math.round((note.beat + note.length + offset) * 480), bytes:[0x80,note.midi,0]},
-  ]).sort((a,b)=>a.tick-b.tick || a.bytes[0]-b.bytes[0])
-  const track = [0,255,81,3, ...[16,8,0].map(shift => (Math.round(60000000 / bpm.value) >> shift) & 255)]
-  let previous = 0
-  for (const event of events) {
-    let delta = event.tick - previous
-    const encoded = [delta & 127]
-    while ((delta >>= 7) > 0) encoded.unshift((delta & 127) | 128)
-    track.push(...encoded,...event.bytes)
-    previous = event.tick
-  }
-  track.push(0,255,47,0)
-  const bytes = new Uint8Array([77,84,104,100,0,0,0,6,0,0,0,1,1,224,77,84,114,107,
-    ...[24,16,8,0].map(shift => (track.length >>> shift) & 255), ...track])
+  const bytes = encodeScoreMidi(notes.value, bpm.value, -pickupStart)
   const url = URL.createObjectURL(new Blob([bytes],{type:'audio/midi'}))
   const link = document.createElement('a')
   link.href = url
@@ -316,7 +307,7 @@ function setPitchHeld(midi, held) {
 
 /** @param {number} midi */
 function choosePitch(midi) {
-  if (midi < 53 || midi > 84) return
+  if (midi < minMidi || midi > maxMidi) return
   const index = selected.value
   if (inputEnabled.value && stepCursor.value !== null) writeStep(midi)
   else if (inputEnabled.value && index >= 0 && notes.value[index].midi !== midi) {
@@ -324,11 +315,18 @@ function choosePitch(midi) {
     notes.value[index].midi = midi
   }
   const request = ++previewGeneration
-  void preview.ready().then(() => {
-    if (request === previewGeneration && preview.context) {
-      if (options.previewTimbre) preview.setTimbre(options.previewTimbre())
-      preview.playAt([midi], preview.context.currentTime + .01, .24)
+  const ready = options.previewBass
+    ? options.previewBass.ready()
+    : preview.ready().then(() => preview.context)
+  void ready.then(context => {
+    if (request !== previewGeneration || !context) return
+    const time = context.currentTime + .01
+    if (options.previewBass) {
+      options.previewBass.playAt(midi, time)
+      return
     }
+    if (options.previewTimbre) preview.setTimbre(options.previewTimbre())
+    preview.playAt([midi], time, .24)
   }).catch(() => {
     if (request === previewGeneration) error.value = '鍵盤の音を再生できませんでした。'
   })
@@ -497,7 +495,7 @@ function moveDrag(event) {
   const dy = event.clientY - y
   if (drag.group.length) {
     const pitches = drag.group.map(note => note.midi)
-    const delta = Math.max(53 - Math.min(...pitches), Math.min(84 - Math.max(...pitches), Math.round(-dy / 20)))
+    const delta = Math.max(minMidi - Math.min(...pitches), Math.min(maxMidi - Math.max(...pitches), Math.round(-dy / 20)))
     if (drag.group.every(({index,midi}) => notes.value[index].midi === midi + delta)) return
     if (!drag.changed) { remember(); drag.changed = true }
     for (const {index,midi} of drag.group) notes.value[index].midi = midi + delta
@@ -509,7 +507,7 @@ function moveDrag(event) {
   }
   if (!drag.changed) { remember(); drag.changed = true }
   if (drag.axis === 'pitch') {
-    const nextPitch = Math.max(53, Math.min(84, midi - Math.round(dy / 20)))
+    const nextPitch = Math.max(minMidi, Math.min(maxMidi, midi - Math.round(dy / 20)))
     if (notes.value[index].midi !== nextPitch) {
       dragPitch.value = nextPitch
       choosePitch(nextPitch)
@@ -609,12 +607,12 @@ const app = createApp({ render: () => [
       ]),
       h('output', `${bpm.value} BPM`),
     ]),
-    options.togglePlayback ? h(Teleport, {to:'.melody-choice-row'}, pickupButton()) : pickupButton(),
+    options.togglePlayback ? h(Teleport, {to:isBass ? '.bass-choice-row' : '.melody-choice-row:not(.bass-choice-row)'}, pickupButton()) : pickupButton(),
     options.togglePlayback ? null : h('button', {type:'button', disabled:notes.value.length === original.length && notes.value.every(({beat,length,midi}, index) => beat === original[index][0] && length === original[index][1] && midi === original[index][2]), onClick:reset}, 'お手本に戻す'),
   ]),
   error.value ? h('p', {role:'alert'}, error.value) : null,
   scoreNavigation({attrs:{
-    class:['tutorial-navigation-advanced arrange-score', {'arrange-hide-note-bars':!showNoteBars.value}], 'aria-label':'メロディの楽譜', tabindex:-1,
+    class:['tutorial-navigation-advanced arrange-score', {'arrange-hide-note-bars':!showNoteBars.value}], 'aria-label':partLabel + 'の楽譜', tabindex:-1,
     onPointerdown:startSelection, onPointermove:moveSelection, onPointerup:finishSelection,
     onPointercancel:cancelSelection, onLostpointercapture:cancelSelection,
     onPointerleave:()=>{ if (!selectionBox.value) cancelSelection() },
@@ -841,21 +839,21 @@ const app = createApp({ render: () => [
       onPageChange:page=>{scorePage.value = page},
     }),
   h('div', {class:'part-mix arrange-record'}, [
-    h('button', {type:'button', class:'mix-button', 'aria-label':'メロディ入力', title:'メロディ入力 (Shift+R)', 'aria-keyshortcuts':'Shift+R', 'aria-pressed':inputEnabled.value, onClick:()=>{ inputEnabled.value = !inputEnabled.value }}, [
+    h('button', {type:'button', class:'mix-button', 'aria-label':partLabel + '入力', title:partLabel + '入力 (Shift+R)', 'aria-keyshortcuts':'Shift+R', 'aria-pressed':inputEnabled.value, onClick:()=>{ inputEnabled.value = !inputEnabled.value }}, [
       h('span', {'aria-hidden':'true'}, '●'), ' Rec',
     ]),
   ]),
   ]),
   ]),
   h('div', {class:'arrange-keyboard-toolbar'}, [
-    octaveControl(octave.value - 4, delta => { octave.value += delta }, {min:-1,max:2 - keyboardOctaves.value}),
+    octaveControl(octave.value - baseOctave, delta => { octave.value += delta }, {min:minOctaveOffset,max:(isBass ? 1 : 2) - keyboardOctaves.value}),
     h('div', {class:'arrange-octave-display'}, [
     h('span', {class:'arrange-octave-display-label', 'aria-hidden':'true'}, '表示'),
     h('div', {class:'segmented-control arrange-octave-width', role:'group', 'aria-label':'鍵盤の表示範囲'}, [1,2].map(count =>
       h('label', [
-        h('input', {type:'radio', name:'arrange-octaves', value:count, 'aria-label':`${count}オクターブ`, checked:keyboardOctaves.value === count,
+        h('input', {type:'radio', name:isBass ? 'bass-arrange-octaves' : 'arrange-octaves', value:count, 'aria-label':`${count}オクターブ`, checked:keyboardOctaves.value === count,
           onChange:()=>{
-            octave.value = Math.min(octave.value, 6 - count)
+            octave.value = Math.min(octave.value, baseOctave + (isBass ? 1 : 2) - count)
             keyboardOctaves.value = count
           }}),
         h('span', `${count}oct`),
@@ -864,10 +862,10 @@ const app = createApp({ render: () => [
     h('button', {type:'button', class:'arrange-bar-toggle', 'aria-pressed':showNoteBars.value, onClick:()=>{ showNoteBars.value = !showNoteBars.value }}, 'バー'),
     h('button', {type:'button', disabled:history.value.length === 0, onClick:undo}, '↶ やり直し'),
   ]),
-  h('div', {class:'tutorial-keyboard arrange-keyboard', style:{'--tutorial-key-count':String(keyboardOctaves.value * 7 + 1)},role:'group','aria-label':'メロディを試す鍵盤'}, Array.from({length:keyboardOctaves.value * 12 + 1}, (_, i) => pianoKey((octave.value + 1) * 12 + i)).map(key => h('button', {
+  h('div', {class:'tutorial-keyboard arrange-keyboard', style:{'--tutorial-key-count':String(keyboardOctaves.value * 7 + 1)},role:'group','aria-label':partLabel + 'を試す鍵盤'}, Array.from({length:keyboardOctaves.value * 12 + 1}, (_, i) => midiKey((octave.value + 1) * 12 + i)).map(key => h('button', {
     type:'button', class:[key.black ? 'tutorial-black' : 'tutorial-white', {active:heldPitches.value.includes(key.midi) || dragPitch.value === key.midi || (playing.value && notes.value.some(note => note.midi === key.midi && position.value >= note.beat && position.value < note.beat + note.length * .9))}],
-    style:key.black ? {left:`${Array.from({length:keyboardOctaves.value * 12 + 1}, (_, i) => pianoKey((octave.value + 1) * 12 + i)).filter(note => !note.black && note.midi < key.midi).length * (100 / (keyboardOctaves.value * 7 + 1))}%`} : undefined,
-    'aria-label':key.label, disabled:key.midi < 53 || key.midi > 84,
+    style:key.black ? {left:`${Array.from({length:keyboardOctaves.value * 12 + 1}, (_, i) => midiKey((octave.value + 1) * 12 + i)).filter(note => !note.black && note.midi < key.midi).length * (100 / (keyboardOctaves.value * 7 + 1))}%`} : undefined,
+    'aria-label':key.label, disabled:key.midi < minMidi || key.midi > maxMidi,
     onPointerdown:()=>setPitchHeld(key.midi, true),
     onPointerup:()=>setPitchHeld(key.midi, false),
     onPointercancel:()=>setPitchHeld(key.midi, false),
@@ -952,7 +950,7 @@ return {
   },
   /** @param {number} midi */
   midiAttack(midi) {
-    if (midi < 53 || midi > 84) return
+    if (midi < minMidi || midi > maxMidi) return
     setPitchHeld(midi, true)
     choosePitch(midi)
   },

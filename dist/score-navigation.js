@@ -1,5 +1,5 @@
 import { h } from './vendor/vue.runtime.esm-browser.prod.js'
-import { pianoKey } from './keyboard.js'
+import { midiKey } from './keyboard.js'
 
 /** @param {{page:number, pageSize:number, totalBars:number, label:string, onPageChange:(page:number)=>void, maxBars?:number, leadingLabel?:string}} options */
 export function scorePagination({page, pageSize, totalBars, label, onPageChange, maxBars = totalBars, leadingLabel}) {
@@ -77,7 +77,7 @@ export const tutorialPitchTop = midi => tutorialStaffTop(3 - Math.max(0, pitches
 
 /** Treble clef positions are measured in diatonic steps from middle C. @param {number} midi */
 export function scoreStaffStep(midi) {
-  const natural = [3,10].includes(midi % 12) ? midi + 1 : pianoKey(midi).black ? midi - 1 : midi
+  const natural = [3,10].includes(midi % 12) ? midi + 1 : midiKey(midi).black ? midi - 1 : midi
   const pitchClasses = [0,2,4,5,7,9,11]
   return (Math.floor(natural / 12) - 5) * 7 + pitchClasses.indexOf(natural % 12)
 }
@@ -117,7 +117,7 @@ export function tutorialSubdivisions(gridBeats) {
 export function scoreAccidentalForNote(notes, index) {
   const {beat, midi} = notes[index]
   if (midi % 12 === 3 || midi % 12 === 10) return '♭'
-  if (pianoKey(midi).black) return '♯'
+  if (midiKey(midi).black) return '♯'
   const flatNatural = midi % 12 === 4 || midi % 12 === 11
   const altered = flatNatural ? midi - 1 : midi + 1
   if (![1,3,6,8,10].includes(altered % 12) || (!flatNatural && (altered % 12 === 3 || altered % 12 === 10))) return ''
@@ -149,7 +149,7 @@ export function scoreKeyedNotes(notes, keyForBar) {
     const signature = scoreKeySignature(fifths)
     const delta = Math.sign(fifths)
     const inKey = signature.some(entry => (entry.midi + delta) % 12 === midi % 12)
-    const altered = inKey ? delta : !pianoKey(midi).black ? 0 : [3,10].includes(midi % 12) ? -1 : 1
+    const altered = inKey ? delta : !midiKey(midi).black ? 0 : [3,10].includes(midi % 12) ? -1 : 1
     const staffMidi = midi - altered
     const keyDefault = signature.some(entry => entry.midi % 12 === staffMidi % 12) ? delta : 0
     let measure = alterations.get(bar)

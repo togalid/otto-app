@@ -5,6 +5,11 @@ export const pianoNotes = Object.freeze(Array.from({length:37},(_,i)=>48+i))
 /** @param {number} midi */
 export function pianoKey(midi) {
   if (!pianoNotes.includes(midi)) throw new RangeError('Outside keyboard range')
+  return midiKey(midi)
+}
+
+/** @param {number} midi */
+export function midiKey(midi) {
   const pitch=midi%12
   return {midi,black:[1,3,6,8,10].includes(pitch),label:['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'][pitch]+(Math.floor(midi/12)-1)}
 }

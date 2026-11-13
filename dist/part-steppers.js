@@ -216,7 +216,7 @@ export function selectStepperView(control, caption, change, override = {}) {
 }
 
 /** @param {HTMLSelectElement} source */
-export function mountMelodyVoiceChoice(source) {
+export function mountMelodyVoiceChoice(source, partLabel = 'メロディ') {
   const element = document.createElement('div')
   element.className = 'section-style-choice part-choice-field'
   const revision = ref(0)
@@ -227,14 +227,16 @@ export function mountMelodyVoiceChoice(source) {
       selectStepperView(source, '音色', value => {
         source.value = value
         source.dispatchEvent(new Event('change', {bubbles:true}))
-      }, {ariaLabel:'メロディ画面の音色', bubbleChange:true}),
+      }, {ariaLabel:partLabel + '画面の音色', bubbleChange:true}),
     ])]
   }})
   app.mount(element)
   source.addEventListener('change', sync)
+  source.addEventListener('part-sync', sync)
   document.addEventListener('melody-timbre-change', sync)
   return {element, unmount:() => {
     source.removeEventListener('change', sync)
+    source.removeEventListener('part-sync', sync)
     document.removeEventListener('melody-timbre-change', sync)
     app.unmount()
   }}

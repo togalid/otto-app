@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { migrateSongSections } from '../dist/song-score.js'
+import { migrateSongSections, restoreSongSections } from '../dist/song-score.js'
 import { Progression } from '../dist/progression.js'
 const legacy=()=>['C','Dm7','Em7','G7'].map(chord=>({slots:Array(8).fill(chord),beatSlots:Array.from({length:8},()=>[null,null,null,null]),modulation:[0,0,0,0],advance:false}))
 test('legacy sections become one shared score without losing chord order',()=>{
@@ -186,4 +186,18 @@ test('pickup notes play before the first bar when starting at the pickup', async
  assert.equal(notes[0].pitches[0], 60)
  assert.ok(Math.abs(startTime - notes[0].time - .5) < 1e-9)
  player.stop()
+})
+
+test('restoring old sections fills missing part settings without replacing captured performance', () => {
+  const sections = legacy()
+  const performance = {key:0, drums:[], bass:[]}
+  const partSettings = {'bass-pattern':'offbeat'}
+  sections[0] = {...sections[0], partSettings, performance}
+  const fallback = {'bass-pattern':'whole'}
+  const restored = restoreSongSections(sections, fallback)
+  assert.deepEqual(restored[0].partSettings, partSettings)
+  assert.deepEqual(restored[0].performance, performance)
+  assert.deepEqual(restored[1].partSettings, fallback)
+  assert.notEqual(restored[1].partSettings, restored[2].partSettings)
+  assert.equal(sections[1].partSettings, undefined)
 })

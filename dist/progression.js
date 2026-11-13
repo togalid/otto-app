@@ -270,6 +270,8 @@ export class Progression {
   presetMelody = false
   /** @type {() => {beat:number,duration:number,midi:number,velocity:number}[] | undefined} */
   studioMelody = () => undefined
+  /** @type {Progression['studioMelody']} */
+  studioBass = () => undefined
   /** @type {{id:string,pattern:string,voice:{ready():Promise<void>,silence():void,schedule(event:import('./ornaments.js').OrnamentEvent,time:number,seconds:number):void}}[]} */
   ornaments = []
   running = false
@@ -306,6 +308,47 @@ export class Progression {
   onStart = () => {}
   onStop = () => {}
 
+  /** @param {string} style @param {number} startBeat @param {number} duration */
+  scheduleStudioMelody(style, startBeat, duration) {
+    const editedMelody = this.studioMelody()
+    if (this.melody && (editedMelody !== undefined || this.presetMelody)) {
+      const notes = editedMelody ?? melodyPresets[style] ?? []
+      if (notes.length) {
+        // Studio notation and its presets store four grid beats per measure.
+        let barBeat = editedMelody === undefined ? 0 : this.nextStep * 4
+        if (editedMelody === undefined) {
+          for (let bar = 0; bar < this.nextStep; bar++) barBeat += this.meterForBar(bar)
+        }
+        const end = barBeat + (editedMelody === undefined ? this.beatsPerBar : Math.min(4, this.beatsPerBar))
+        const secondsPerBeat = duration / this.beatsPerBar
+        for (const note of notes) {
+          if (note.beat >= end) break
+          if (note.beat < barBeat + startBeat) continue
+          this.melody.playAt([note.midi], this.nextTime + (note.beat - barBeat - startBeat) * secondsPerBeat,
+            note.duration * secondsPerBeat, note.velocity)
+        }
+      }
+    }
+  }
+
+  /**
+   * @param {NonNullable<ReturnType<Progression['studioBass']>>} notes
+   * @param {number} startBeat
+   * @param {number} duration
+   */
+  scheduleStudioBass(notes, startBeat, duration) {
+    // Scale the four-beat notation grid to the active meter.
+    const barBeat = this.nextStep * 4
+    for (const note of notes) {
+      if (note.beat < barBeat || note.beat >= barBeat + 4) continue
+      const beat = (note.beat - barBeat) * this.beatsPerBar / 4
+      if (beat < startBeat || !this.bass) continue
+      const time = this.nextTime + (beat - startBeat) * duration / this.beatsPerBar
+      this.queuePadHit(time, {part:'bass', midi:note.midi})
+      this.bass.playAt(note.midi, time, note.duration * duration / 4, note.velocity)
+    }
+  }
+
   /** @param {number} [bar] @param {number} [beat] @param {number} [startTime] AudioContext time, for a synchronized count-in. */
   async start(bar = 0, beat = 0, startTime = 0) {
     if (!Number.isInteger(bar) || bar < 0 || bar >= this.barCount() || !Number.isFinite(beat) || (beat < 0 && !(bar === 0 && beat === -1)) || beat >= this.meterForBar(bar))
@@ -332,6 +375,11 @@ export class Progression {
         for (const note of this.studioMelody() ?? []) {
           if (note.beat >= 0 || note.beat < -1) continue
           this.melody?.playAt([note.midi], this.nextTime + (note.beat + 1) * secondsPerBeat, note.duration * secondsPerBeat, note.velocity)
+        }
+        for (const note of this.studioBass() ?? []) {
+          if (note.beat >= 0 || note.beat < -1) continue
+          this.bass?.playAt(note.midi, this.nextTime + (note.beat + 1) * secondsPerBeat,
+            note.duration * secondsPerBeat, note.velocity)
         }
         this.nextTime += secondsPerBeat
         beat = 0
@@ -443,25 +491,7 @@ export class Progression {
         playBacking(event.notes, this.nextTime + event.offset, event.length, event.level,
           chordWeights(event.notes, event.chord, barKey), event.chord)
       }
-      const editedMelody = this.studioMelody()
-      if (this.melody && (editedMelody !== undefined || this.presetMelody)) {
-        const notes = editedMelody ?? melodyPresets[score.style ?? this.genre] ?? []
-        if (notes.length) {
-          // Studio notation and its presets store four grid beats per measure.
-          let barBeat = editedMelody === undefined ? 0 : this.nextStep * 4
-          if (editedMelody === undefined) {
-            for (let bar = 0; bar < this.nextStep; bar++) barBeat += this.meterForBar(bar)
-          }
-          const end = barBeat + (editedMelody === undefined ? this.beatsPerBar : Math.min(4, this.beatsPerBar))
-          const secondsPerBeat = duration / this.beatsPerBar
-          for (const note of notes) {
-            if (note.beat >= end) break
-            if (note.beat < barBeat + startBeat) continue
-            this.melody.playAt([note.midi], this.nextTime + (note.beat - barBeat - startBeat) * secondsPerBeat,
-              note.duration * secondsPerBeat, note.velocity)
-          }
-        }
-      }
+      this.scheduleStudioMelody(score.style ?? this.genre, startBeat, duration)
       if (this.melody && this.melodyPattern) {
         for (const change of changes) {
           const end = nextChange(change.beat)
@@ -517,7 +547,10 @@ export class Progression {
           )
         }
       }
-      if (!ottoBassPattern && score.performance?.bass) {
+      const editedBass = this.studioBass()
+      if (editedBass !== undefined) {
+        this.scheduleStudioBass(editedBass, startBeat, duration)
+      } else if (!ottoBassPattern && score.performance?.bass) {
         const barBeat = this.nextStep * this.beatsPerBar
         for (const note of [...score.performance.bass].sort((a, b) => a.beat - b.beat)) {
           const beat = note.beat - barBeat

@@ -345,12 +345,17 @@ export function mountMobileLayout() {
   mixer.addEventListener('input', refresh)
   const melodyPanel = document.querySelector('#detail-melody')
   const melodyTop = melodyPanel?.querySelector('.melody-top-row')
+  const bassPanel = document.querySelector('#detail-bass')
   function placeTransport() {
     if (!transport || !narrow.matches) return
-    const destination = melodyPanel?.matches(':not([hidden])') ? melodyTop : playRow
+    const editingNotes = melodyPanel?.matches(':not([hidden])') || bassPanel?.matches(':not([hidden])')
+    const destination = editingNotes ? melodyTop : playRow
     if (destination && transport.parentElement !== destination) destination.append(transport)
   }
-  if (melodyPanel) new MutationObserver(placeTransport).observe(melodyPanel, {attributes:true, attributeFilter:['hidden']})
+  const editorVisibility = new MutationObserver(placeTransport)
+  for (const editor of [melodyPanel, bassPanel]) {
+    if (editor) editorVisibility.observe(editor, {attributes:true, attributeFilter:['hidden']})
+  }
   const keyboard = document.querySelector('#piano-scroll')
   const keyboardHome = document.createComment('keyboard home')
   keyboard?.before(keyboardHome)

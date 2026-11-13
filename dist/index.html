@@ -156,14 +156,6 @@
               hidden
             ><div class="drum-detail-heading"><h2 class="track-detail-title">好きなリズムを作ってみよう。</h2><fieldset class="segmented-control drum-rate" aria-label="ドラムの速度"><legend class="sr-only">ドラムの速度</legend><label><input type="radio" name="drum-rate" value="0.5"><span>ハーフ</span></label><label><input type="radio" name="drum-rate" value="1" checked><span>通常</span></label><label><input type="radio" name="drum-rate" value="2"><span>ダブル</span></label></fieldset></div><div id="drum-sequencer" class="drum-sequencer" role="group" aria-label="16ステップのドラムシーケンサー"></div></div>
             <div
-              id="detail-bass"
-              class="bass-detail"
-              role="region"
-              aria-label="ベースの詳細"
-              hidden
-            >
-            </div>
-            <div
               id="detail-chord"
               role="region"
               aria-label="コード進行"
@@ -218,6 +210,9 @@
                 ></div>
               </div>
             </div>
+        </section>
+        <section id="detail-bass" class="instrument bass-detail" aria-label="ベースの詳細" hidden>
+          <div id="bass-pattern-detail" hidden></div>
         </section>
         <section id="detail-melody" class="instrument" aria-labelledby="instrument-title" hidden>
           <div class="melody-heading"><h2 id="instrument-title" class="track-detail-title">Ottoとセッション。</h2></div>

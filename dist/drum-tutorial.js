@@ -14,26 +14,6 @@ export const drumPads = Object.freeze([
   {name:'キック',sound:'kick',hand:'右',finger:'人差し指',key:'m',pan:.03,level:1},
   {name:'オープンハット',sound:'open',hand:'右',finger:'薬指',key:',',pan:.3,level:.7},
 ])
-const kitPads = [
-  {name:'クラッシュ',sound:'crash',hand:'左',finger:'薬指',key:'a',pan:-.24,level:.8},
-  {name:'ハイタム',sound:'high-tom',hand:'左',finger:'中指',key:'s',pan:-.12,level:.85},
-  {name:'フロアタム',sound:'floor-tom',hand:'右',finger:'人差し指',key:'k',pan:.12,level:.9},
-  {name:'ライド',sound:'ride',hand:'右',finger:'中指',key:'l',pan:.24,level:.8},
-  {name:'キック',sound:'kick',hand:'左',finger:'薬指',key:'z',pan:0,level:1},
-  {name:'スネア',sound:'snare',hand:'左',finger:'中指',key:'x',pan:0,level:1},
-  {name:'クローズHH',sound:'hat',hand:'右',finger:'人差し指',key:'m',pan:.18,level:.85},
-  {name:'オープンHH',sound:'open',hand:'右',finger:'中指',key:',',pan:.18,level:.8},
-]
-
-export function drumKitEightBeat() {
-  return Array.from({length:8}, (_, i) => {
-    const beat = i / 2
-    const hits = [{beat, pad:6}]
-    if (i % 2 === 0) hits.push({beat, pad:i % 4 === 0 ? 4 : 5})
-    return hits
-  }).flat()
-}
-
 /** @param {number[]} beats @param {number} pad */
 const strokes=(beats,pad)=>beats.map(beat=>({beat,pad}))
 const alternatingHats=(step=.5)=>Array.from({length:4/step},(_,i)=>({beat:i*step,pad:i%2?0:3}))
@@ -131,18 +111,14 @@ const stages = [
 export function padIcon(sound) {
   const common={viewBox:'0 0 32 32','aria-hidden':'true',class:'drum-pad-icon'}
   if(sound==='kick') return h('svg',common,[h('circle',{cx:16,cy:16,r:11}),h('circle',{cx:16,cy:16,r:7}),h('path',{d:'M9 25l-2 3m16-3 2 3'})])
-  if(sound==='snare' || sound.endsWith('-tom')) return h('svg',common,[h('path',{d:'M5 12 Q16 8 27 12 L25 23 Q16 27 7 23 Z'}),h('path',{d:'M5 12 Q16 16 27 12 M8 20 Q16 23 24 20 M10 4l12 8 M22 4 10 12'})])
+  if(sound==='snare') return h('svg',common,[h('path',{d:'M5 12 Q16 8 27 12 L25 23 Q16 27 7 23 Z'}),h('path',{d:'M5 12 Q16 16 27 12 M8 20 Q16 23 24 20 M10 4l12 8 M22 4 10 12'})])
   return h('svg',common,[h('path',{d:'M3 13 Q16 6 29 13 Q16 16 3 13 Z M16 8V4 M16 15v13 M10 28h12'}),...(sound==='open'?[h('path',{d:'M5 19 Q16 23 27 19'})]:[])])
 }
 
 /** One self-contained lesson; no changes to free-play instruments or settings.
- * @param {HTMLElement} host @param {()=>void} onBack @param {boolean} [kit] */
-export function mountDrumTutorial(host,onBack,kit=false) {
-  const pads = kit ? kitPads : drumPads
-  const lessons = kit ? [{title:'基本の8ビート',message:'右手でクローズHHを8分音符で刻もう。左手は1・3拍目にキック、2・4拍目にスネア。'}] : stages
-  const kitPattern = kit ? drumKitEightBeat() : null
-  const lessonKey = kit ? 'drum-kit-lesson' : 'drum-lesson'
-  const state=ref({stage:0,exercise:0,introStep:0,tempo:50,phase:'intro',message:lessons[0].message,countIndex:0,beat:-1,bar:0,score:0,error:'',lit:/** @type {number[]} */([]),pressed:/** @type {number[]} */([]),matched:/** @type {number[]} */([])}).value
+ * @param {HTMLElement} host @param {()=>void} onBack */
+export function mountDrumTutorial(host,onBack) {
+  const state=ref({stage:0,exercise:0,introStep:0,tempo:50,phase:'intro',message:stages[0].message,countIndex:0,beat:-1,bar:0,score:0,error:'',lit:/** @type {number[]} */([]),pressed:/** @type {number[]} */([]),matched:/** @type {number[]} */([])}).value
   let visible=false, generation=0, origin=0, tick=0, frame=0, nextBar=0, judgedBar=-1, displayedBar=-1
   /** @type {AudioContext|undefined} */ let context
   /** @type {GainNode|undefined} */ let master
@@ -175,21 +151,20 @@ export function mountDrumTutorial(host,onBack,kit=false) {
   /** @param {number} pad @param {number} time */
   function sound(pad,time) {
     if(!context||!master||!noise)return
-    const config=pads[pad], ctx=context
+    const config=drumPads[pad], ctx=context
     const pan=ctx.createStereoPanner();pan.pan.value=config.pan
     const amp=ctx.createGain();amp.connect(pan);pan.connect(master)
-    const tom=config.sound.endsWith('-tom')
-    const length=config.sound==='crash'?.38:config.sound==='ride'?.3:tom ? .19 :config.sound==='open'?.24:config.sound==='hat'?.07:config.sound==='snare'?.15:.24
+    const length=config.sound==='open'?.24:config.sound==='hat'?.07:config.sound==='snare'?.15:.24
     amp.gain.setValueAtTime(config.level*(config.sound==='kick'?.6:config.sound==='snare'?.3:.14),time)
     amp.gain.exponentialRampToValueAtTime(.001,time+length)
     /** @type {AudioScheduledSourceNode} */ let source
     /** @type {BiquadFilterNode|undefined} */ let filter
-    if(config.sound==='kick' || tom) {
-      const oscillator=ctx.createOscillator();oscillator.frequency.setValueAtTime(tom?(config.sound==='high-tom'?245:155):config.hand==='右'?130:125,time)
-      oscillator.frequency.exponentialRampToValueAtTime(tom?(config.sound==='high-tom'?135:82):45,time+.12);oscillator.connect(amp);source=oscillator
+    if(config.sound==='kick') {
+      const oscillator=ctx.createOscillator();oscillator.frequency.setValueAtTime(config.hand==='右'?130:125,time)
+      oscillator.frequency.exponentialRampToValueAtTime(45,time+.12);oscillator.connect(amp);source=oscillator
     } else {
       const buffer=ctx.createBufferSource();buffer.buffer=noise;filter=ctx.createBiquadFilter()
-      filter.type='highpass';filter.frequency.value=config.sound==='snare'?1100:config.sound==='crash'?4300:config.sound==='ride'?9000:config.hand==='右'?6800:7300
+      filter.type='highpass';filter.frequency.value=config.sound==='snare'?1100:config.hand==='右'?6800:7300
       buffer.connect(filter);filter.connect(amp);source=buffer
     }
     sources.add(source)
@@ -212,11 +187,11 @@ export function mountDrumTutorial(host,onBack,kit=false) {
     flashes.forEach(timer=>window.clearTimeout(timer));flashes.clear()
     state.lit=[];state.pressed=[];state.beat=-1
   }
-  const currentPattern=()=>kitPattern ?? drumLessonPattern(state.stage,split() ? state.exercise : 1)
+  const currentPattern=()=>drumLessonPattern(state.stage,split() ? state.exercise : 1)
   function finish() {
     cancel();
     if(split() && state.exercise===0){state.phase='practiceComplete';state.message=advanced()?'前半おつかれさま！ 次は伴奏に合わせて叩いてみよう。':state.stage===4?'同時押しを練習できたね！ 次は8ビートに加えてみよう。':'右手の練習ができたね！ 次は左手も加えてみよう。';return}
-    state.phase='complete';state.message=kit?(state.score===goal()?'8ビート、バッチリ！':'もう一度、下段の3つを合わせてみよう。'):state.score===goal()?'すごい！ぜんぶバッチリ！ 次のレッスンも楽しもう！':state.stage===lessons.length-1?(state.score>=goal()*.7?'セッションできたね！ いいリズムだったよ！':'最後まで練習したね。もう一度、ゆっくり合わせてみよう！'):'よく頑張ったね！ 次はもっとうまく叩けるよ！'
+    state.phase='complete';state.message=state.score===goal()?'すごい！ぜんぶバッチリ！ 次のレッスンも楽しもう！':state.stage===stages.length-1?(state.score>=goal()*.7?'セッションできたね！ いいリズムだったよ！':'最後まで練習したね。もう一度、ゆっくり合わせてみよう！'):'よく頑張ったね！ 次はもっとうまく叩けるよ！'
   }
   function animate() {
     if(!context||!visible||!['count','play'].includes(state.phase))return
@@ -227,7 +202,7 @@ export function mountDrumTutorial(host,onBack,kit=false) {
       const bar=Math.floor(beat/4),local=beat%4
       if(displayedBar!==bar){displayedBar=bar;if(judgedBar!==bar)state.matched=[]}
       state.phase='play';state.bar=bar;state.beat=local
-      state.message=kit?(bar%2?'あなたの番。下段の3つで8ビートを叩こう！':'Ottoのお手本を聴こう。'):session()?`${bar+1} / 8小節　${advanced()?.message ?? '8ビートを続けよう！'}`:state.stage===1 && state.exercise===0?'右手の薬指でハイハット。2拍目と4拍目は中指でスネアも一緒に叩こう。':state.stage===0?'右・左・右・左……タイミングよく薬指で鳴らそう。':advanced()?.practice ?? (bar%2?'あなたの番。光るパッドに合わせて叩こう！':state.stage===2 && state.exercise===0?'右手の動きを見てね。':'左右の手の動きを見てね。')
+      state.message=session()?`${bar+1} / 8小節　${advanced()?.message ?? '8ビートを続けよう！'}`:state.stage===1 && state.exercise===0?'右手の薬指でハイハット。2拍目と4拍目は中指でスネアも一緒に叩こう。':state.stage===0?'右・左・右・左……タイミングよく薬指で鳴らそう。':advanced()?.practice ?? (bar%2?'あなたの番。光るパッドに合わせて叩こう！':state.stage===2 && state.exercise===0?'右手の動きを見てね。':'左右の手の動きを見てね。')
       if(session()) state.matched=[...(sessionMatches.get(bar) ?? [])]
       else if(bar%2===1 && judgedBar<bar){judgedBar=bar;matches=new Set();state.matched=[]}
       const pattern=currentPattern()
@@ -328,24 +303,24 @@ export function mountDrumTutorial(host,onBack,kit=false) {
     }catch(error){state.error=error instanceof Error?error.message:'音を準備できませんでした。'}
   }
   function advanceMessage() {if(!visible)return;if(state.phase==='intro'){
-      if(!kit && state.stage===0 && state.introStep<drumIntro.length-1){state.introStep++;return}
+      if(state.stage===0 && state.introStep<drumIntro.length-1){state.introStep++;return}
       void start()
-    }else if(state.phase==='complete'&&state.stage<lessons.length-1){selectStage(state.stage+1)}}
+    }else if(state.phase==='complete'&&state.stage<stages.length-1){selectStage(state.stage+1)}}
   const onKey=/** @param {KeyboardEvent} event */event=>{
     if(!visible||event.repeat||event.metaKey||event.ctrlKey||event.altKey)return
-    const pad=pads.findIndex(p=>p.key===event.key.toLowerCase())
+    const pad=drumPads.findIndex(p=>p.key===event.key.toLowerCase())
     if(pad>=0){event.preventDefault();void hit(pad)}
   }
   const drawing = document.querySelector('#oto-buddy svg')?.outerHTML ?? ''
   function selectStage(/** @type {number} */ stage) {
     cancel()
     state.stage = stage
-    saveDevelopmentScreen(lessonKey, String(stage))
+    saveDevelopmentScreen('drum-lesson', String(stage))
     state.exercise = 0
     state.tempo = defaultTempo()
     state.introStep = 0
     state.phase = 'intro'
-    state.message = advanced()?.practice ?? lessons[stage].message
+    state.message = advanced()?.practice ?? stages[stage].message
     state.score = 0
     state.matched = []
     state.error = ''
@@ -356,24 +331,24 @@ export function mountDrumTutorial(host,onBack,kit=false) {
     const gridSteps=Array.from({length:grid},(_,i)=>i)
     const slotsPerBeat=grid/4
     const gridLine=(/** @type {number} */ i)=>i%slotsPerBeat===0?'drum-grid-beat':grid===16 && i%2===1?'drum-grid-sixteenth':'drum-grid-eighth'
-    const rows=(kit ? [6,5,4] : [3,7,2,6,5,1,4,0]).filter(pad=>(state.stage===4 && (pad===1 || pad===2)) || pattern.some(hit=>hit.pad===pad))
-    const firstLeft=rows.findIndex(pad=>pads[pad].hand==='左')
-    const intro=!kit && state.phase==='intro' && state.stage===0 ? drumIntro[state.introStep] : undefined
-    const placementPads=kit && state.phase==='intro' ? [4,5,6] : intro?.pads ?? (state.phase==='intro' ? (state.stage===1 ? (state.exercise===0 ? [2,3] : [0,2,3]) : state.stage===2 ? (state.exercise===0 ? [6] : [0,2,3,6]) : state.stage===4 ? (state.exercise===0 ? [0,3,5,6] : [0,5]) : state.stage===6 ? [4] : []) : [])
+    const rows=[3,7,2,6,5,1,4,0].filter(pad=>(state.stage===4 && (pad===1 || pad===2)) || pattern.some(hit=>hit.pad===pad))
+    const firstLeft=rows.findIndex(pad=>drumPads[pad].hand==='左')
+    const intro=state.phase==='intro' && state.stage===0 ? drumIntro[state.introStep] : undefined
+    const placementPads=intro?.pads ?? (state.phase==='intro' ? (state.stage===1 ? (state.exercise===0 ? [2,3] : [0,2,3]) : state.stage===2 ? (state.exercise===0 ? [6] : [0,2,3,6]) : state.stage===4 ? (state.exercise===0 ? [0,3,5,6] : [0,5]) : state.stage===6 ? [4] : []) : [])
     return h('div',{class:'drum-lesson'},[
     h(TutorialSelector,{
-      onBack,onSelect:selectStage,index:state.stage,count:lessons.length,label:kit?'ドラム編のレッスン':'ビート編のレッスン',
-      options:lessons.map((stage,i)=>h('option',{value:i},`No.${i+1} · ${stage.title}${i>=5?'（応用）':''}`)),
+      onBack,onSelect:selectStage,index:state.stage,count:stages.length,label:'ビート編のレッスン',
+      options:stages.map((stage,i)=>h('option',{value:i},`No.${i+1} · ${stage.title}${i>=5?'（応用）':''}`)),
       onStop:['play','count','loading'].includes(state.phase)?()=>selectStage(state.stage):undefined,
     }),
     h(TutorialCompanion,{
       drawing,line:intro?.line ?? (state.phase==='intro' && state.stage===4 && state.exercise===0 ? '右ハイハットと右キック、次に左ハイハットと左キックを一緒に叩こう。4回繰り返してみよう。' : state.phase==='intro' && state.stage===1 && state.exercise===0 ? 'まず右手だけで練習しよう。薬指でハイハット、2拍目と4拍目は中指でスネアも一緒に叩こう。' : state.message),error:state.error,happy:state.phase==='complete',perfect:state.phase==='complete' && state.score===goal(),
       advance:state.phase==='intro'?advanceMessage:undefined,
       hint:state.phase==='intro'?(intro && state.introStep<drumIntro.length-1?`${state.introStep+1} / ${drumIntro.length}　タップして次へ →`:'準備ができたらタップしてスタート →'):undefined,
-      actions:state.phase==='practiceComplete'?[h('button',{type:'button',onClick:()=>{state.exercise=1;if(advanced()){void start();return}state.phase='intro';state.message=state.stage===4?lessons[4].message:state.stage===2?'今度は1拍目と3拍目に右手の人差し指でキックも加えよう。ハイハットと一緒に叩けば8ビート！':lessons[1].message;state.score=0;state.matched=[]}},advanced()?'後半：伴奏に合わせる →':state.stage===4?'8ビートに加える →':'左手も加える →'),h('button',{type:'button',onClick:()=>void start()},'もう一度'),h(TutorialTempo,{value:state.tempo,onTempoUpdate:(/** @type {number} */ value)=>{state.tempo=value}})]:state.phase==='complete'?[
+      actions:state.phase==='practiceComplete'?[h('button',{type:'button',onClick:()=>{state.exercise=1;if(advanced()){void start();return}state.phase='intro';state.message=state.stage===4?stages[4].message:state.stage===2?'今度は1拍目と3拍目に右手の人差し指でキックも加えよう。ハイハットと一緒に叩けば8ビート！':stages[1].message;state.score=0;state.matched=[]}},advanced()?'後半：伴奏に合わせる →':state.stage===4?'8ビートに加える →':'左手も加える →'),h('button',{type:'button',onClick:()=>void start()},'もう一度'),h(TutorialTempo,{value:state.tempo,onTempoUpdate:(/** @type {number} */ value)=>{state.tempo=value}})]:state.phase==='complete'?[
         h('button',{type:'button',onClick:()=>void start()},'もう一度'),
         h(TutorialTempo,{value:state.tempo,onTempoUpdate:(/** @type {number} */ value)=>{state.tempo=value}}),
-        state.stage<lessons.length-1
+        state.stage<stages.length-1
           ? h('button',{type:'button',onClick:advanceMessage},'次のレッスン →')
           : h('button',{type:'button',onClick:onBack},'チュートリアルへ'),
       ]:undefined,
@@ -388,7 +363,7 @@ export function mountDrumTutorial(host,onBack,kit=false) {
             ['中指','M26 8 Q26 4 29 4 Q32 4 32 8 L33 27 Q30 30 26 27 Z'],
             ['薬指','M38 12 Q39 8 41 9 Q44 9 43 13 L41 29 Q38 31 35 28 Z'],
           ].map(([finger,d])=>{
-            const matches=/** @param {number} i */ i=>pads[i].hand===hand && pads[i].finger===finger
+            const matches=/** @param {number} i */ i=>drumPads[i].hand===hand && drumPads[i].finger===finger
             const active=state.pressed.some(matches) || (state.phase==='play' && !session() && state.bar%2===0 && state.lit.some(matches))
             const hint=placementPads.some(matches)
             return h('path',{d,class:'drum-hand-active','data-hint':hint && !active?'':undefined,visibility:active || hint?'visible':'hidden'})
@@ -399,16 +374,16 @@ export function mountDrumTutorial(host,onBack,kit=false) {
         h('div',{class:'drum-timeline-grid','aria-hidden':'true'},gridSteps.map(i=>h('span',{class:gridLine(i)},i%slotsPerBeat?'':String(i/slotsPerBeat+1)))),
         state.phase==='play'?h('span',{class:'drum-playhead','aria-hidden':'true',style:{left:`${state.beat*25}%`,height:`${30+rows.length*28}px`}}):null,
       ]),
-      ...rows.map((pad,row)=>h('div',{class:'drum-guide-row','data-hand-divider':firstLeft>0 && row===firstLeft?'':undefined},[h('small',{'data-highlight':state.stage===6 && pad===4?'':undefined},`${pads[pad].hand} ${pads[pad].name}`),...gridSteps.map(i=>{
+      ...rows.map((pad,row)=>h('div',{class:'drum-guide-row','data-hand-divider':firstLeft>0 && row===firstLeft?'':undefined},[h('small',{'data-highlight':state.stage===6 && pad===4?'':undefined},`${drumPads[pad].hand} ${drumPads[pad].name}`),...gridSteps.map(i=>{
         const index=pattern.findIndex(hit=>hit.pad===pad&&Math.round(hit.beat*slotsPerBeat)===i)
-        return h('span',{class:gridLine(i),'data-note':index>=0?'':undefined,'data-hit':state.matched.includes(index)||(index>=0 && state.phase==='intro' && state.pressed.includes(pad))?'':undefined,'aria-label':index>=0?`${pads[pad].hand}手の${pads[pad].finger}`:undefined},index>=0?pads[pad].finger[0]:'')
+        return h('span',{class:gridLine(i),'data-note':index>=0?'':undefined,'data-hit':state.matched.includes(index)||(index>=0 && state.phase==='intro' && state.pressed.includes(pad))?'':undefined,'aria-label':index>=0?`${drumPads[pad].hand}手の${drumPads[pad].finger}`:undefined},index>=0?drumPads[pad].finger[0]:'')
       })])),
     ]),
-    h('div',{class:'drum-pad-grid','aria-label':kit?'ドラムキット':'左右のドラムパッド'},pads.map((pad,i)=>h('button',{type:'button',class:'drum-tutorial-pad','data-sound':pad.sound,'data-placement':placementPads.includes(i)?'':undefined,'data-lit':state.lit.includes(i)||state.pressed.includes(i)?'':undefined,'aria-label':`${pad.hand}手 ${pad.finger} ${pad.name} ${pad.key}キー`,onPointerdown:(/** @type {PointerEvent} */event)=>{if(event.button!==0)return;event.preventDefault();void hit(i)},onClick:(/** @type {MouseEvent} */event)=>{if(event.detail===0)void hit(i)}},[
+    h('div',{class:'drum-pad-grid','aria-label':'左右のドラムパッド'},drumPads.map((pad,i)=>h('button',{type:'button',class:'drum-tutorial-pad','data-sound':pad.sound,'data-placement':placementPads.includes(i)?'':undefined,'data-lit':state.lit.includes(i)||state.pressed.includes(i)?'':undefined,'aria-label':`${pad.hand}手 ${pad.finger} ${pad.name} ${pad.key}キー`,onPointerdown:(/** @type {PointerEvent} */event)=>{if(event.button!==0)return;event.preventDefault();void hit(i)},onClick:(/** @type {MouseEvent} */event)=>{if(event.detail===0)void hit(i)}},[
       h('span',{class:'drum-pad-name'},[padIcon(pad.sound),h('strong',pad.name)]),h('kbd',pad.key.toUpperCase())]))),
   ])}}).mount(host)
   return {
-    open(restore = false){visible=true;const saved=readDevelopmentScreen(lessonKey);const index=saved === null ? 0 : Number(saved);const stage=restore && Number.isInteger(index) && index>=0 && index<lessons.length ? index : 0;selectStage(stage);document.addEventListener('keydown',onKey)},
+    open(restore = false){visible=true;const saved=readDevelopmentScreen('drum-lesson');const index=saved === null ? 0 : Number(saved);const stage=restore && Number.isInteger(index) && index>=0 && index<stages.length ? index : 0;selectStage(stage);document.addEventListener('keydown',onKey)},
     close(){visible=false;cancel();document.removeEventListener('keydown',onKey);master?.disconnect();master=undefined},
     advanceMessage,
   }

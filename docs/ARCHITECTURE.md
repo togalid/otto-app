@@ -32,7 +32,7 @@ The browser loads authored native ES modules from `dist/`. The transport, score,
 | --- | --- | --- |
 | Shared score navigation, lanes, note rendering and editing adapters | `score-navigation.js`, `tutorial-view.js`, `melody-arrange.js` | `score-navigation`, `tutorial`, browser |
 | Tutorial curriculum, eight-bar clock, dedicated lesson UI | `tutorial.js`, `tutorial-view.js`; mode lifecycle in `melody-view.js` | `tests/tutorial.test.mjs`, browser |
-| Drum tutorial, mirrored Beat course, eight-instrument Drum course, staged rhythm practice and sessions | `drum-tutorial.js`; category navigation in `melody-view.js` | `drum-tutorial`, browser |
+| Drum tutorial, mirrored Beat course, staged rhythm practice and sessions | `drum-tutorial.js`; category navigation in `melody-view.js` | `drum-tutorial`, browser |
 | Shared tutorial score, stamp and count label | `tutorial-view.js`; count sound in `tutorial.js` | `tests/tutorial.test.mjs`, browser |
 | Instrument and chord choice menus | `choice-menu.js`, `part-steppers.js` | browser |
 | Song session and melody arrangement octave control | `part-steppers.js` (`octaveControl`), `song-session.js`, `melody-arrange.js` | browser |
@@ -159,3 +159,5 @@ Mode and tutorial-instrument selection use the shared Vue selector in `melody-vi
 The Studio places part settings and pickup above the shared score and accompaniment pads below the entry controls. Studio backing and drum pads write into the shared four-beat score grid. Backing stores the voiced pitches at each step and drums store the pad index. Recorded tracks replace their generated patterns during playback, and the optional `studioAccompaniment` field carries both tracks in version-1 arrangement files.
 
 The Studio drum kit UI lives in `quick-mixer.js`. `DrumSynth` in `rhythm.js` owns the eight decoded WAV slots and uses the existing drum mixer and audio clock. Slots are session-only; version-1 arrangements retain pad indices. Unassigned pads use the synthesized sound.
+
+Studio drum display order and WAV slot labels share the layout in `rhythm.js`. Display positions are separate from the pad IDs stored in version-1 scores.

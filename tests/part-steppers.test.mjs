@@ -45,17 +45,18 @@ test('shared melody picker keeps source values, option groups and step boundarie
   view.element.remove()
 })
 
-test('accompaniment Vue surface preserves pad order, mode callbacks and disposal', async () => {
+test('accompaniment Vue surface maps studio pad positions to saved IDs and preserves mode callbacks and disposal', async () => {
   const played = []
   const modes = []
   const view = mountAccompanimentPlay('drums', 'auto', null, mode => modes.push(mode), index => played.push(index))
   document.body.append(view.element)
   const pads = [...view.element.querySelectorAll('.drum-tutorial-pad')]
   assert.equal(pads.length, 8)
-  assert.match(pads[0].getAttribute('aria-label'), /左手.*ハイハット/)
-  assert.match(pads[6].getAttribute('aria-label'), /右手.*キック/)
+  assert.match(pads[0].getAttribute('aria-label'), /クラッシュ/)
+  assert.match(pads[4].getAttribute('aria-label'), /キック/)
+  pads[4].click()
   pads[6].click()
-  assert.deepEqual(played, [0])
+  assert.deepEqual(played, [0, 2])
   const otto = view.element.querySelector('input[value="otto"]')
   otto.click()
   await nextTick()

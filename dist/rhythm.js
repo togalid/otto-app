@@ -252,6 +252,18 @@ const studioDrumPads = [
   ['ロータム風', 'kick', 7, .13], ['ハイハット強', 'hat', 4, .08],
 ]
 
+// Display order is independent of the pad IDs saved in Studio scores.
+export const studioDrumLayout = [
+  {id:7, name:'クラッシュ', sound:'crash', key:'a'},
+  {id:6, name:'ハイタム', sound:'high-tom', key:'s'},
+  {id:4, name:'フロアタム', sound:'floor-tom', key:'k'},
+  {id:5, name:'ライド', sound:'ride', key:'l'},
+  {id:0, name:'キック', sound:'kick', key:'z'},
+  {id:1, name:'スネア', sound:'snare', key:'x'},
+  {id:2, name:'クローズHH', sound:'hat', key:'m'},
+  {id:3, name:'オープンHH', sound:'open', key:','},
+]
+
 /** @param {number} index */
 export function drumPadSound(index) {
   return /** @type {[string,string,number,number]} */ (studioDrumPads[index])

@@ -23,6 +23,7 @@ export const routes = new Map([
   ['/buddy-view.js', ['buddy-view.js', 'text/javascript']],
   ['/buddy.js', ['buddy.js', 'text/javascript']],
   ['/vendor/vue.runtime.esm-browser.prod.js', ['vendor/vue.runtime.esm-browser.prod.js', 'text/javascript']],
+  ['/vendor/Bravura.otf', ['vendor/Bravura.otf', 'font/otf']],
   ['/vendor/VUE-LICENSE.txt', ['vendor/VUE-LICENSE.txt', 'text/plain']],
   ['/vendor/tone.js', ['vendor/tone.js', 'text/javascript']],
   ['/vendor/TONE-LICENSE.txt', ['vendor/TONE-LICENSE.txt', 'text/plain']],

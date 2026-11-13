@@ -13,9 +13,35 @@ test('a half note entered on beat four displays tied quarter notes and stays one
     const {nextTick} = await import('../dist/vendor/vue.runtime.esm-browser.prod.js')
     const host = document.querySelector('#editor')
     editor = mountMelodyEditor(host, {empty:true, togglePlayback() {}})
+    editor.midiAttack(60)
+    await nextTick()
+    host.querySelector('[aria-label="直前の音を伸ばす"]').click()
+    await nextTick()
+    assert.deepEqual(editor.getNotes(), [{beat:0, duration:1, midi:60, velocity:.8}])
+    host.getClientRects = () => [host.getBoundingClientRect()]
+    host.dispatchEvent(new dom.window.KeyboardEvent('keydown', {code:'KeyZ', metaKey:true, bubbles:true, cancelable:true}))
+    assert.equal(editor.getNotes()[0].duration, .5)
+    host.dispatchEvent(new dom.window.KeyboardEvent('keydown', {code:'KeyZ', metaKey:true, bubbles:true, cancelable:true}))
+    assert.deepEqual(editor.getNotes(), [])
+    await nextTick()
+    editor.setNotes([{beat:0, duration:1, midi:60}, {beat:1.25, duration:.5, midi:62}])
+    await nextTick()
+    host.querySelector('[aria-label="1小節目 2拍から入力"]').click()
+    await nextTick()
+    host.querySelector('[aria-label="直前の音を伸ばす"]').click()
+    await nextTick()
+    assert.deepEqual(editor.getNotes().map(({beat,duration}) => ({beat,duration})), [
+      {beat:0,duration:1.25}, {beat:1.25,duration:.5},
+    ])
+    assert.equal(host.querySelector('[aria-label="直前の音を伸ばす"]').disabled, true)
+    editor.setNotes([])
+    await nextTick()
     host.querySelector('[aria-label="1小節目 4拍から入力"]').click()
     await nextTick()
-    host.querySelector('[aria-label="2分音符"]').click()
+    for (let i = 0; i < 4; i++) {
+      host.querySelector('[aria-label="音価を長く"]').click()
+      await nextTick()
+    }
     editor.midiAttack(60)
     await nextTick()
     assert.deepEqual(editor.getNotes(), [{beat:3, duration:2, midi:60, velocity:.8}])
@@ -35,6 +61,22 @@ test('a half note entered on beat four displays tied quarter notes and stays one
     host.querySelector('[aria-label="2分休符"]').click()
     command('KeyY')
     assert.deepEqual(editor.getNotes(), [])
+
+    const drumHost = document.createElement('section')
+    document.body.append(drumHost)
+    const drumEditor = mountMelodyEditor(drumHost, {empty:true, part:'drums'})
+    try {
+      drumEditor.recordStep([0])
+      await nextTick()
+      drumHost.querySelector('.arrange-note').click()
+      drumEditor.recordStep([1])
+      await nextTick()
+      assert.deepEqual(drumEditor.getNotes().map(({beat,midi}) => ({beat,midi})), [
+        {beat:0,midi:0}, {beat:0,midi:1},
+      ])
+    } finally {
+      drumEditor.destroy()
+    }
 
     const bassHost = document.createElement('section')
     document.body.append(bassHost)

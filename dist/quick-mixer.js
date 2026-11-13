@@ -1,4 +1,4 @@
-import { drumPadSound } from './rhythm.js'
+import { studioDrumLayout } from './rhythm.js'
 import { bindSynthKnob } from './main-controls.js'
 import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
 import { mountAccompanimentPlay, selectStepperView } from './part-steppers.js'
@@ -131,7 +131,7 @@ export function mountQuickMixer({
           )
     if (index === undefined) return
     const pad = quickPlay.querySelector(
-      `.accompaniment-pads .pad[data-pad-index="${index}"]`,
+      `[data-pad-index="${index}"]`,
     )
     if (!pad) return
     const note =
@@ -551,8 +551,8 @@ export function mountDrumSamples(host, drums, audition) {
       ]))),
     enabled.value ? h('div', {class:'drum-sample-slots'}, [
       h('p', '未設定のパッドは合成音。WAVの割り当てはこの画面を開いている間だけ有効です。'),
-      ...names.value.map((name, index) => {
-        const [label] = drumPadSound(index)
+      ...studioDrumLayout.map(({id:index, name:label}) => {
+        const name = names.value[index]
         return h('div', {class:'drum-sample-slot', key:index}, [
           h('button', {type:'button', class:'drum-tutorial-pad', onClick:() => audition(index)}, label),
           h('input', {type:'file', accept:'.wav,audio/wav,audio/x-wav', 'aria-label':label + 'のWAV',

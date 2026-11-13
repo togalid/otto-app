@@ -377,6 +377,28 @@ function writeStep(pitches) {
   return true
 }
 
+function extensionTarget() {
+  if (!inputEnabled.value || stepCursor.value === null) return null
+  const cursor = stepCursor.value
+  const index = notes.value.findIndex(note => Math.abs(note.beat + note.length - cursor) < 1e-7)
+  if (index < 0 || cursor + stepDuration.value > totalBeats()) return null
+  const next = notes.value.reduce((earliest, note, other) => {
+    if (other === index || note.beat + note.length <= cursor) return earliest
+    return Math.min(earliest, Math.max(cursor, note.beat))
+  }, totalBeats())
+  const end = Math.min(cursor + stepDuration.value, next)
+  return end > cursor + 1e-7 ? {index, end} : null
+}
+
+function extendPreviousNote() {
+  const target = extensionTarget()
+  if (!target || stepCursor.value === null) return
+  remember()
+  notes.value[target.index].length += target.end - stepCursor.value
+  stepCursor.value = target.end
+  if (target.end < totalBeats()) scorePage.value = Math.floor(Math.max(0, target.end) / 16)
+}
+
 /** @param {number} beat */
 function setStepCursor(beat) {
   selectNote(-1)
@@ -644,7 +666,7 @@ const app = createApp({ render: () => [
     scorePage.value * 16, scorePage.value * 16 + 8,
   ], lane:start => {
     const clef = clefs[clefIndex.value]
-    const noteTop = (/** @type {number} */ midi) => isDrums ? `${30 + midi * 16}px` : scoreTrebleTop(midi, clef.stepOffset)
+    const noteTop = (/** @type {number} */ midi) => isDrums ? scoreTrebleTop([65,72,81,83,69,79,76,86][midi]) : scoreTrebleTop(midi, clef.stepOffset)
     const rhythmGroups = isAccompaniment ? [] : scoreRhythmGroups(notes.value)
     const pickup = start < 0
     const laneBeats = pickup ? 1 : 8
@@ -654,8 +676,8 @@ const app = createApp({ render: () => [
     const staffMidi = (/** @type {number} */ index) => keyed?.[index].staffMidi ?? notes.value[index].midi
     const accidental = (/** @type {number} */ index) => isDrums ? '' : keyed?.[index].sign ?? scoreAccidentalForNote(notes.value, index)
     const firstBar = Math.max(0, start / 4)
-    const fifths = keyForBar ? scoreKeyFifths(keyForBar(firstBar)) : 0
-    const nextFifths = keyForBar && !pickup && firstBar + 1 < totalBars()
+    const fifths = !isDrums && keyForBar ? scoreKeyFifths(keyForBar(firstBar)) : 0
+    const nextFifths = !isDrums && keyForBar && !pickup && firstBar + 1 < totalBars()
       ? scoreKeyFifths(keyForBar(firstBar + 1)) : fifths
     const signature = scoreKeySignature(fifths)
     const change = nextFifths === fifths ? [] : nextFifths === 0
@@ -689,23 +711,17 @@ const app = createApp({ render: () => [
         }, label))) : null,
       !playbackContext && stepCursor.value !== null && stepCursor.value >= start && stepCursor.value < start + laneBeats
         ? h('span',{class:'arrange-step-cursor',style:{left:`${(stepCursor.value-start)*percent}%`},'aria-hidden':'true'}) : null,
-      ...(isDrums ? Array.from({length:8}, (_, index) => h('span', {class:'arrange-drum-line', style:{top:noteTop(index)}, 'aria-hidden':'true'}, drumPadSound(index)[0])) : [tutorialStaffLines()]),
-      options.togglePlayback && !isDrums ? h('button', {
-        type:'button', class:'arrange-clef', title:`${clef.label}（クリックで切り替え）`,
-        'aria-label':`${clef.label}。次は${clefs[(clefIndex.value + 1) % clefs.length].label}`,
+      tutorialStaffLines(),
+      options.togglePlayback && !isDrums ? h('span', {
+        class:'arrange-clef', role:'img', 'aria-label':clef.label,
         style:{top:scoreTrebleTop(clef.bass ? 74 : 67)},
-        onClick:()=>{ if (!drag) clefIndex.value = (clefIndex.value + 1) % clefs.length },
       }, [h('svg', {viewBox:'0 0 28 84', 'aria-hidden':'true'}, [
         clef.bass ? h('g', [
           h('path', {d:'M3 39C3 28 20 27 20 38C20 48 10 54 2 57C10 52 16 46 16 38C16 31 8 30 5 36Z'}),
           h('circle', {cx:6, cy:39, r:3.5}),
           h('circle', {cx:24, cy:34.5, r:1.6}),
           h('circle', {cx:24, cy:43.5, r:1.6}),
-        ]) : h('g', [
-          // Keep the loop on the G line (y=39), independent of the system music font.
-          h('path', {d:'M12 59C19 63 21 56 19 48L12 21C10 13 12 7 16 5C20 8 21 16 17 22C13 28 4 33 4 41C4 49 11 52 17 49C23 46 23 39 18 36C13 33 8 37 10 42C11 44 13 45 15 44', fill:'none', stroke:'currentColor', 'stroke-width':2.6, 'stroke-linecap':'round', 'stroke-linejoin':'round', transform:'translate(0 39) scale(1 .82) translate(0 -39)'}),
-          h('ellipse', {cx:11, cy:55.4, rx:3.2, ry:3}),
-        ]),
+        ]) : h('text', {x:2, y:39, class:'arrange-treble-glyph'}, '\uE050'),
         clef.octave ? h('text', {x:clef.bass ? 8 : 11, y:clef.bass ? 65 : 1, 'font-size':10}, '8') : null,
       ])]) : null,
       ...[signature, change].flatMap((entries, group) => entries.map(({midi, sign}, index) =>
@@ -801,7 +817,7 @@ const app = createApp({ render: () => [
             ...dragEvents(index, null),
           }, [
             scoreAccidental(sign),
-            isDrums ? h('span', {class:'arrange-drum-hit', 'aria-hidden':'true'}, '●') : tutorialPitchSymbol({midi, duration:segmentEnd - segmentStart, beam:!!group, stemDown, stemLength:beamLayout && group ? beamLayout.stemLengths[group.indexOf(index)] : undefined, ledgerOffsets:scoreLedgerOffsets(staffMidi(index), clef.stepOffset)}),
+            isDrums ? h('span', {class:['arrange-drum-symbol', {'arrange-drum-cymbal':[2,3,5,7].includes(midi)}], 'aria-hidden':'true'}, [h('span', {class:'arrange-drum-head'}), h('span', {class:'arrange-drum-stem'}), segmentEnd - segmentStart <= .5 ? h('span', {class:'arrange-drum-flag'}) : null, segmentEnd - segmentStart <= .25 ? h('span', {class:'arrange-drum-flag arrange-drum-flag-second'}) : null]) : tutorialPitchSymbol({midi, duration:segmentEnd - segmentStart, beam:!!group, stemDown, stemLength:beamLayout && group ? beamLayout.stemLengths[group.indexOf(index)] : undefined, ledgerOffsets:scoreLedgerOffsets(staffMidi(index), clef.stepOffset)}),
             h('span', {class:'tutorial-note-label'}, noteName(midi).replace(/\d+$/, '')),
           ], {beat:segmentStart - start, duration:segmentEnd - segmentStart, laneBeats, top}))
           segmentStart = segmentEnd
@@ -837,6 +853,33 @@ const app = createApp({ render: () => [
   h('div', {class:'arrange-entry-row'}, [
   h('section', {class:'arrange-step-controls', 'aria-label':'ステップ入力'}, [
     stepCursor.value === null ? null : h('div', {class:'arrange-step-status',role:'status'}, stepCursor.value >= totalBeats() ? '入力終了' : `${stepCursor.value < 0 ? '弱起' : `${Math.floor(stepCursor.value / 4) + 1}小節目 · ${stepCursor.value % 4 + 1}拍目`}から入力`),
+    options.part === undefined ? (() => {
+      const current = notes.value[selected.value]?.length ?? stepDuration.value
+      const found = durations.findIndex(([duration]) => duration === current)
+      const index = found < 0 ? durations.findIndex(([duration]) => duration === stepDuration.value) : found
+      const [duration, label] = durations[index]
+      return h('div', {class:'arrange-duration-picker', role:'group', 'aria-label':'音価'}, [
+        h('div', {class:'style-stepper arrange-duration-arrows'}, [
+          h('button', {type:'button', 'aria-label':'音価を短く', disabled:index === 0 || !canSetDuration(Number(durations[index - 1]?.[0])),
+            onClick:()=>useDuration(Number(durations[index - 1][0]), false)}, '←'),
+          h('button', {type:'button', 'aria-label':'音価を長く', disabled:index === durations.length - 1 || !canSetDuration(Number(durations[index + 1]?.[0])),
+            onClick:()=>useDuration(Number(durations[index + 1][0]), false)}, '→'),
+        ]),
+        h('div', {class:'arrange-duration-values'}, [
+          h('div', {class:'arrange-step-row'}, [
+            h('button', {type:'button', 'aria-label':`${label}音符`, 'aria-pressed':true,
+              title:`${label}音符 (${noteKeys[index]})`, disabled:!canSetDuration(Number(duration)),
+              onClick:()=>useDuration(Number(duration), false)}, noteIcon(Number(duration))),
+          ]),
+          h('div', {class:'arrange-step-row'}, [
+            h('button', {type:'button', 'aria-label':`${label}休符`, title:`${label}休符 (${restKeys[index]})`,
+              disabled:!inputEnabled.value || stepCursor.value === null || stepCursor.value >= totalBeats(),
+              onClick:()=>useDuration(Number(duration), true)}, restIcon(Number(duration))),
+            h('button', {type:'button', 'aria-label':'直前の音を伸ばす', title:'直前の音を選択した音価分伸ばす', disabled:!extensionTarget(), onClick:extendPreviousNote}, '→伸'),
+          ]),
+        ]),
+      ])
+    })() : [
     h('div', {class:'arrange-step-row',role:'group','aria-label':'音の長さ'}, [
       ...durations.map(([duration,label], index) =>
         h('button',{type:'button','aria-label':`${label}音符`, title:`${label}音符 (${noteKeys[index]})`,
@@ -852,6 +895,7 @@ const app = createApp({ render: () => [
           disabled:!inputEnabled.value || stepCursor.value === null || stepCursor.value >= totalBeats(),
           onClick:()=>useDuration(Number(duration), true)},restIcon(Number(duration)))),
     ]),
+    ],
   ]),
   h('div', {class:'arrange-entry-actions'}, [
     scorePagination({
@@ -921,7 +965,7 @@ const handleKey = (/** @type {KeyboardEvent} */ event) => {
   }
   if (!host.contains(document.activeElement)) return
   if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return
-  if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select, dialog, .arrange-clef'))) return
+  if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select, dialog'))) return
   if (!event.shiftKey && !event.isComposing && !document.querySelector('dialog[open]')) {
     const key = /^Key([A-Z])$/.exec(event.code)?.[1]
     if (key) {
@@ -978,6 +1022,9 @@ return {
   midiRelease(midi) { setPitchHeld(midi, false) },
   /** @param {readonly number[]} pitches */
   recordStep(pitches) {
+    if (isDrums && inputEnabled.value && stepCursor.value === null && selected.value >= 0) {
+      stepCursor.value = notes.value[selected.value].beat
+    }
     if (inputEnabled.value && stepCursor.value !== null && pitches.length &&
         pitches.every(midi => Number.isInteger(midi) && midi >= minMidi && midi <= maxMidi)) {
       return writeStep(pitches)

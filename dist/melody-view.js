@@ -438,15 +438,12 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
   const drumRoot = document.createElement('section')
   drumRoot.className = 'tutorial-screen drum-tutorial'
   drumRoot.hidden = true
-  const drumKitRoot = document.createElement('section')
-  drumKitRoot.className = 'tutorial-screen drum-tutorial'
-  drumKitRoot.hidden = true
   const songPrototype = document.createElement('section')
   songPrototype.className = 'tutorial-screen song-session-prototype'
   songPrototype.hidden = true
   songPrototype.innerHTML = '<header class="selection-header"><button type="button" data-song-back>← メニュー</button><h1>ライブ</h1></header><section class="live-setup"></section><main aria-label="ライブ演奏" hidden></main>'
   songPrototype.querySelector('[data-song-back]')?.addEventListener('click', () => open('menu'))
-  menu.after(categories, drumRoot, drumKitRoot, songPrototype)
+  menu.after(categories, drumRoot, songPrototype)
   const livePerformance = /** @type {HTMLElement} */ (songPrototype.querySelector('main'))
   const songSession = mountSongSession(livePerformance)
   const liveStep = ref(0)
@@ -483,7 +480,6 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
     ]
   }}).mount(liveSetup)
   const drumView = mountDrumTutorial(drumRoot, () => open('categories'))
-  const drumKitView = mountDrumTutorial(drumKitRoot, () => open('categories'), true)
   categories.querySelector('[data-category-back]')?.addEventListener('click', () => open('menu'))
 
   /** @param {string} mode */
@@ -496,13 +492,10 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
     }
     tutorialView.close()
     drumView.close()
-    drumKitView.close()
     categories.hidden = mode !== 'categories'
     drumRoot.hidden = mode !== 'drum-tutorial'
     songPrototype.hidden = mode !== 'song-session'
     if (mode === 'drum-tutorial') drumView.open(restore)
-    drumKitRoot.hidden = mode !== 'drum-kit-tutorial'
-    if (mode === 'drum-kit-tutorial') drumKitView.open(restore)
     document.body.dataset.appMode = mode
     saveDevelopmentScreen('mode', mode)
     free.hidden = mode !== 'free'
@@ -530,7 +523,6 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
     {id:'melody-advanced',title:'メロディ編 2',detailTitle:'いろんな曲',subtitle:'曲のメロディを弾こう',description:'「ちょうちょう」から、シャープやフラットが出てくる曲まで。',badge:`${lessons.filter(lesson=>lesson.settings?.course === 'songs').length} LESSONS`,icon:'keys'},
     {id:'adlib',title:'メロディ編 3',detailTitle:'即興アレンジ',subtitle:'好きな音でメロディをつくろう',description:'好きな音を選んで、その場でメロディをつくろう。Ottoとのセッションにも挑戦！',badge:`${lessons.filter(lesson=>lesson.settings?.course === 'adlib').length} LESSONS`,icon:'keys'},
     {id:'drum-tutorial',title:'ビート編',subtitle:'8つのパッドでビートを刻もう',description:'左右の手で、トン、タン。基本のリズムからセッションまで、少しずつステップアップ。',badge:'10 LESSONS',icon:'drums'},
-    {id:'drum-kit-tutorial',title:'ドラム編',subtitle:'ドラムキットで8ビート',description:'キック、スネア、ハイハット。下段の3つでOttoの8ビートをまねしてみよう。',badge:'1 LESSON',icon:'drums'},
     {id:'bass',title:'ベース編',subtitle:'',description:'',badge:'',icon:'keys',disabled:true},
     {id:'chords',title:'コード編',subtitle:'',description:'',badge:'',icon:'keys',disabled:true},
   ], mode => {
@@ -559,24 +551,23 @@ export function mountModeMenu(stopPlayback, connectMidi, selectSession) {
         if (event.type === 'keydown' && !event.repeat) void songSession.togglePlayback()
         return
       }
-      if (['tutorial','drum-tutorial','drum-kit-tutorial'].includes(document.body.dataset.appMode ?? '') && event instanceof KeyboardEvent && event.key === ' ') {
+      if (['tutorial','drum-tutorial'].includes(document.body.dataset.appMode ?? '') && event instanceof KeyboardEvent && event.key === ' ') {
         event.preventDefault()
         event.stopImmediatePropagation()
         if (event.type === 'keydown' && !event.repeat) {
           if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
-          if (document.body.dataset.appMode === 'drum-kit-tutorial') drumKitView.advanceMessage()
-          else if (document.body.dataset.appMode === 'drum-tutorial') drumView.advanceMessage()
+          if (document.body.dataset.appMode === 'drum-tutorial') drumView.advanceMessage()
           else tutorialView.advanceMessage()
         }
         return
       }
-      if (['free','drum-tutorial','drum-kit-tutorial'].includes(document.body.dataset.appMode ?? '') || (event.target instanceof Node && tutorial.contains(event.target))) return
+      if (document.body.dataset.appMode === 'free' || document.body.dataset.appMode === 'drum-tutorial' || (event.target instanceof Node && tutorial.contains(event.target))) return
       // Menu controls retain native keyboard activation without triggering performance shortcuts.
       event.stopImmediatePropagation()
     }, true)
   }
   free.hidden = true
   const previousMode = readDevelopmentScreen('mode')
-  open(previousMode && ['menu','categories','free','tutorial','drum-tutorial','drum-kit-tutorial','song-session'].includes(previousMode) ? previousMode : 'menu', true)
+  open(previousMode && ['menu','categories','free','tutorial','drum-tutorial','song-session'].includes(previousMode) ? previousMode : 'menu', true)
   return Object.assign(tutorialView, { songMidiAttack: songSession.midiAttack, songMidiRelease: songSession.midiRelease })
 }

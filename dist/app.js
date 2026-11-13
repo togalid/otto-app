@@ -1188,7 +1188,7 @@ const midiInput = mountMidiInput({
     else if(part==='chord') chordInstrument.attack(midi)
     else if(part==='bass') {const time=chordInstrument.context?.currentTime;if(time!==undefined)bass.playAt(midi,time+.01,.5,.8)}
     else {
-      const gm = /** @type {Record<number,number>} */ ({36:4,38:5,42:6,46:7,35:0,40:1,45:2,44:3})
+      const gm = /** @type {Record<number,number>} */ ({35:0,36:0,38:1,40:1,42:2,44:2,46:3,41:4,43:4,45:4,47:6,48:6,50:6,49:7,51:5})
       const index=gm[midi] ?? ((midi%8)+8)%8
       if (workspace.dataset.workspaceView === 'mixer' && workspace.dataset.mixerPart === 'drums') {
         void playAccompanimentPad('drums', index)

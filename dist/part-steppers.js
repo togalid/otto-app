@@ -1,6 +1,6 @@
-import { drumPadSound } from './rhythm.js'
+import { studioDrumLayout } from './rhythm.js'
 export { drumPadSound } from './rhythm.js'
-import { drumPads, padIcon } from './drum-tutorial.js'
+import { padIcon } from './drum-tutorial.js'
 import * as Vue from './vendor/vue.runtime.esm-browser.prod.js'
 const {createApp, h, ref} = Vue
 const Teleport = Reflect.get(Vue, 'Teleport')
@@ -112,20 +112,19 @@ export function mountAccompanimentPlay(part, initialMode, face, setMode, play, o
   const element = document.createElement('div')
   element.className = 'accompaniment-play'
   const mode = ref(initialMode)
-  const labels = part === 'drums' ? Array.from({length:8}, (_, index) => drumPadSound(index)[0]) : notes.map((note, index) => note + (index === 7 ? '3' : '2'))
+  const labels = notes.map((note, index) => note + (index === 7 ? '3' : '2'))
   const padOrder = labels.map((_, index) => index)
-  const drumSoundIndices = [2, 1, 5, 7, 3, 4, 0, 6]
   const onDrumKey = (/** @type {KeyboardEvent} */ event) => {
     if (part !== 'drums' || !element.getClientRects().length || event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || document.body.dataset.appMode !== 'free') return
     const target = /** @type {HTMLElement|null} */ (event.target)
     if (target?.closest('input, select, textarea, [contenteditable=true]')) return
-    const index = drumPads.findIndex(pad => pad.key === event.key.toLowerCase())
+    const index = studioDrumLayout.findIndex(pad => pad.key === event.key.toLowerCase())
     if (index < 0) return
     event.preventDefault()
     const button = element.querySelectorAll('.drum-tutorial-pad')[index]
     button?.setAttribute('data-lit', '')
     window.setTimeout(() => button?.removeAttribute('data-lit'), 120)
-    play(drumSoundIndices[index])
+    play(studioDrumLayout[index].id)
   }
   if (part === 'drums') document.addEventListener('keydown', onDrumKey)
   const modes = /** @type {const} */ ([['auto', 'パターン'], ['manual', '自分が弾く'], ['otto', 'Ottoが弾く']])
@@ -145,10 +144,10 @@ export function mountAccompanimentPlay(part, initialMode, face, setMode, play, o
   const app = createApp({ render: () => [
     headingHost ? h(Teleport, {to:headingHost}, heading()) : heading(),
     part === 'drums'
-      ? h('div', {class:'drum-pad-grid', role:'group', 'aria-label':'左右のドラムパッド'}, drumPads.map((pad,index) =>
-        h('button', {type:'button', class:'drum-tutorial-pad', 'aria-label':`${pad.hand}手 ${pad.finger} ${pad.name} ${pad.key}キー`,
-          onPointerdown:(/** @type {PointerEvent} */ event) => { if(event.button!==0)return; event.preventDefault(); play(drumSoundIndices[index]) },
-          onClick:(/** @type {MouseEvent} */ event) => { if(event.detail===0)play(drumSoundIndices[index]) },
+      ? h('div', {class:'drum-pad-grid', role:'group', 'aria-label':'ドラムキット'}, studioDrumLayout.map((pad) =>
+        h('button', {type:'button', class:'drum-tutorial-pad', 'data-pad-index':String(pad.id), 'aria-label':`${pad.name} ${pad.key}キー`,
+          onPointerdown:(/** @type {PointerEvent} */ event) => { if(event.button!==0)return; event.preventDefault(); play(pad.id) },
+          onClick:(/** @type {MouseEvent} */ event) => { if(event.detail===0)play(pad.id) },
         }, [h('span',{class:'drum-pad-name'},[padIcon(pad.sound),h('strong',pad.name)]), h('kbd',pad.key.toUpperCase())])))
       : part === 'chord'
       ? h('iframe', { class: 'backing-chord-pads', title: 'バッキングのコードパッド', src: './chord-pad.html?embedded=1&backing=1', onLoad: onFrameLoad })

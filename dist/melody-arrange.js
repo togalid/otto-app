@@ -650,7 +650,7 @@ const app = createApp({ render: () => [
   ]),
   error.value ? h('p', {role:'alert'}, error.value) : null,
   scoreNavigation({attrs:{
-    class:['tutorial-navigation-advanced arrange-score', {'arrange-hide-note-bars':!showNoteBars.value}], 'aria-label':partLabel + 'の楽譜', tabindex:-1,
+    class:['tutorial-navigation-advanced arrange-score', {'arrange-hide-note-bars':isDrums || !showNoteBars.value}], 'aria-label':partLabel + 'の楽譜', tabindex:-1,
     onPointerdown:startSelection, onPointermove:moveSelection, onPointerup:finishSelection,
     onPointercancel:cancelSelection, onLostpointercapture:cancelSelection,
     onPointerleave:()=>{ if (!selectionBox.value) cancelSelection() },
@@ -822,7 +822,7 @@ const app = createApp({ render: () => [
           ], {beat:segmentStart - start, duration:segmentEnd - segmentStart, laneBeats, top}))
           segmentStart = segmentEnd
         }
-        return [...rendered, ...(showNoteBars.value && beat + length <= start + laneBeats ? [h('button', {
+        return [...rendered, ...(!isDrums && showNoteBars.value && beat + length <= start + laneBeats ? [h('button', {
           key:`boundary-${index}`, type:'button', class:'arrange-score-boundary',
           style:{left:`${(beat + length - start) * percent}%`,top:noteTop(staffMidi(index))},
           'aria-label':`${beat < 0 ? '弱起' : `${Math.floor(beat / 4) + 1}小節目`}、${noteName(midi)}の右端を移動`,
@@ -853,7 +853,7 @@ const app = createApp({ render: () => [
   h('div', {class:'arrange-entry-row'}, [
   h('section', {class:'arrange-step-controls', 'aria-label':'ステップ入力'}, [
     stepCursor.value === null ? null : h('div', {class:'arrange-step-status',role:'status'}, stepCursor.value >= totalBeats() ? '入力終了' : `${stepCursor.value < 0 ? '弱起' : `${Math.floor(stepCursor.value / 4) + 1}小節目 · ${stepCursor.value % 4 + 1}拍目`}から入力`),
-    options.part === undefined ? (() => {
+    !isAccompaniment ? (() => {
       const current = notes.value[selected.value]?.length ?? stepDuration.value
       const found = durations.findIndex(([duration]) => duration === current)
       const index = found < 0 ? durations.findIndex(([duration]) => duration === stepDuration.value) : found
@@ -923,7 +923,7 @@ const app = createApp({ render: () => [
         h('span', `${count}oct`),
       ]))),
     ]),
-    h('button', {type:'button', class:'arrange-bar-toggle', 'aria-pressed':showNoteBars.value, onClick:()=>{ showNoteBars.value = !showNoteBars.value }}, 'バー'),
+    isDrums ? null : h('button', {type:'button', class:'arrange-bar-toggle', 'aria-pressed':showNoteBars.value, onClick:()=>{ showNoteBars.value = !showNoteBars.value }}, 'バー'),
     h('button', {type:'button', disabled:history.value.length === 0, onClick:undo}, '↶ やり直し'),
   ]),
   isAccompaniment ? null : h('div', {class:'tutorial-keyboard arrange-keyboard', style:{'--tutorial-key-count':String(keyboardOctaves.value * 7 + 1)},role:'group','aria-label':partLabel + 'を試す鍵盤'}, Array.from({length:keyboardOctaves.value * 12 + 1}, (_, i) => midiKey((octave.value + 1) * 12 + i)).map(key => h('button', {

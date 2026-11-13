@@ -1,6 +1,5 @@
 import { studioDrumLayout } from './rhythm.js'
 export { drumPadSound } from './rhythm.js'
-import { padIcon } from './drum-tutorial.js'
 import * as Vue from './vendor/vue.runtime.esm-browser.prod.js'
 const {createApp, h, ref} = Vue
 export const drumPadNames = ref(/** @type {Record<number,string>} */ ({}))
@@ -138,14 +137,11 @@ export function mountAccompanimentPlay(part, initialMode, face, setMode, play, o
     if (index < 0) return
     event.preventDefault()
     if (!drumPadPlayable(studioDrumLayout[index].id)) return
-    const button = element.querySelectorAll('.drum-tutorial-pad')[index]
-    button?.setAttribute('data-lit', '')
-    window.setTimeout(() => button?.removeAttribute('data-lit'), 120)
     play(studioDrumLayout[index].id)
   }
   if (part === 'drums') document.addEventListener('keydown', onDrumKey)
   const modes = /** @type {const} */ ([['auto', 'パターン'], ['manual', '自分が弾く'], ['otto', 'Ottoが弾く']])
-  const heading = () => h('div', { class: 'accompaniment-play-heading' }, [
+  const heading = () => part === 'drums' || part === 'chord' ? null : h('div', { class: 'accompaniment-play-heading' }, [
       h('div', { class: 'talk-companion' }, [
         h('div', { class: 'talk-avatar', 'aria-hidden': 'true', 'data-look': face?.parentElement?.getAttribute('data-look') ?? '', innerHTML: face?.outerHTML ?? '' }),
         h('p', { class: 'talk-bubble' }, '一緒に弾こう'),
@@ -159,25 +155,11 @@ export function mountAccompanimentPlay(part, initialMode, face, setMode, play, o
       ]),
   ])
   const app = createApp({ render: () => [
-    headingHost ? h(Teleport, {to:headingHost}, heading()) : heading(),
+    headingHost ? h(Teleport, {to:headingHost}, [heading()]) : heading(),
     part === 'drums'
-      ? h('div', [
-        h('span', {class:'sr-only', role:'status', 'aria-live':'polite'},
-          drumPadState.value.status === 'loading' ? 'ドラム音色をロード中。パッドはまだ鳴りません。'
-            : drumPadState.value.status === 'error' ? 'ドラム音色を読み込めませんでした。' : ''),
-        h('div', {class:'drum-pad-grid', role:'group', 'aria-label':'ドラムキット', 'aria-busy':drumPadState.value.status === 'loading'}, studioDrumLayout.map((pad) => {
-          const state = drumPadState.value
-          const message = state.status === 'loading' ? 'ロード中' : state.status === 'error' ? '読込失敗'
-            : !drumPadPlayable(pad.id) ? '未設定' : ''
-          const name = drumPadNames.value[pad.id] ?? pad.name
-          return h('button', {type:'button', class:'drum-tutorial-pad', 'data-pad-index':String(pad.id), 'data-drum-type':drumPadTypes.value[pad.id] ?? drumPadType(pad.sound),
-            'aria-label':`${name} ${pad.key}キー${message ? ' ' + message : ''}`, disabled:!!message,
-            onPointerdown:(/** @type {PointerEvent} */ event) => { if(event.button!==0 || !drumPadPlayable(pad.id))return; event.preventDefault(); play(pad.id) },
-            onClick:(/** @type {MouseEvent} */ event) => { if(event.detail===0 && drumPadPlayable(pad.id))play(pad.id) },
-          }, [h('span',{class:'drum-pad-name'},[padIcon(pad.sound),h('strong',name)]),
-            message ? h('span', {class:'drum-pad-status', 'aria-hidden':'true'}, message) : h('kbd',pad.key.toUpperCase())])
-        })),
-      ])
+      ? h('p', {class:'sr-only', role:'status', 'aria-live':'polite'},
+        drumPadState.value.status === 'loading' ? 'ドラム音色をロード中。まだ音は鳴りません。'
+          : drumPadState.value.status === 'error' ? 'ドラム音色を読み込めませんでした。' : '')
       : part === 'chord'
       ? h('iframe', { class: 'backing-chord-pads', title: 'バッキングのコードパッド', src: './chord-pad.html?embedded=1&backing=1', onLoad: onFrameLoad })
       : h('div', { class: 'accompaniment-pads', role: 'group', 'aria-label': '演奏パッド' },

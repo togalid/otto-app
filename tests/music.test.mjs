@@ -65,6 +65,14 @@ test('Pad upper structures preserve the selected bass and upper chord through tr
  }
 })
 
+test('Pad slash chord labels show the upper chord and bass in each notation', async () => {
+  const {customChord, displayChordParts} = await import('../dist/music.js')
+  const id = customChord({root:3, alter:0, quality:'slash', extension:'pad_2_maj'})
+  assert.deepEqual(displayChordParts(id, 0, 'number'), {main:'5', suffix:'/4'})
+  assert.deepEqual(displayChordParts(id, 0, 'roman'), {main:'V', suffix:'/IV'})
+  assert.deepEqual(displayChordParts(id, 2, 'chord'), {main:'A', suffix:'/G'})
+})
+
 test('open and closed voicings keep harmonic pitches and bass while changing spacing',async()=>{
  const {voicePhrase}=await import('../dist/music.js')
  const cells=['CM7','Dm7','G7','CM7'].map(id=>({id,key:0}))

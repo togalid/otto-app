@@ -94,10 +94,7 @@
 
 
           <div class="mixer-layout-tools">
-            <fieldset class="segmented-control workspace-switch" aria-label="ミキサーの表示">
-              <label><input type="radio" name="mixer-layout" value="simple" checked><span>簡易</span></label>
-              <label><input type="radio" name="mixer-layout" value="detail"><span>詳細</span></label>
-            </fieldset>
+            <div class="workspace-switch"><button id="mixer-layout-toggle" type="button" aria-pressed="false">ミキサー</button></div>
             <div id="score-length-host"></div>
           </div>
           <div class="mixer-watermark" aria-hidden="true"><span>Arrange Mixer</span></div>
@@ -106,6 +103,7 @@
             <select id="genre" aria-label="ジャンルのスタイル" hidden></select>
           </div>
           <div class="groove-settings">
+            <div class="timing-control swing-control"><button id="swing-toggle" type="button" aria-pressed="false">シャッフル</button><input id="swing" type="range" min="0" max="100" value="0" step="1"><output id="swing-value" for="swing" hidden>0%</output></div>
             <div class="mixer-key"><label for="mixer-key">キー</label>
               <span class="volume-knob key-knob"><input id="mixer-key" type="range" min="-12" max="12" step="1" value="0" aria-label="キーを半音ずつ変更" /><span aria-hidden="true"></span></span>
               <output id="mixer-key-value" for="mixer-key">C</output>
@@ -126,17 +124,6 @@
                   step="0.1"
                 /><input id="tempo-value" type="number" inputmode="decimal" min="40" max="200" step="0.1" value="100" aria-label="テンポを数値で入力" /></label
               >
-              <label class="timing-control swing-control" for="swing"
-                ><span class="swing-caption">ノリ</span>
-                <input
-                  id="swing"
-                  type="range"
-                  min="0"
-                  max="100"
-                  value="0"
-                  step="1"
-                /><output id="swing-value" for="swing">0%</output></label
-              >
             </div>
           </div>
           <div class="mixer-banks">
@@ -147,10 +134,8 @@
           <h2 class="track-detail-title"></h2>
           <div class="accompaniment-settings" hidden>
             <div class="accompaniment-mode-host"></div>
-            <div class="melody-choice-row accompaniment-choice-row" data-studio-part="backing"></div>
-            <div class="melody-choice-row accompaniment-choice-row" data-studio-part="drums"></div>
           </div>
-          <div class="mixer-quick-fields"></div>
+          <div class="accompaniment-choice-row"><div class="mixer-quick-fields"></div><div id="drum-score-pagination"></div><div id="backing-score-pagination"></div></div>
           <div class="studio-accompaniment-scores"></div>
           <div class="studio-accompaniment-pads"></div>
         </section>
@@ -169,7 +154,6 @@
             >
               <div class="chord-heading"><div id="section-bar-count" hidden></div><div class="backing-display"><div id="backing-monitor" role="img" aria-label="バッキングの鍵盤表示"></div></div></div>
               <div class="chord-settings">
-                <div id="score-pagination"></div>
                 <div class="chord-field chord-start" hidden><label for="preset-group">開始度数</label><select id="preset-group" aria-label="プリセットの開始度数" aria-controls="preset"></select></div>
                 <div class="chord-field chord-preset"><label for="preset">コード進行</label><div class="preset-picker part-choice-picker"><select id="preset" aria-label="コード進行プリセット"></select><div class="style-stepper part-choice-steps" role="group" aria-label="コード進行を切り替え"><button id="preset-prev" type="button" aria-label="前のコード進行">▲</button><button id="preset-next" type="button" aria-label="次のコード進行">▼</button></div></div></div>
                 <div class="chord-field" hidden><label for="chord-rate">進行の速さ</label><select id="chord-rate"><option value="0.5">½ ハーフ</option><option value="1" selected>1 通常</option><option value="2">2 ダブル</option></select></div>
@@ -202,6 +186,7 @@
                     ></label
                   >
                 </fieldset></div>
+                <div id="score-pagination"></div>
               </div>
               <div
                 class="chord-grid-scroll"
@@ -220,6 +205,7 @@
         </section>
         <section id="detail-bass" class="instrument bass-detail" aria-label="ベースの詳細" hidden>
           <div id="bass-pattern-detail" hidden></div>
+          <div id="bass-tone-editor-host"></div>
         </section>
         <section id="detail-melody" class="instrument" aria-labelledby="instrument-title" hidden>
           <div class="melody-heading"><h2 id="instrument-title" class="track-detail-title">Ottoとセッション。</h2></div>

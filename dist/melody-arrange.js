@@ -1,19 +1,18 @@
 import { encodeScoreMidi } from './score-midi.js'
-import { studioPitchRange } from './studio-style.js'
+import { studioPitchRange, resolveDrumPattern, defaultDrumPatterns } from './studio-style.js'
 import * as Vue from './vendor/vue.runtime.esm-browser.prod.js'
-const {createApp, h, ref} = Vue
-const Teleport = Reflect.get(Vue, 'Teleport')
+const {createApp, h, ref, Teleport} = Vue
 import { Instrument, audioContext } from './audio.js'
-import { DrumSynth, drumPadSound } from './rhythm.js'
+import { DrumSynth, drumPadSound, studioDrumLayout } from './rhythm.js'
 import { genres } from './groove.js'
 import { midiKey, pianoWhiteLabel } from './keyboard.js'
 import { bindTempoKnob } from './main-controls.js'
-import { drumPadNames, octaveControl } from './part-steppers.js'
+import { drumPadNames, drumPadState, drumPadPlayable, octaveControl } from './part-steppers.js'
 import { scoreNavigation, scorePagination, scoreNote, scoreAccidental, scoreAccidentalGlyph, scoreAccidentalForNote, scoreKeyFifths, scoreKeySignature, scoreKeyedNotes, scoreRhythmGroups, scoreBeamLayout, scoreTrebleTop, scoreStaffStep, scoreStemDown, scoreLedgerOffsets, tutorialStaffLines, tutorialSubdivisions, tutorialPitchSymbol } from './score-navigation.js'
 
 /**
  * @param {HTMLElement} host
- * @param {{empty?:boolean, defaultKeyboardOctaves?:1|2, barCount?:()=>number, previewTimbre?:()=>string, part?:'bass'|'backing'|'drums', pickupTarget?:string, previewBass?:{ready:()=>Promise<AudioContext|undefined>,playAt:(midi:number,time:number)=>void}, keyForBar?:(bar:number)=>number, chordChanges?:(bar:number)=>{beat:number,position:number,label:string}[], togglePlayback?:()=>void, selectBar?:(bar:number, pickup?:boolean, beat?:number)=>void}} [options]
+ * @param {{empty?:boolean, defaultKeyboardOctaves?:1|2, barCount?:()=>number, previewTimbre?:()=>string, previewDrum?:(id:number)=>void, part?:'bass'|'backing'|'drums', previewBass?:{ready:()=>Promise<AudioContext|undefined>,playAt:(midi:number,time:number)=>void}, keyForBar?:(bar:number)=>number, chordChanges?:(bar:number)=>{beat:number,position:number,label:string}[], togglePlayback?:()=>void, selectBar?:(bar:number, pickup?:boolean, beat?:number)=>void, paginationTarget?:string}} [options]
  */
 export function mountMelodyEditor(host, options = {}) {
 // [beat, length in beats, MIDI pitch]
@@ -36,6 +35,12 @@ const {min: minMidi, max: maxMidi} = studioPitchRange[options.part ?? 'melody']
 const octave = ref(baseOctave + (isBass ? -1 : 0))
 const keyboardOctaves = ref(/** @type {number} */ (options.defaultKeyboardOctaves ?? 1))
 const scorePage = ref(0)
+const drumBar = ref(0)
+const selectedDrumBoundary = ref(/** @type {number|null} */ (null))
+const drumPatternIndex = ref(0)
+const drumZeroSelected = ref(false)
+const drumAssignments = ref(/** @type {number[]} */ ([]))
+const drumPatterns = ref(isDrums ? defaultDrumPatterns() : /** @type {({beat:number,duration:number,midi:number}[]|null)[]} */ ([null,null,null,null]))
 const clefs = [
   {label:'ト音記号', bass:false, octave:false, stepOffset:0},
   {label:'ト音記号 8va', bass:false, octave:true, stepOffset:-7},
@@ -143,8 +148,7 @@ const stepCursor = ref(/** @type {number|null} */ (options.empty ? 0 : null))
 const stepDuration = ref(.5)
 const inputEnabled = ref(true)
 const playbackStart = ref(0)
-const pickupStart = -1
-const showPickup = ref(false)
+const pickupStart = -4
 const playing = ref(false)
 const loading = ref(false)
 const error = ref('')
@@ -161,8 +165,9 @@ function updatePlaybackPosition() {
   const current = scheduledBars[0]
   if (now >= current.time) {
     const beat = current.beat + (now - current.time) / current.secondsPerBeat
-    position.value = current.bar * 4 + Math.min(beat / current.meter, 0.999999) * 4
-    scorePage.value = Math.floor(current.bar / 4)
+    position.value = current.bar < 0 ? -4 + Math.min(beat / current.meter, .999999) * 4 : current.bar * 4 + Math.min(beat / current.meter, 0.999999) * 4
+    scorePage.value = current.bar < 0 ? -1 : Math.floor(current.bar / 4)
+    if (isDrums) { drumZeroSelected.value = current.bar < 0; if (current.bar >= 0) { drumBar.value = current.bar; drumPatternIndex.value = drumAssignments.value[current.bar] ?? 0 } }
   }
   playbackFrame = requestAnimationFrame(updatePlaybackPosition)
 }
@@ -173,7 +178,7 @@ function stopPlaybackPosition() {
   scheduledBars.length = 0
   position.value = -Infinity
 }
-/** @typedef {{notes:{beat:number,length:number,midi:number}[],cursor:number|null,page:number,pickup:boolean}} EditSnapshot */
+/** @typedef {{notes:{beat:number,length:number,midi:number}[],cursor:number|null,page:number,patterns:({beat:number,duration:number,midi:number}[]|null)[]}} EditSnapshot */
 const history = ref(/** @type {EditSnapshot[]} */ ([]))
 const redoHistory = /** @type {EditSnapshot[]} */ ([])
 
@@ -192,7 +197,7 @@ function captureEdit() {
     notes:notes.value.map(note => ({...note})),
     cursor:stepCursor.value,
     page:scorePage.value,
-    pickup:showPickup.value,
+    patterns:drumPatterns.value.map(pattern => pattern?.map(note => ({...note})) ?? null),
   }
 }
 
@@ -205,9 +210,10 @@ function remember() {
 /** @param {EditSnapshot} snapshot */
 function restoreEdit(snapshot) {
   notes.value = snapshot.notes
+  drumPatterns.value = snapshot.patterns
   stepCursor.value = snapshot.cursor
   scorePage.value = snapshot.page
-  showPickup.value = snapshot.pickup
+  if (isDrums && snapshot.cursor !== null) drumBar.value = Math.floor(snapshot.cursor / 4)
   if (snapshot.cursor !== null && snapshot.cursor < 0) options.selectBar?.(0, true)
   selectNote(-1)
 }
@@ -217,6 +223,31 @@ function undo() {
   if (!previous) return
   redoHistory.push(captureEdit())
   restoreEdit(previous)
+}
+
+function undoLabel() {
+  return [h('svg', {class:'arrange-undo-icon', viewBox:'0 0 24 24', 'aria-hidden':'true'}, [
+    h('path', {d:'M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2', fill:'none', stroke:'currentColor', 'stroke-width':2, 'stroke-linecap':'round', 'stroke-linejoin':'round'}),
+  ]), 'やり直し']
+}
+
+function pageBounds() {
+  return scorePage.value < 0 ? [pickupStart, 0] : [scorePage.value * 16, (scorePage.value + 1) * 16]
+}
+
+function clearPage() {
+  const [start, end] = pageBounds()
+  if (!notes.value.some(note => note.beat < end && note.beat + note.length > start)) return
+  remember()
+  notes.value = notes.value.flatMap(note => {
+    const noteEnd = note.beat + note.length
+    if (note.beat >= end || noteEnd <= start) return [note]
+    return [
+      ...(note.beat < start ? [{...note, length:start - note.beat}] : []),
+      ...(noteEnd > end ? [{...note, beat:end, length:noteEnd - end}] : []),
+    ]
+  })
+  selectNote(-1)
 }
 
 function redo() {
@@ -371,6 +402,7 @@ function writeStep(pitches) {
   notes.value = updated.sort((a,b) => a.beat - b.beat)
   selectNote(-1)
   stepCursor.value = end
+  if (isDrums && end < totalBeats()) drumBar.value = Math.floor(end / 4)
   if (end >= 0 && end < totalBeats() && Math.floor(Math.max(0, start) / 16) !== Math.floor(end / 16)) {
     scorePage.value = Math.floor(end / 16)
   }
@@ -382,19 +414,20 @@ function extensionTarget() {
   const cursor = stepCursor.value
   const index = notes.value.findIndex(note => Math.abs(note.beat + note.length - cursor) < 1e-7)
   if (index < 0 || cursor + stepDuration.value > totalBeats()) return null
+  const indices = isBacking ? notes.value.flatMap((note, i) => Math.abs(note.beat - notes.value[index].beat) < 1e-7 && Math.abs(note.beat + note.length - cursor) < 1e-7 ? [i] : []) : [index]
   const next = notes.value.reduce((earliest, note, other) => {
-    if (other === index || note.beat + note.length <= cursor) return earliest
+    if (indices.includes(other) || note.beat + note.length <= cursor) return earliest
     return Math.min(earliest, Math.max(cursor, note.beat))
   }, totalBeats())
   const end = Math.min(cursor + stepDuration.value, next)
-  return end > cursor + 1e-7 ? {index, end} : null
+  return end > cursor + 1e-7 ? {indices, end} : null
 }
 
 function extendPreviousNote() {
   const target = extensionTarget()
   if (!target || stepCursor.value === null) return
   remember()
-  notes.value[target.index].length += target.end - stepCursor.value
+  for (const index of target.indices) notes.value[index].length += target.end - stepCursor.value
   stepCursor.value = target.end
   if (target.end < totalBeats()) scorePage.value = Math.floor(Math.max(0, target.end) / 16)
 }
@@ -403,6 +436,7 @@ function extendPreviousNote() {
 function setStepCursor(beat) {
   selectNote(-1)
   stepCursor.value = beat
+  if (isDrums && beat >= 0) drumBar.value = Math.floor(beat / 4)
   playbackStart.value = beat
   if (playing.value || loading.value) {
     stop()
@@ -416,13 +450,13 @@ function timingBounds(index) {
     const note = notes.value[index]
     const peers = isDrums ? notes.value.filter(other => other.midi === note.midi) : notes.value
     return {
-      earliest: peers.filter(other => other.beat < note.beat).reduce((end, other) => Math.max(end, other.beat + other.length), showPickup.value ? pickupStart : 0),
+      earliest: peers.filter(other => other.beat < note.beat).reduce((end, other) => Math.max(end, other.beat + other.length), pickupStart),
       latest: peers.filter(other => other.beat > note.beat).reduce((start, other) => Math.min(start, other.beat), totalBeats()),
     }
   }
   const previous = notes.value[index - 1]
   return {
-    earliest: previous ? previous.beat + previous.length : showPickup.value ? pickupStart : 0,
+    earliest: previous ? previous.beat + previous.length : pickupStart,
     latest: notes.value[index + 1]?.beat ?? totalBeats(),
   }
 }
@@ -614,22 +648,188 @@ function restIcon(duration) {
   return h('svg', {class:'arrange-rhythm-icon',viewBox:'0 0 24 32','aria-hidden':'true'}, [shape, [.375,.75,1.5].includes(duration) ? h('circle',{cx:20,cy:16,r:1.5,fill:'currentColor'}) : null])
 }
 
-function pickupButton() {
-  const hasPickup = notes.value.some(note => note.beat < 0)
-  return h('button', {type:'button', class:'arrange-pickup', onClick:()=>{
-    if (hasPickup) {
-      remember()
-      notes.value = notes.value.filter(note => note.beat >= 0)
-      showPickup.value = false
-      setStepCursor(0)
-      options.selectBar?.(0)
-      return
+/** @param {number} bar */
+function selectDrumBar(bar) {
+  const earliest = -1
+  const next = Math.max(earliest, Math.min(totalBars() - 1, bar))
+  setStepCursor(next < 0 ? pickupStart : next * 4)
+  if (next >= 0) drumPatternIndex.value = drumAssignments.value[next] ?? 0
+}
+
+/** @param {number} bar */
+function drumViewNotes(bar) {
+  if (bar < 0) return notes.value
+  const pattern = resolveDrumPattern(drumPatterns.value, drumPatternIndex.value)
+  if (pattern) return pattern.map(note => ({beat:bar * 4 + note.beat, length:note.duration, midi:note.midi}))
+  return notes.value
+}
+
+/** @param {number} bar @param {{beat:number,length:number,midi:number}[]} edited */
+function setDrumViewNotes(bar, edited) {
+  if (bar < 0) { notes.value = edited; return }
+  const start = bar * 4
+  drumPatterns.value[drumPatternIndex.value] = edited.filter(note => note.beat >= start && note.beat < start + 4)
+    .map(note => ({beat:note.beat - start, duration:Math.min(note.length, start + 4 - note.beat), midi:note.midi}))
+}
+
+/** @param {number} id @param {number} beat @param {number} bar */
+function toggleDrumStep(id, beat, bar) {
+  const current = drumViewNotes(bar)
+  const matches = current.filter(note => note.midi === id && Math.abs(note.beat - beat) < 1e-7)
+  remember()
+  if (matches.length) {
+    setDrumViewNotes(bar, current.filter(note => !matches.includes(note)))
+  } else {
+    setDrumViewNotes(bar, [...current, {beat, length:.25, midi:id}].sort((a,b) => a.beat - b.beat))
+    if (drumPadPlayable(id)) options.previewDrum?.(id)
+  }
+  setStepCursor(beat)
+}
+
+/** @type {{pointerId:number, id:number, step:number, bar:number, add:boolean}|undefined} */
+let drumStroke
+
+/** @param {EventTarget|null} target @param {HTMLElement} grid */
+function drumStrokeCell(target, grid) {
+  const cell = target instanceof Element ? target.closest('button.drum-step[data-pad-index][data-step]') : null
+  if (!(cell instanceof HTMLElement) || cell.hasAttribute('disabled') || !grid.contains(cell)) return
+  return {id:Number(cell.dataset.padIndex), step:Number(cell.dataset.step)}
+}
+
+/** @param {number} id @param {number} first @param {number} last */
+function paintDrumStroke(id, first, last) {
+  if (!drumStroke) return
+  const next = [...drumViewNotes(drumStroke.bar)]
+  for (let step = Math.min(first,last); step <= Math.max(first,last); step++) {
+    const beat = drumStroke.bar * 4 + step / 4
+    if (beat < pickupStart) continue
+    const matches = next.filter(note => note.midi === id && Math.abs(note.beat - beat) < 1e-7)
+    if (drumStroke.add && !matches.length) {
+      next.push({beat, length:.25, midi:id})
+      if (drumPadPlayable(id)) options.previewDrum?.(id)
+    } else if (!drumStroke.add && matches.length) {
+      for (const note of matches) next.splice(next.indexOf(note), 1)
     }
-    showPickup.value = true
-    scorePage.value = 0
-    setStepCursor(pickupStart)
-    options.selectBar?.(0, true)
-  }}, hasPickup ? '弱起を削除' : '弱起から入力')
+  }
+  setDrumViewNotes(drumStroke.bar, next.sort((a,b)=>a.beat-b.beat))
+  setStepCursor(drumStroke.bar * 4 + last / 4)
+}
+
+/** @param {PointerEvent} event */
+function startDrumStroke(event) {
+  if (drumStroke || !event.isPrimary || event.button !== 0) return
+  const grid = /** @type {HTMLElement} */ (event.currentTarget)
+  const cell = drumStrokeCell(event.target, grid)
+  if (!cell) return
+  const bar = Number(grid.dataset.bar)
+  const beat = bar * 4 + cell.step / 4
+  const add = !drumViewNotes(bar).some(note => note.midi === cell.id && Math.abs(note.beat - beat) < 1e-7)
+  remember()
+  drumStroke = {pointerId:event.pointerId, bar, add, ...cell}
+  grid.setPointerCapture(event.pointerId)
+  event.preventDefault()
+  paintDrumStroke(cell.id, cell.step, cell.step)
+}
+
+/** @param {PointerEvent} event */
+function moveDrumStroke(event) {
+  if (!drumStroke || drumStroke.pointerId !== event.pointerId) return
+  const grid = /** @type {HTMLElement} */ (event.currentTarget)
+  const cell = drumStrokeCell(document.elementFromPoint(event.clientX, event.clientY), grid)
+  if (!cell) return
+  paintDrumStroke(cell.id, cell.id === drumStroke.id ? drumStroke.step : cell.step, cell.step)
+  Object.assign(drumStroke, cell)
+}
+
+/** @param {PointerEvent} event */
+function endDrumStroke(event) {
+  if (drumStroke?.pointerId === event.pointerId) drumStroke = undefined
+}
+
+/** @param {{id:number,name:string}} pad */
+function drumRowName(pad) {
+  const name = drumPadNames.value[pad.id] ?? pad.name
+  if (/ハイハット|クローズHH|オープンHH|hi[ -]?hat|\bHH\b/i.test(name)) {
+    if (/オープン|open|\bOP\b/i.test(name) || pad.id === 3) return 'OP HH'
+    return 'CL HH'
+  }
+  /** @type {Record<string,string>} */
+  const names = {'キック':'KICK', 'スネア':'SNARE', 'クラップ':'CLAP', 'パーカッション':'PERC',
+    'ブロック':'BLOCK', 'クラッシュ':'CRASH', 'ハイタム':'HI TOM', 'フロアタム':'FLOOR TOM', 'ライド':'RIDE'}
+  return names[name] ?? (/^[a-z0-9 _-]+$/i.test(name) ? name.toUpperCase() : `FLEX ${pad.id + 1}`)
+}
+
+/** @param {number} bar */
+function drumGrid(bar) {
+  const start = bar * 4
+  const viewNotes = drumViewNotes(bar)
+  const offGrid = viewNotes.filter(note => note.beat >= start && note.beat < start + 4 &&
+    Math.abs(note.beat * 4 - Math.round(note.beat * 4)) > 1e-7).length
+  return [
+    offGrid ? h('p', {class:'arrange-drum-offgrid', role:'status'}, `16分の位置以外に${offGrid}音あります。`) : null,
+    h('div', {class:['drum-sequencer arrange-drum-grid', {'arrange-drum-pickup':bar < 0}], 'data-bar':bar, role:'group', 'aria-label':bar < 0 ? '0小節目の16ステップ' : `${bar + 1}小節目の16ステップ`,
+      onPointerdown:startDrumStroke, onPointermove:moveDrumStroke, onPointerup:endDrumStroke, onPointercancel:endDrumStroke, onLostpointercapture:endDrumStroke}, [
+      ...[...studioDrumLayout.slice(4), ...studioDrumLayout.slice(0, 4)].reverse().flatMap(pad => [
+        h('button', {type:'button', class:'drum-row-label arrange-drum-name', 'data-loading':drumPadState.value.status === 'loading' ? '' : undefined,
+          'aria-label':`${drumRowName(pad)}を試聴${drumPadState.value.status === 'loading' ? '（ロード中）' : drumPadState.value.status === 'error' ? '（読込失敗）' : !drumPadPlayable(pad.id) ? '（未設定）' : ''}`,
+          title:drumRowName(pad), disabled:!options.previewDrum || !drumPadPlayable(pad.id),
+          onClick:()=>options.previewDrum?.(pad.id)}, drumRowName(pad)),
+        ...Array.from({length:16}, (_, step) => {
+          const beat = start + step / 4
+          const on = viewNotes.some(note => note.midi === pad.id && Math.abs(note.beat - beat) < 1e-7)
+          const current = Number.isFinite(position.value) && position.value >= start && position.value < start + 4 &&
+            Math.floor((position.value - start) * 4) === step
+          return h('button', {
+            type:'button', class:['drum-step', {'beat-start':step % 4 === 0, playing:current}],
+            'data-step':step, 'data-pad-index':pad.id,
+            'aria-label':`${drumRowName(pad)}、${bar < 0 ? '0小節目' : `${bar + 1}小節目`}、${(Math.floor(step / 4) + 1)}拍目の${step % 4 + 1}ステップ`,
+            'aria-pressed':on, disabled:beat < pickupStart,
+            onClick:(/** @type {MouseEvent} */ event)=>{ if (event.detail === 0) toggleDrumStep(pad.id, beat, bar) },
+          })
+        }),
+      ]),
+    ]),
+  ]
+}
+
+function drumNavigation() {
+  const bar = Math.max(0, Math.min(totalBars() - 1, drumBar.value))
+  const pagination = scorePagination({
+    page:Math.floor(Math.max(0,bar) / 8), pageSize:8, totalBars:totalBars(), label:'ドラムのページ', leadingLabel:'page',
+    onPageChange:page=>selectDrumBar(page * 8),
+  })
+  return h('section', {class:'tutorial-navigation arrange-drum-navigation', 'aria-label':'ドラムのステップシーケンサー'}, [
+    options.paginationTarget ? h(Teleport, {to:options.paginationTarget}, pagination) : h('div', {class:'arrange-drum-pagination'}, [pagination]),
+    h('div', {class:'arrange-drum-header', 'aria-label':'小節バー'}, [
+      h('div', {class:'arrange-drum-bars', role:'group', 'aria-label':'小節ごとのパターン'},
+        Array.from({length:Math.min(8, totalBars() - Math.floor(Math.max(0,bar) / 8) * 8)}, (_, index) => {
+          const target = Math.floor(Math.max(0,bar) / 8) * 8 + index
+          const pattern = drumAssignments.value[target] ?? 0
+          const sounding = Number.isFinite(position.value) && Math.floor(position.value / 4) === target
+          return h('div', {class:['arrange-drum-bar', {playing:sounding}], key:target}, [
+            h('button', {type:'button', class:'arrange-drum-boundary', 'aria-label':`${target + 1}小節目から再生`, 'aria-pressed':selectedDrumBoundary.value === target,
+              onClick:()=>{selectedDrumBoundary.value = target; selectDrumBar(target); options.selectBar?.(target)}}, h('span', {'aria-hidden':'true'})),
+            h('label', {class:'arrange-drum-choice'}, [
+              h('span', {class:'arrange-drum-bar-number', 'aria-hidden':'true'}, String(target + 1)),
+              h('span', {class:'arrange-drum-pattern-label', 'aria-hidden':'true'}, [h('span', {class:'arrange-drum-pattern-prefix'}, 'Ptn'), 'ABCD'[pattern]]),
+              h('select', {class:'arrange-drum-assignment', 'aria-label':`${target + 1}小節目のパターン`, value:String(pattern),
+              onPointerdown:()=>selectDrumBar(target),
+              onChange:(/** @type {Event} */ event)=>{
+                const next = Number((/** @type {HTMLSelectElement} */ (event.target)).value)
+                while (drumAssignments.value.length <= target) drumAssignments.value.push(0)
+                drumAssignments.value[target] = next
+                selectDrumBar(target)
+              }}, 'ABCD'.split('').map((label, patternIndex)=>h('option', {value:String(patternIndex)}, `${target + 1}  Ptn${label}`))),
+            ]),
+          ])
+        })),
+    ]),
+    h('div', {class:'arrange-drum-pattern-row'}, [h('div', {class:'arrange-drum-patterns', role:'group', 'aria-label':'ドラムパターン'}, [
+      h('button', {type:'button', 'aria-label':'パターン0', 'aria-pressed':drumZeroSelected.value, onClick:()=>{drumZeroSelected.value = true}}, '0'),
+      ...['A','B','C','D'].map((label, index) => h('button', {type:'button', 'aria-label':`パターン${label}`, 'aria-pressed':!drumZeroSelected.value && drumPatternIndex.value === index, onClick:()=>{drumZeroSelected.value = false; drumPatternIndex.value = index}}, `Ptn${label}`)),
+    ]), h('button', {type:'button', class:'arrange-drum-undo', disabled:history.value.length === 0, onClick:undo}, undoLabel())]),
+    ...drumGrid(drumZeroSelected.value ? -1 : bar),
+  ])
 }
 
 const app = createApp({ render: () => [
@@ -643,14 +843,11 @@ const app = createApp({ render: () => [
       ]),
       h('output', `${bpm.value} BPM`),
     ]),
-    options.togglePlayback ? h(Teleport, {
-      to:options.pickupTarget ?? (isBass ? '.bass-choice-row' : '.melody-choice-row:not(.bass-choice-row, .accompaniment-choice-row)'),
-    }, pickupButton()) : pickupButton(),
     options.togglePlayback ? null : h('button', {type:'button', disabled:notes.value.length === original.length && notes.value.every(({beat,length,midi}, index) => beat === original[index][0] && length === original[index][1] && midi === original[index][2]), onClick:reset}, 'お手本に戻す'),
   ]),
   error.value ? h('p', {role:'alert'}, error.value) : null,
-  scoreNavigation({attrs:{
-    class:['tutorial-navigation-advanced arrange-score', {'arrange-hide-note-bars':isDrums || !showNoteBars.value}], 'aria-label':partLabel + 'の楽譜', tabindex:-1,
+  isDrums ? drumNavigation() : scoreNavigation({attrs:{
+    class:['tutorial-navigation-advanced arrange-score', {'arrange-hide-note-bars':isDrums || !showNoteBars.value, 'arrange-pickup-page':scorePage.value < 0}], 'aria-label':partLabel + 'の楽譜', tabindex:-1,
     onPointerdown:startSelection, onPointermove:moveSelection, onPointerup:finishSelection,
     onPointercancel:cancelSelection, onLostpointercapture:cancelSelection,
     onPointerleave:()=>{ if (!selectionBox.value) cancelSelection() },
@@ -662,14 +859,13 @@ const app = createApp({ render: () => [
       height:`${selectionBox.value.bottom - selectionBox.value.top}px`,
     },
   }) : null], lanes:[
-    ...(scorePage.value === 0 && (showPickup.value || notes.value.some(note => note.beat < 0)) ? [pickupStart] : []),
-    scorePage.value * 16, scorePage.value * 16 + 8,
+    ...(scorePage.value < 0 ? [pickupStart] : [scorePage.value * 16, scorePage.value * 16 + 8]),
   ], lane:start => {
     const clef = clefs[clefIndex.value]
     const noteTop = (/** @type {number} */ midi) => isDrums ? scoreTrebleTop([65,72,81,83,69,79,76,86][midi]) : scoreTrebleTop(midi, clef.stepOffset)
     const rhythmGroups = isAccompaniment ? [] : scoreRhythmGroups(notes.value)
     const pickup = start < 0
-    const laneBeats = pickup ? 1 : 8
+    const laneBeats = pickup ? 4 : 8
     const percent = 100 / laneBeats
     const keyForBar = options.keyForBar
     const keyed = keyForBar ? scoreKeyedNotes(notes.value, keyForBar) : null
@@ -692,16 +888,16 @@ const app = createApp({ render: () => [
     const farthestStep = Math.max(0, ...laneNotes.map(({index}) => Math.abs(scoreStaffStep(staffMidi(index)) + clef.stepOffset - 6)))
     const minHeight = clefIndex.value && farthestStep > 8 ? `${farthestStep * 9 + 88}px` : undefined
     return {
-    attrs:{class:['arrange-staff tutorial-pitch-lane', {'arrange-drum-lane':isDrums}], role:'group', style:{minHeight, '--arrange-clef-clearance':clef.bass ? '23px' : '27px', '--arrange-sign-width':`${signature.length * signatureSpacing}px`}, 'data-start-beat':start, 'aria-label':pickup ? '弱起' : `${start / 4 + 1}〜${start / 4 + 2}小節`}, before:[
+    attrs:{class:['arrange-staff tutorial-pitch-lane', {'arrange-drum-lane':isDrums}], role:'group', style:{minHeight, '--arrange-clef-clearance':clef.bass ? '23px' : '27px', '--arrange-sign-width':`${signature.length * signatureSpacing}px`}, 'data-start-beat':start, 'aria-label':pickup ? '0' : `${start / 4 + 1}〜${start / 4 + 2}小節`}, before:[
       ...Array.from({length:laneBeats}, (_, i) => h('button', {
         type:'button', class:['arrange-beat', {'arrange-cursor-beat':stepCursor.value === start + i}],
-        style:{left:`${i * percent}%`}, 'aria-label':pickup ? '弱起の1拍から入力' : `${Math.floor((start + i) / 4) + 1}小節目 ${i % 4 + 1}拍から入力`,
+        style:{left:`${i * percent}%`}, 'aria-label':pickup ? `0小節目の${i + 1}拍から入力` : `${Math.floor((start + i) / 4) + 1}小節目 ${i % 4 + 1}拍から入力`,
         onClick:()=>{
           setStepCursor(start + i)
           if (pickup) options.selectBar?.(0, true)
           else options.selectBar?.(Math.floor((start + i) / 4), false, (start + i) % 4)
         },
-      }, pickup ? '弱起' : i % 4 === 0 ? String((start + i) / 4 + 1) : '')),
+      }, pickup ? (i === 0 ? '0' : '') : i % 4 === 0 ? String((start + i) / 4 + 1) : '')),
       chordChanges ? h('div', {class:'arrange-chord-strip', role:'group', 'aria-label':'コード進行'},
         chordChanges.map(({bar, beat, position, label}, index) => h('span', {
           class:['arrange-chord-change', {'arrange-chord-on-downbeat': beat === 0}],
@@ -812,7 +1008,7 @@ const app = createApp({ render: () => [
           rendered.push(scoreNote('button', {
             key:`note-${index}-${Math.floor(segmentStart / 4)}`, type:'button', class:['tutorial-pitch-note', 'arrange-note', {active, 'tutorial-accidental-note':!!sign}], 'data-note-index':index, 'aria-pressed':selected.value === index || selection.value.includes(index),
             style:{'--arrange-signature-shift':`${signatureShift(segmentStart)}px`},
-            'aria-label':`${beat < 0 ? '弱起' : `${Math.floor(beat / 4) + 1}小節目、${beat % 4 + 1}拍`}、${noteName(midi)}、長さ${length}拍`,
+            'aria-label':`${beat < 0 ? '0小節目' : `${Math.floor(beat / 4) + 1}小節目、${beat % 4 + 1}拍`}、${noteName(midi)}、長さ${length}拍`,
             onClick:()=>{ stepCursor.value = null; if (!selection.value.includes(index)) selectNote(index) },
             ...dragEvents(index, null),
           }, [
@@ -825,7 +1021,7 @@ const app = createApp({ render: () => [
         return [...rendered, ...(!isDrums && showNoteBars.value && beat + length <= start + laneBeats ? [h('button', {
           key:`boundary-${index}`, type:'button', class:'arrange-score-boundary',
           style:{left:`${(beat + length - start) * percent}%`,top:noteTop(staffMidi(index))},
-          'aria-label':`${beat < 0 ? '弱起' : `${Math.floor(beat / 4) + 1}小節目`}、${noteName(midi)}の右端を移動`,
+          'aria-label':`${beat < 0 ? '0小節目' : `${Math.floor(beat / 4) + 1}小節目`}、${noteName(midi)}の右端を移動`,
           ...dragEvents(index, 'length'),
           onKeydown:(/** @type {KeyboardEvent} */ event)=>{
             if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
@@ -851,58 +1047,41 @@ const app = createApp({ render: () => [
   ]) : null,
   h('div', {class:'arrange-input-dock'}, [
   h('div', {class:'arrange-entry-row'}, [
-  h('section', {class:'arrange-step-controls', 'aria-label':'ステップ入力'}, [
-    stepCursor.value === null ? null : h('div', {class:'arrange-step-status',role:'status'}, stepCursor.value >= totalBeats() ? '入力終了' : `${stepCursor.value < 0 ? '弱起' : `${Math.floor(stepCursor.value / 4) + 1}小節目 · ${stepCursor.value % 4 + 1}拍目`}から入力`),
-    !isAccompaniment ? (() => {
+  isDrums ? null : h('section', {class:'arrange-step-controls', 'aria-label':'ステップ入力'}, [
+    stepCursor.value === null ? null : h('div', {class:'arrange-step-status',role:'status'}, stepCursor.value >= totalBeats() ? '入力終了' : `${stepCursor.value < 0 ? '0小節目' : `${Math.floor(stepCursor.value / 4) + 1}小節目 · ${stepCursor.value % 4 + 1}拍目`}から入力`),
+    (() => {
       const current = notes.value[selected.value]?.length ?? stepDuration.value
       const found = durations.findIndex(([duration]) => duration === current)
       const index = found < 0 ? durations.findIndex(([duration]) => duration === stepDuration.value) : found
       const [duration, label] = durations[index]
       return h('div', {class:'arrange-duration-picker', role:'group', 'aria-label':'音価'}, [
-        h('div', {class:'style-stepper arrange-duration-arrows'}, [
-          h('button', {type:'button', 'aria-label':'音価を短く', disabled:index === 0 || !canSetDuration(Number(durations[index - 1]?.[0])),
-            onClick:()=>useDuration(Number(durations[index - 1][0]), false)}, '←'),
-          h('button', {type:'button', 'aria-label':'音価を長く', disabled:index === durations.length - 1 || !canSetDuration(Number(durations[index + 1]?.[0])),
-            onClick:()=>useDuration(Number(durations[index + 1][0]), false)}, '→'),
-        ]),
         h('div', {class:'arrange-duration-values'}, [
-          h('div', {class:'arrange-step-row'}, [
-            h('button', {type:'button', 'aria-label':`${label}音符`, 'aria-pressed':true,
-              title:`${label}音符 (${noteKeys[index]})`, disabled:!canSetDuration(Number(duration)),
-              onClick:()=>useDuration(Number(duration), false)}, noteIcon(Number(duration))),
+          h('label', {class:'arrange-duration-select'}, [
+            noteIcon(Number(duration)),
+            h('select', {'aria-label':'音価を選択', value:String(duration),
+              onChange:(/** @type {Event} */ event)=>useDuration(Number((/** @type {HTMLSelectElement} */ (event.currentTarget)).value), false)},
+              durations.map(([value, name]) => h('option', {value:String(value), disabled:!canSetDuration(Number(value))}, `${name}音符`))),
           ]),
           h('div', {class:'arrange-step-row'}, [
-            h('button', {type:'button', 'aria-label':`${label}休符`, title:`${label}休符 (${restKeys[index]})`,
+            h('button', {type:'button', 'aria-label':`${label}休符`, title:`${label}休符 (Z)`, 'aria-keyshortcuts':'Z',
               disabled:!inputEnabled.value || stepCursor.value === null || stepCursor.value >= totalBeats(),
               onClick:()=>useDuration(Number(duration), true)}, restIcon(Number(duration))),
-            h('button', {type:'button', 'aria-label':'直前の音を伸ばす', title:'直前の音を選択した音価分伸ばす', disabled:!extensionTarget(), onClick:extendPreviousNote}, '→伸'),
+            h('button', {type:'button', 'aria-label':'直前の音を伸ばす', title:'直前の音を選択した音価分伸ばす (X)', 'aria-keyshortcuts':'X', disabled:!extensionTarget(), onClick:extendPreviousNote}, '→伸'),
+            h('button', {type:'button', class:'arrange-clear-page', 'aria-label':'表示中のページのノートを消す', disabled:!notes.value.some(note => { const [start, end] = pageBounds(); return note.beat < end && note.beat + note.length > start }), onClick:clearPage}, 'ページを消す'),
           ]),
         ]),
       ])
-    })() : [
-    h('div', {class:'arrange-step-row',role:'group','aria-label':'音の長さ'}, [
-      ...durations.map(([duration,label], index) =>
-        h('button',{type:'button','aria-label':`${label}音符`, title:`${label}音符 (${noteKeys[index]})`,
-          'aria-keyshortcuts':noteKeys[index],
-          'aria-pressed':(notes.value[selected.value]?.length ?? stepDuration.value) === duration,
-          disabled:!canSetDuration(Number(duration)),
-          onClick:()=>useDuration(Number(duration), false)},noteIcon(Number(duration)))),
-    ]),
-    h('div', {class:'arrange-step-row',role:'group','aria-label':'休符を入力'}, [
-      ...durations.map(([duration,label], index) =>
-        h('button',{type:'button','aria-label':`${label}休符`, title:`${label}休符 (${restKeys[index]})`,
-          'aria-keyshortcuts':restKeys[index],
-          disabled:!inputEnabled.value || stepCursor.value === null || stepCursor.value >= totalBeats(),
-          onClick:()=>useDuration(Number(duration), true)},restIcon(Number(duration)))),
-    ]),
-    ],
+    })(),
   ]),
   h('div', {class:'arrange-entry-actions'}, [
-    scorePagination({
-      page:scorePage.value, pageSize:4, totalBars:totalBars(), label:'楽譜のページ', leadingLabel:'page',
+    isDrums ? null : options.paginationTarget ? h(Teleport, {to:options.paginationTarget}, scorePagination({
+      page:scorePage.value, pageSize:4, totalBars:totalBars(), label:'楽譜のページ', leadingLabel:'page', minPage:-1,
+      onPageChange:page=>{scorePage.value = page},
+    })) : scorePagination({
+      page:scorePage.value, pageSize:4, totalBars:totalBars(), label:'楽譜のページ', leadingLabel:'page', minPage:-1,
       onPageChange:page=>{scorePage.value = page},
     }),
-  h('div', {class:'part-mix arrange-record'}, [
+  isDrums ? null : h('div', {class:'part-mix arrange-record'}, [
     h('button', {type:'button', class:'mix-button', 'aria-label':partLabel + '入力', title:partLabel + '入力 (Shift+R)', 'aria-keyshortcuts':'Shift+R', 'aria-pressed':inputEnabled.value, onClick:()=>{ inputEnabled.value = !inputEnabled.value }}, [
       h('span', {'aria-hidden':'true'}, '●'), ' Rec',
     ]),
@@ -912,7 +1091,6 @@ const app = createApp({ render: () => [
   h('div', {class:'arrange-keyboard-toolbar'}, [
     isAccompaniment ? null : octaveControl(octave.value - baseOctave, delta => { octave.value += delta }, {min:minOctaveOffset,max:(isBass ? 1 : 2) - keyboardOctaves.value}),
     isAccompaniment ? null : h('div', {class:'arrange-octave-display'}, [
-    h('span', {class:'arrange-octave-display-label', 'aria-hidden':'true'}, '表示'),
     h('div', {class:'segmented-control arrange-octave-width', role:'group', 'aria-label':'鍵盤の表示範囲'}, [1,2].map(count =>
       h('label', [
         h('input', {type:'radio', name:isBass ? 'bass-arrange-octaves' : 'arrange-octaves', value:count, 'aria-label':`${count}オクターブ`, checked:keyboardOctaves.value === count,
@@ -924,7 +1102,7 @@ const app = createApp({ render: () => [
       ]))),
     ]),
     isDrums ? null : h('button', {type:'button', class:'arrange-bar-toggle', 'aria-pressed':showNoteBars.value, onClick:()=>{ showNoteBars.value = !showNoteBars.value }}, 'バー'),
-    h('button', {type:'button', disabled:history.value.length === 0, onClick:undo}, '↶ やり直し'),
+    isDrums ? null : h('button', {type:'button', class:'arrange-undo', disabled:history.value.length === 0, onClick:undo}, undoLabel()),
   ]),
   isAccompaniment ? null : h('div', {class:'tutorial-keyboard arrange-keyboard', style:{'--tutorial-key-count':String(keyboardOctaves.value * 7 + 1)},role:'group','aria-label':partLabel + 'を試す鍵盤'}, Array.from({length:keyboardOctaves.value * 12 + 1}, (_, i) => midiKey((octave.value + 1) * 12 + i)).map(key => h('button', {
     type:'button', class:[key.black ? 'tutorial-black' : 'tutorial-white', {active:heldPitches.value.includes(key.midi) || dragPitch.value === key.midi || (playing.value && notes.value.some(note => note.midi === key.midi && position.value >= note.beat && position.value < note.beat + note.length * .9))}],
@@ -936,14 +1114,14 @@ const app = createApp({ render: () => [
     onLostpointercapture:()=>setPitchHeld(key.midi, false),
     onPointerleave:(/** @type {PointerEvent} */ event)=>{if (event.buttons) setPitchHeld(key.midi, false)},
     onClick:()=>choosePitch(key.midi),
-  }, key.black ? '' : pianoWhiteLabel(key.midi)))),
+  }, key.black || key.midi % 12 !== 0 ? '' : `C${Math.floor(key.midi / 12) - 1}`))),
   ]),
 ] })
 app.mount(host)
 
 const handleKey = (/** @type {KeyboardEvent} */ event) => {
   const target = event.target
-  if (event.code === 'KeyR' && event.shiftKey && options.empty && host.getClientRects().length > 0 &&
+  if (!isDrums && event.code === 'KeyR' && event.shiftKey && options.empty && host.getClientRects().length > 0 &&
       !event.repeat && !event.isComposing && !event.ctrlKey && !event.metaKey && !event.altKey &&
       !document.querySelector('dialog[open]') &&
       !(target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select, [contenteditable]')))) {
@@ -967,6 +1145,16 @@ const handleKey = (/** @type {KeyboardEvent} */ event) => {
   if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return
   if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select, dialog'))) return
   if (!event.shiftKey && !event.isComposing && !document.querySelector('dialog[open]')) {
+    if (!isDrums && event.code === 'KeyZ') {
+      event.preventDefault()
+      useDuration(notes.value[selected.value]?.length ?? stepDuration.value, true)
+      return
+    }
+    if (!isDrums && event.code === 'KeyX') {
+      event.preventDefault()
+      extendPreviousNote()
+      return
+    }
     const key = /^Key([A-Z])$/.exec(event.code)?.[1]
     if (key) {
       const noteIndex = noteKeys.indexOf(key)
@@ -1010,7 +1198,9 @@ return {
     stepCursor.value = 0
     playbackStart.value = 0
     scorePage.value = 0
-    showPickup.value = saved.some(note => note.beat < 0)
+    drumBar.value = 0
+    drumZeroSelected.value = false
+    selectedDrumBoundary.value = null
   },
   /** @param {number} midi */
   midiAttack(midi) {
@@ -1031,6 +1221,12 @@ return {
     }
     return false
   },
+  /** @param {({beat:number,duration:number,midi:number}[]|null)[]} patterns */
+  setDrumPatterns(patterns) { drumPatterns.value = patterns.map(pattern => pattern?.map(note => ({...note})) ?? null) },
+  getDrumPatterns() { return drumPatterns.value.map(pattern => pattern?.map(note => ({...note})) ?? null) },
+  /** @param {number[]} assignments */
+  setDrumAssignments(assignments) { drumAssignments.value = [...assignments] },
+  getDrumAssignments() { return [...drumAssignments.value] },
   getNotes() {
     const result = notes.value.map(note => ({beat:note.beat, duration:note.length, midi:note.midi, velocity:0.8}))
     return isAccompaniment ? result.sort((a,b) => a.beat - b.beat) : result

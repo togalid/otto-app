@@ -1,5 +1,5 @@
 import { applySavedControl, arrangementControlRules } from './arrangement-controls.js'
-import { decodeStudioStyle } from './studio-style.js'
+import { decodeStudioStyle, drumPlaybackNotes, defaultDrumPatterns } from './studio-style.js'
 import { mountStudioEditors } from './studio-editors.js'
 import { bundledDrumKits } from './drum-kit-manifest.js'
 import { createPartSettings } from './part-settings.js'
@@ -255,6 +255,7 @@ const playingSection = ref(-1)
 const editingSection = ref(0)
 const sectionBars = ref(16)
 const scorePage = ref(0)
+const pickupChord = ref(/** @type {string|null} */ (null))
 const sectionContextRevision = ref(0)
 let refreshSectionControls = () => {}
 const progression = new Progression(
@@ -328,7 +329,7 @@ progression.onScheduleBar = (/** @type {number} */ bar, /** @type {number} */ be
   playerDisplay.meter(chordInstrument.context)
   const context = chordInstrument.context
   if (!context) return
-  const meter = progression.meterForBar(bar)
+  const meter = progression.meterForBar(Math.max(0, bar))
   studioEditor?.schedulePlaybackBar(bar, beat, time, secondsPerBeat, meter, context)
   studioBassEditor?.schedulePlaybackBar(bar, beat, time, secondsPerBeat, meter, context)
   for (const editor of Object.values(studioAccompanimentEditors)) editor.schedulePlaybackBar(bar, beat, time, secondsPerBeat, meter, context)
@@ -654,6 +655,10 @@ function updateChordCell(beatElement, bar, beat, keepOptions = null) {
   beatElement.classList.toggle('is-empty', !id)
   if (!id) return
   const config = chordConfig(id)
+  const display = displayParts(id, barKey)
+  const padSlash = config.quality === 'slash' && config.extension.startsWith('pad_')
+  if (padSlash && rootDisplay) rootDisplay.textContent = display.main
+  if (padSlash) editButton?.setAttribute('aria-label', `${bar+1}小節 ${beat+1}拍目：${display.main}${display.suffix}をPadで編集`)
   const groupSignature = `${qualityOrigins[bar][beat]}|${id}`
   if (quality !== keepOptions && quality.dataset.origin !== groupSignature) {
     const groupedChoices = qualityGroups(qualityOrigins[bar][beat], id)
@@ -673,6 +678,14 @@ function updateChordCell(beatElement, bar, beat, keepOptions = null) {
     quality.title = 'ルートに応じた候補。前後のコードによって響きの印象は変わります'
   }
   quality.value = `${config.quality}:${config.extension}`
+  if (padSlash && !quality.selectedOptions.length) {
+    const option = document.createElement('option')
+    option.value = `${config.quality}:${config.extension}`
+    option.textContent = display.suffix
+    quality.append(option)
+    quality.value = option.value
+  }
+  if (padSlash && quality.selectedOptions[0]) quality.selectedOptions[0].textContent = display.suffix
   const isMajor = quality.value === 'maj:none'
   quality.classList.toggle('is-major', isMajor)
   quality.classList.toggle('is-long', (quality.selectedOptions[0]?.textContent?.length ?? 0) > 5)
@@ -882,7 +895,7 @@ genreSelect.addEventListener('change', () => {
     if (progression.songMode) progression.sections[progression.selectedSection].bpm = genre.bpm
     else progression.bpm = genre.bpm
   }
-  progression.swing = genre.swing
+  progression.swing = 0
   partSettings.apply(bassTimbre, genre.bass)
   partSettings.apply(drumTimbre, genre.drum)
   partSettings.apply(backingSelect, genre.backing === 'bass-chord' ? 'quarters' : genre.backing)
@@ -890,7 +903,7 @@ genreSelect.addEventListener('change', () => {
   partSettings.apply(melodyMode, melodyMode.value)
   partSettings.apply(timbreSelect, genre.chord)
   if (!referenceView.filename && !progression.songMode) tempo.value = String(genre.bpm)
-  swing.value = String(genre.swing)
+  swing.value = '0'
   tempoNumber.value = tempo.value
   renderSwing()
   buddyController?.styleChanged()
@@ -914,10 +927,15 @@ swing.addEventListener('input', () => {
   progression.swing = Number(swing.value)
   renderSwing()
 })
+document.querySelector('#swing-toggle')?.addEventListener('click', () => {
+  swing.value = Number(swing.value) > 0 ? '0' : '100'
+  swing.dispatchEvent(new Event('input', {bubbles:true}))
+})
 function renderSwing() {
   refreshBassDetail()
   const output = document.querySelector('#swing-value')
   if (output) output.textContent = `${swing.value}%`
+  document.querySelector('#swing-toggle')?.setAttribute('aria-pressed', String(Number(swing.value) > 0))
 }
 
 const ornamentTracks = ['bell', 'pluck', 'phrase', 'fx'].map((id, index) => ({
@@ -1055,7 +1073,6 @@ function selectDrumTimbre() {
   drums.samples.clear()
   drumPadNames.value = Object.fromEntries(kit.samples.map(sample => [sample.id, sample.label]))
   drumPadTypes.value = Object.fromEntries(kit.samples.map(sample => [sample.id, drumPadType(sample.label + ' ' + sample.file)]))
-  if (progressionStatus) progressionStatus.textContent = kit.name + 'を読み込み中'
   const context = audioContext()
   drums.sampleReady = Promise.all(kit.samples.map(async sample => {
     const url = kit.bundled
@@ -1138,10 +1155,10 @@ progression.onPadHit = showPadHit
 trackGrid.addEventListener('click', event => {
   if (event.target instanceof Element && event.target.closest('[data-track="drums"]')) void refreshDrumKits()
 })
-/** @param {'drums'|'bass'|'chord'} part @param {number} index */
-async function playAccompanimentPad(part, index) {
+/** @param {'drums'|'bass'|'chord'} part @param {number} index @param {boolean} [record] */
+async function playAccompanimentPad(part, index, record = true) {
   if (part === 'drums' && !drumPadPlayable(index)) return
-  if (part === 'drums') studioAccompanimentEditors.drums?.recordStep([index])
+  if (part === 'drums' && record) studioAccompanimentEditors.drums?.recordStep([index])
   try {
     await chordInstrument.ready()
     const time = chordInstrument.context?.currentTime
@@ -1391,7 +1408,7 @@ function editSection(section) {
   if (style) {
     void chooseStyle(style, false)
     const item=genres.find(item=>item.id===style)
-    if(item){progression.genre=item.id;progression.swing=item.swing;swing.value=String(item.swing);renderSwing();playerDisplay.setStyle(item.label,item.group);refreshBuddyLook()}
+    if(item){progression.genre=item.id;progression.swing=0;swing.value='0';renderSwing();playerDisplay.setStyle(item.label,item.group);refreshBuddyLook()}
   }
   restoreSectionParts()
   sectionContextRevision.value++
@@ -1477,8 +1494,11 @@ function captureArrangement() {
   const {bassFeel, bassTones, drumSteps, drumAccents, drumPitch, sections, drumRate, barSettings} = progression
   const beatsPerBar = Number(meterInput.value)
   const studioAccompaniment = {
+    pickupChord:pickupChord.value,
     backing: studioAccompanimentEditors.backing?.getNotes() ?? [],
     drums: studioAccompanimentEditors.drums?.getNotes() ?? [],
+    drumPatterns: studioAccompanimentEditors.drums?.getDrumPatterns() ?? (studioAccompanimentLoad ? studioAccompanimentLoad.drumPatterns ?? [null,null,null,null] : defaultDrumPatterns()),
+    drumAssignments: studioAccompanimentEditors.drums?.getDrumAssignments() ?? studioAccompanimentLoad?.drumAssignments ?? [],
   }
   return encodeArrangement(controls, mix, {studioAccompaniment, slots, beatSlots, modulation, bassFeel, bassTones, drumSteps, drumAccents, drumPitch, beatsPerBar, drumRate, barSettings}, sections)
 }
@@ -1552,8 +1572,11 @@ async function applyArrangementJson(json, selectedStyle = false) {
       progression.bassTones = score.bassTones
       if (!selectedStyle) {
         studioAccompanimentLoad = score.studioAccompaniment
+        pickupChord.value = studioAccompanimentLoad?.pickupChord ?? null
         studioAccompanimentEditors.backing?.setNotes(studioAccompanimentLoad?.backing ?? [])
         studioAccompanimentEditors.drums?.setNotes(studioAccompanimentLoad?.drums ?? [])
+        studioAccompanimentEditors.drums?.setDrumPatterns(studioAccompanimentLoad?.drumPatterns ?? [null,null,null,null])
+        studioAccompanimentEditors.drums?.setDrumAssignments(studioAccompanimentLoad?.drumAssignments ?? [])
       }
       progression.drumSteps = score.drumSteps
       progression.drumAccents = score.drumAccents ?? []
@@ -1724,6 +1747,7 @@ mountStudioEditors({
   progression, seekMelodyBar, togglePlayback, displayParts, bassTimbre,
   readChordRevision: () => melodyChordsRevision.value,
   previewTimbre: () => instrument.timbre,
+  previewDrum: id => { void playAccompanimentPad('drums', id, false) },
   previewBass: {
     ready: async () => {
       await chordInstrument.ready()
@@ -1736,8 +1760,13 @@ mountStudioEditors({
   onAccompanimentMounted(part, editor) {
     studioAccompanimentEditors[part] = editor
     editor.setNotes(studioAccompanimentLoad?.[part] ?? [])
+    if (part === 'drums') {
+      if (studioAccompanimentLoad) editor.setDrumPatterns(studioAccompanimentLoad.drumPatterns ?? [null,null,null,null])
+      editor.setDrumAssignments(studioAccompanimentLoad?.drumAssignments ?? [])
+    }
     progression[part === 'backing' ? 'studioBacking' : 'studioDrums'] = () => {
       const notes = editor.getNotes()
+      if (part === 'drums') return drumPlaybackNotes(notes, editor.getDrumPatterns(), editor.getDrumAssignments(), progression.barCount())
       return notes.length ? notes : undefined
     }
   },

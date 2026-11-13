@@ -1,5 +1,7 @@
 import { bindSynthKnob } from './main-controls.js'
-import { createApp, h, ref } from './vendor/vue.runtime.esm-browser.prod.js'
+import * as Vue from './vendor/vue.runtime.esm-browser.prod.js'
+const {createApp, h, ref} = Vue
+const Teleport = Reflect.get(Vue, 'Teleport')
 import { mountAccompanimentPlay, selectStepperView } from './part-steppers.js'
 import { ottoAccompanimentStyles } from './progression.js'
 import { lfoWaveforms, lfoWaveformNames, lfoWaveValue } from './groove.js'
@@ -74,6 +76,11 @@ export function mountQuickMixer({
   /** @type {'drums'|'bass'|'chord'|undefined} */
   let playable
   let unmountPlay = () => {}
+  document.addEventListener('bass-editor-ready', () => { fieldsRevision.value++ })
+  document.querySelector('#bass-timbre')?.addEventListener('change', event => {
+    if ((/** @type {HTMLSelectElement} */ (event.currentTarget)).value !== 'synth') bassToneOpen.value = false
+    fieldsRevision.value++
+  })
   const fieldsApp = createApp({ render: renderQuickFields })
   fieldsApp.mount(quickFields)
   const accompanimentParts = /** @type {const} */ (['drums', 'bass', 'chord'])
@@ -218,7 +225,7 @@ export function mountQuickMixer({
       document.querySelector('#track-grid .track-select[aria-pressed="true"]')
     )
     const part = selected?.dataset.track
-    playable = accompanimentParts.find((name) => name === part && name !== 'bass')
+    playable = accompanimentParts.find((name) => name === part)
     startFilterAnimation()
     const simple = workspace.dataset.mixerLayout === 'simple'
     workspace.dataset.mixerPart = part ?? ''
@@ -233,7 +240,7 @@ export function mountQuickMixer({
     unmountPlay()
     unmountPlay = () => {}
     quickPlay.replaceChildren()
-    if (quickEdit.hidden) return
+    if (quickEdit.hidden) { fieldsRevision.value++; return }
     if (playable) {
       const part = playable
       const view = mountAccompanimentPlay(
@@ -265,6 +272,7 @@ export function mountQuickMixer({
     fieldsRevision.value
     const mode = playable && progression.accompanimentModes[playable]
     const fields = controls.map((control, index) => {
+      if ((playable === 'drums' || playable === 'chord') && index > 0) return null
       const stylePart =
         index === 1 &&
         mode === 'otto' &&
@@ -292,7 +300,7 @@ export function mountQuickMixer({
         fieldsRevision.value++
       }
       return h('div', { class: 'part-choice-field', key: control.id }, [
-        h('span', caption),
+        playable === 'chord' || playable === 'drums' ? null : h('span', caption),
         h('div', { class: 'part-choice-picker' }, [
           selectStepperView(control, caption, change, {
             value,
@@ -305,7 +313,7 @@ export function mountQuickMixer({
               : undefined,
           }),
           playable === 'bass' && index === 0 ? h('button', { type: 'button', class: 'melody-deep-toggle', 'aria-controls': 'bass-tone-settings', 'aria-expanded': String(bassToneOpen.value), onClick: () => { bassToneOpen.value = !bassToneOpen.value; if (bassToneOpen.value) { quickAdvanced.delete('bass'); workspace.classList.add('hide-accompaniment-detail') } startFilterAnimation(); fieldsRevision.value++ } }, 'こだわる') : null,
-          playable && index === controls.length - 1
+          playable && playable !== 'drums' && playable !== 'chord' && index === controls.length - 1
             ? h(
                 'button',
                 {
@@ -405,7 +413,7 @@ export function mountQuickMixer({
         h('polyline',{points:lfoPoints,class:'synth-filter-line'}),
         bass.lfo.depth > 0 ? h('line',{x1:lfoPhase.value*120,x2:lfoPhase.value*120,y1:8,y2:117,class:'synth-amp-playhead','aria-hidden':'true'}) : null
       ])
-      fields.push(h('section',{id:'bass-tone-settings',hidden:!bassToneOpen.value,style:'grid-column:1 / -1'},[h('div',{class:'tone-editor synth-editor'},[
+      const bassTonePanel = h('section',{id:'bass-tone-settings',hidden:!bassToneOpen.value,style:'grid-column:1 / -1'},[h('div',{class:'tone-editor synth-editor'},[
         h('fieldset',{class:'synth-osc'},[h('legend','OSC'),h('div',{class:'synth-osc-bank'},[bass.oscillators[0]].map((osc,index)=>{
           if (!waveIds.includes(osc.waveform) || osc.waveform === 'off') osc.waveform = 'sawtooth'
           const waveIndex=waveIds.indexOf(osc.waveform)
@@ -424,21 +432,22 @@ export function mountQuickMixer({
           control('深さ',bass.lfo.depth,0,100,1,' cent',value=>{bass.lfo.depth=value},true),
           h('div',{class:'synth-osc-control'},[control('LFO波形',lfoIndex,0,3,1,'',value=>{bass.lfo.waveform=lfoWaveforms[value]},true),h('svg',{class:'synth-wave-icon',viewBox:'0 0 40 20',role:'img','aria-label':lfoWaveformNames[lfoIndex]},[h('path',{d:['M3 10 C8 -1 12 -1 17 10 S26 21 31 10 S35 1 37 3','M3 17 L11 3 L19 17 L27 3 L35 17','M3 17 L15 3 L15 17 L27 3 L27 17 L37 5','M3 16 V4 H12 V16 H22 V4 H32 V16 H37'][lfoIndex],fill:'none',stroke:'currentColor','stroke-width':2.8,'stroke-linecap':'round','stroke-linejoin':'round'})])])
         ]),h('div',{class:'synth-lfo-display'},[lfoCurve])]),
-      ])]))
+      ])])
+      if (document.querySelector('#bass-tone-button-host') && (/** @type {HTMLSelectElement|null} */ (document.querySelector('#bass-timbre')))?.value === 'synth') {
+        fields.push(h(Teleport, {to:'#bass-tone-button-host'}, [h('button', {type:'button', class:'melody-deep-toggle', 'aria-controls':'bass-tone-settings', 'aria-expanded':String(bassToneOpen.value), onClick:()=>{bassToneOpen.value = !bassToneOpen.value; startFilterAnimation()}}, 'こだわる')]))
+      }
+      fields.push(h(Teleport, {to:'#bass-tone-editor-host'}, [bassTonePanel]))
     }
     return fields
   }
 
-  for (const input of Array.from(
-    document.querySelectorAll('input[name="mixer-layout"]'),
-  )) {
-    input.addEventListener('change', () => {
-      workspace.dataset.mixerLayout = /** @type {HTMLInputElement} */ (
-        input
-      ).value
-      updateQuickMixer()
-    })
-  }
+  const mixerToggle = document.querySelector('#mixer-layout-toggle')
+  mixerToggle?.addEventListener('click', () => {
+    const open = workspace.dataset.mixerLayout !== 'detail'
+    workspace.dataset.mixerLayout = open ? 'detail' : 'simple'
+    mixerToggle.setAttribute('aria-pressed', String(open))
+    updateQuickMixer()
+  })
   document.querySelector('.mixer-score-link')?.addEventListener('click', () => {
     ;/** @type {HTMLInputElement|null} */ (
       document.querySelector('input[name="workspace-view"][value="score"]')

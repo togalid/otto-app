@@ -25,6 +25,12 @@ export const ottoAccompanimentStyles = {
 export const barMeters = /** @type {const} */ ([3, 4, 5, '6/8', '3/8'])
 export const maxChordBeats = 6
 
+/** @param {{beat:number,duration:number,midi:number}[]} notes @param {{beat:number,duration:number,midi:number}} note @param {number} seconds */
+function repeatedNoteDuration(notes, note, seconds) {
+  if ((note.duration !== .5 && note.duration !== 1) || !notes.some(next => next !== note && next.midi === note.midi && Math.abs(next.beat - note.beat - note.duration) < 1e-7)) return seconds
+  return Math.max(.001, seconds - Math.min(.025, seconds * .1))
+}
+
 /** @typedef {typeof barMeters[number]} BarMeter */
 /** @typedef {{bpm?:number, meter?:BarMeter, key?:number}} BarSettings */
 /** @typedef {{slots:string[], beatSlots:(string|null)[][], modulation:number[], name?:string, key?:number, style?:string, backingSteps?:{enabled:boolean,duration:number,level:number}[], backingExpression?:{length:number,dynamics:number,touch?:string,voicing?:string}, advance:boolean, startBar?:number, endBar?:number, bpm?:number, meter?:number, barCount?:number, partSettings?:Record<string,string>, performance?:CapturedPerformance}} Section */
@@ -328,8 +334,10 @@ export class Progression {
         for (const note of notes) {
           if (note.beat >= end) break
           if (note.beat < barBeat + startBeat) continue
-          this.melody.playAt([note.midi], this.nextTime + (note.beat - barBeat - startBeat) * secondsPerBeat,
-            note.duration * secondsPerBeat, note.velocity)
+          const from = swungBassBeat((note.beat - barBeat) * 2, this.swing)
+          const to = swungBassBeat((note.beat - barBeat + note.duration) * 2, this.swing)
+          this.melody.playAt([note.midi], this.nextTime + (from - swungBassBeat(startBeat * 2, this.swing)) * secondsPerBeat,
+            repeatedNoteDuration(notes, note, (to - from) * secondsPerBeat), note.velocity)
         }
       }
     }
@@ -347,9 +355,11 @@ export class Progression {
       if (note.beat < barBeat || note.beat >= barBeat + 4) continue
       const beat = (note.beat - barBeat) * this.beatsPerBar / 4
       if (beat < startBeat || !this.bass) continue
-      const time = this.nextTime + (beat - startBeat) * duration / this.beatsPerBar
+      const from = swungBassBeat((note.beat - barBeat) * 2, this.swing)
+      const to = swungBassBeat((note.beat - barBeat + note.duration) * 2, this.swing)
+      const time = this.nextTime + (from * this.beatsPerBar / 4 - swungBassBeat(startBeat * 8 / this.beatsPerBar, this.swing) * this.beatsPerBar / 4) * duration / this.beatsPerBar
       this.queuePadHit(time, {part:'bass', midi:note.midi})
-      this.bass.playAt(note.midi, time, note.duration * duration / 4, note.velocity)
+      this.bass.playAt(note.midi, time, repeatedNoteDuration(notes, note, (to - from) * duration / 4), note.velocity)
     }
   }
 
@@ -362,7 +372,9 @@ export class Progression {
     const events = new Map()
     for (const note of notes) {
       if (note.beat < gridStart || note.beat >= gridEnd) continue
-      const time = this.nextTime + (note.beat - gridStart) * secondsPerGridBeat
+      const from = swungBassBeat(note.beat * 2, this.swing)
+      const to = swungBassBeat((note.beat + note.duration) * 2, this.swing)
+      const time = this.nextTime + (from - swungBassBeat(gridStart * 2, this.swing)) * secondsPerGridBeat
       if (percussion) {
         const [, sound, pitch, duration] = drumPadSound(note.midi)
         this.queuePadHit(time, {part:'drums', sound, duration})
@@ -373,7 +385,8 @@ export class Progression {
         const key = `${note.beat}:${note.duration}`
         const event = events.get(key)
         if (event) event.notes.push(note.midi)
-        else events.set(key, {notes:[note.midi], time, duration:note.duration * secondsPerGridBeat, velocity:note.velocity})
+        else events.set(key, {notes:[note.midi], time, duration:repeatedNoteDuration(notes, note, (to - from) * secondsPerGridBeat), velocity:note.velocity})
+        if (event) event.duration = Math.min(event.duration, repeatedNoteDuration(notes, note, (to - from) * secondsPerGridBeat))
       }
     }
     for (const {notes, time, duration, velocity} of events.values()) {
@@ -400,27 +413,38 @@ export class Progression {
       await Promise.all(this.ornaments.map(track => track.voice.ready()))
       if (generation !== this.generation) return
       this.nextStep = bar
-      const pickup = beat === -1
-      this.startBeat = pickup ? 0 : beat
+      const pickupTracks = bar === 0 && beat <= 0
+        ? [this.studioMelody(), this.studioBass(), this.studioBacking(), this.studioDrums()]
+        : []
+      const pickup = pickupTracks.some(track => track?.some(note => note.beat >= -4 && note.beat < 0))
+      beat = Math.max(0, beat)
+      this.startBeat = beat
       this.nextTime = Math.max((this.instrument.context?.currentTime ?? 0) + (startTime ? 0.02 : 0.05), startTime)
       if (pickup) {
         const secondsPerBeat = 60 / this.bpmForBar(0)
-        for (const note of this.studioMelody() ?? []) {
-          if (note.beat >= 0 || note.beat < -1) continue
-          this.melody?.playAt([note.midi], this.nextTime + (note.beat + 1) * secondsPerBeat, note.duration * secondsPerBeat, note.velocity)
+        const pickupDuration = this.meterForBar(0) * secondsPerBeat
+        const secondsPerGridBeat = pickupDuration / 4
+        this.onScheduleBar(-1, 0, this.nextTime, secondsPerBeat)
+        for (const note of pickupTracks[0] ?? []) {
+          if (note.beat >= 0 || note.beat < -4) continue
+          const from = swungBassBeat(note.beat * 2, this.swing)
+          const to = swungBassBeat((note.beat + note.duration) * 2, this.swing)
+          this.melody?.playAt([note.midi], this.nextTime + (from + 4) * secondsPerGridBeat, repeatedNoteDuration(pickupTracks[0] ?? [], note, (to - from) * secondsPerGridBeat), note.velocity)
         }
-        for (const note of this.studioBass() ?? []) {
-          if (note.beat >= 0 || note.beat < -1) continue
-          this.bass?.playAt(note.midi, this.nextTime + (note.beat + 1) * secondsPerBeat,
-            note.duration * secondsPerBeat, note.velocity)
+        for (const note of pickupTracks[1] ?? []) {
+          if (note.beat >= 0 || note.beat < -4) continue
+          const from = swungBassBeat(note.beat * 2, this.swing)
+          const to = swungBassBeat((note.beat + note.duration) * 2, this.swing)
+          this.bass?.playAt(note.midi, this.nextTime + (from + 4) * secondsPerGridBeat,
+            repeatedNoteDuration(pickupTracks[1] ?? [], note, (to - from) * secondsPerGridBeat), note.velocity)
         }
         if (this.accompanimentModes.chord !== 'manual') {
-          this.scheduleStudioAccompaniment(this.studioBacking() ?? [], -1, 0, secondsPerBeat)
+          this.scheduleStudioAccompaniment(pickupTracks[2] ?? [], -4, 0, secondsPerGridBeat)
         }
         if (this.accompanimentModes.drums !== 'manual') {
-          this.scheduleStudioAccompaniment(this.studioDrums() ?? [], -1, 0, secondsPerBeat, true)
+          this.scheduleStudioAccompaniment(pickupTracks[3] ?? [], -4, 0, secondsPerGridBeat, true)
         }
-        this.nextTime += secondsPerBeat
+        this.nextTime += pickupDuration
         beat = 0
       }
       let offset=(bar * this.beatsPerBar + beat)*60/this.bpmForBar(bar)

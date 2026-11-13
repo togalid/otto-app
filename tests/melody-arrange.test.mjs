@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom'
 
 test('a half note entered on beat four displays tied quarter notes and stays one playback event', async () => {
   const dom = new JSDOM('<div class="melody-choice-row"></div><div id="editor"></div>', {pretendToBeVisual:true})
-  const globals = ['window', 'document', 'Element', 'SVGElement', 'HTMLElement', 'HTMLInputElement', 'Event', 'cancelAnimationFrame']
+  const globals = ['window', 'document', 'Element', 'SVGElement', 'HTMLElement', 'HTMLInputElement', 'Event', 'cancelAnimationFrame', 'requestAnimationFrame']
   const previous = globals.map(name => Object.getOwnPropertyDescriptor(globalThis, name))
   globals.forEach(name => Object.defineProperty(globalThis, name, {configurable:true, writable:true, value:dom.window[name]}))
   let editor
@@ -15,7 +15,8 @@ test('a half note entered on beat four displays tied quarter notes and stays one
     editor = mountMelodyEditor(host, {empty:true, togglePlayback() {}})
     editor.midiAttack(60)
     await nextTick()
-    host.querySelector('[aria-label="直前の音を伸ばす"]').click()
+    host.querySelector('[aria-label="直前の音を伸ばす"]').focus()
+    host.dispatchEvent(new dom.window.KeyboardEvent('keydown', {code:'KeyX', bubbles:true, cancelable:true}))
     await nextTick()
     assert.deepEqual(editor.getNotes(), [{beat:0, duration:1, midi:60, velocity:.8}])
     host.getClientRects = () => [host.getBoundingClientRect()]
@@ -38,10 +39,9 @@ test('a half note entered on beat four displays tied quarter notes and stays one
     await nextTick()
     host.querySelector('[aria-label="1小節目 4拍から入力"]').click()
     await nextTick()
-    for (let i = 0; i < 4; i++) {
-      host.querySelector('[aria-label="音価を長く"]').click()
-      await nextTick()
-    }
+    host.querySelector('[aria-label="音価を選択"]').value = '2'
+    host.querySelector('[aria-label="音価を選択"]').dispatchEvent(new Event('change', {bubbles:true}))
+    await nextTick()
     editor.midiAttack(60)
     await nextTick()
     assert.deepEqual(editor.getNotes(), [{beat:3, duration:2, midi:60, velocity:.8}])
@@ -58,22 +58,139 @@ test('a half note entered on beat four displays tied quarter notes and stays one
     assert.equal(editor.getNotes()[0].duration, 2)
     command('KeyZ')
     await nextTick()
-    host.querySelector('[aria-label="2分休符"]').click()
+    host.querySelector('[aria-label="2分休符"]').focus()
+    host.dispatchEvent(new dom.window.KeyboardEvent('keydown', {code:'KeyZ', bubbles:true, cancelable:true}))
     command('KeyY')
     assert.deepEqual(editor.getNotes(), [])
 
     const drumHost = document.createElement('section')
     document.body.append(drumHost)
-    const drumEditor = mountMelodyEditor(drumHost, {empty:true, part:'drums'})
+    const {drumPadState} = await import('../dist/part-steppers.js')
+    const previewed = []
+    const selectedBars = []
+    const drumEditor = mountMelodyEditor(drumHost, {empty:true, part:'drums', barCount:()=>20, previewDrum:id=>previewed.push(id), selectBar:(bar,pickup)=>selectedBars.push([bar,pickup])})
     try {
-      drumEditor.recordStep([0])
+      assert.deepEqual(drumEditor.getDrumPatterns()[0].map(note => ({beat:note.beat,midi:note.midi})), [0,1,2,3].map(beat => ({beat,midi:0})))
+      assert.deepEqual([...drumHost.querySelectorAll('[data-pad-index="0"].drum-step[aria-pressed="true"]')].map(cell=>Number(cell.dataset.step)), [0,4,8,12])
+      drumEditor.setDrumPatterns([null,null,null,null])
       await nextTick()
-      drumHost.querySelector('.arrange-note').click()
-      drumEditor.recordStep([1])
+      assert.equal(drumHost.querySelectorAll('.arrange-drum-bar').length, 8)
+      assert.equal(drumHost.querySelector('[aria-label="ドラムのページ"] .score-page-label').textContent, 'page')
+      drumHost.querySelector('[aria-label="ドラムのページ"] [aria-label="次の8小節"]').click()
       await nextTick()
-      assert.deepEqual(drumEditor.getNotes().map(({beat,midi}) => ({beat,midi})), [
-        {beat:0,midi:0}, {beat:0,midi:1},
-      ])
+      assert.ok(drumHost.querySelector('[aria-label="9小節目のパターン"]'))
+      drumHost.querySelector('[aria-label="ドラムのページ"] [aria-label="前の8小節"]').click()
+      await nextTick()
+      const assignment = drumHost.querySelector('[aria-label="4小節目のパターン"]')
+      assignment.value = '1'
+      assignment.dispatchEvent(new Event('change', {bubbles:true}))
+      await nextTick()
+      assert.equal(assignment.value, '1')
+      drumHost.querySelector('[aria-label="1小節目から再生"]').click()
+      assert.deepEqual(selectedBars, [[0,undefined]])
+      await nextTick()
+      assert.equal(drumHost.querySelector('[aria-label="1小節目から再生"]').getAttribute('aria-pressed'), 'true')
+      drumHost.querySelector('[aria-label="2小節目から再生"]').click()
+      await nextTick()
+      assert.equal(drumHost.querySelector('[aria-label="1小節目から再生"]').getAttribute('aria-pressed'), 'false')
+      assert.equal(drumHost.querySelector('[aria-label="2小節目から再生"]').getAttribute('aria-pressed'), 'true')
+      drumHost.querySelector('[aria-label="1小節目から再生"]').click()
+      await nextTick()
+      assert.deepEqual(drumEditor.getDrumAssignments(), [0,0,0,1])
+      drumHost.querySelector('[aria-label="KICKを試聴"]').click()
+      assert.deepEqual(previewed, [0])
+      drumPadState.value = {status:'loading', samples:[0,1]}
+      await nextTick()
+      const loadingKick = drumHost.querySelector('[aria-label="KICKを試聴（ロード中）"]')
+      assert.equal(loadingKick.disabled, true)
+      assert.equal(loadingKick.hasAttribute('data-loading'), true)
+      drumPadState.value = {status:'ready', samples:null}
+      await nextTick()
+      assert.equal(drumHost.querySelector('[aria-label="KICKを試聴"]').hasAttribute('data-loading'), false)
+      assert.ok(drumHost.querySelector('[aria-label="CL HHを試聴"]'))
+      assert.ok(drumHost.querySelector('[aria-label="OP HHを試聴"]'))
+      assert.deepEqual(drumEditor.getNotes(), [])
+      drumHost.querySelector('[data-pad-index="0"][data-step="0"]').click()
+      drumHost.querySelector('[data-pad-index="1"][data-step="0"]').click()
+      await nextTick()
+      assert.deepEqual(drumEditor.getDrumPatterns()[0].map(({beat,midi}) => ({beat,midi})), [{beat:0,midi:0},{beat:0,midi:1}])
+      assert.equal(drumHost.querySelectorAll('.arrange-drum-grid:not(.arrange-drum-pickup) .drum-step').length, 128)
+      assert.equal(drumHost.querySelector('[aria-label="ステップ入力"]'), null)
+      assert.equal(drumHost.querySelector('[aria-label="ドラム入力"]'), null)
+      assert.doesNotMatch(drumHost.textContent, /この小節を登録|この小節に上書き/)
+      assert.deepEqual([...drumHost.querySelectorAll('.arrange-drum-grid .drum-step[data-step="0"]')].map(button => Number(button.dataset.padIndex)), [5,4,6,7,3,2,1,0])
+      drumHost.querySelector('[aria-label="パターンB"]').click()
+      await nextTick()
+      assert.equal(drumHost.querySelector('[data-pad-index="0"][data-step="0"]').getAttribute('aria-pressed'), 'true')
+      assert.equal(drumEditor.getDrumPatterns()[1], null)
+      drumHost.querySelector('[data-pad-index="2"][data-step="4"]').click()
+      assert.deepEqual(drumEditor.getDrumPatterns()[1], [{beat:0,duration:.25,midi:0},{beat:0,duration:.25,midi:1},{beat:1,duration:.25,midi:2}])
+      drumHost.querySelector('[aria-label="パターンA"]').click()
+      await nextTick()
+      assert.equal(drumHost.querySelector('[data-pad-index="0"][data-step="0"]').getAttribute('aria-pressed'), 'true')
+      drumHost.querySelector('[data-pad-index="0"][data-step="0"]').click()
+      drumHost.querySelector('[aria-label="パターンC"]').click()
+      await nextTick()
+      assert.equal(drumHost.querySelector('[data-pad-index="0"][data-step="0"]').getAttribute('aria-pressed'), 'false')
+      drumHost.querySelector('[aria-label="パターンB"]').click()
+      await nextTick()
+      assert.equal(drumHost.querySelector('[data-pad-index="0"][data-step="0"]').getAttribute('aria-pressed'), 'true')
+      drumHost.querySelector('[aria-label="パターンA"]').click()
+      await nextTick()
+      drumHost.querySelector('[data-pad-index="0"][data-step="0"]').click()
+      await nextTick()
+      let animationFrame
+      globalThis.requestAnimationFrame = callback => { animationFrame = callback; return 1 }
+      const clock = {currentTime:10}
+      drumEditor.schedulePlaybackBar(0, 0, 10, .5, 4, clock)
+      animationFrame()
+      await nextTick()
+      assert.equal(drumHost.querySelectorAll('.drum-step.playing').length, 8)
+      assert.equal(drumHost.querySelectorAll('.arrange-drum-bar.playing').length, 1)
+      assert.equal(drumHost.querySelector('.drum-step.playing').dataset.step, '0')
+      clock.currentTime = 10.25
+      animationFrame()
+      await nextTick()
+      assert.equal(drumHost.querySelector('.drum-step.playing').dataset.step, '2')
+      drumEditor.stopPlaybackPosition()
+      await nextTick()
+      assert.equal(drumHost.querySelectorAll('.drum-step.playing').length, 0)
+      assert.equal(drumHost.querySelectorAll('.arrange-drum-bar.playing').length, 0)
+      const {drumPlaybackNotes} = await import('../dist/studio-style.js')
+      assert.deepEqual(drumPlaybackNotes(drumEditor.getNotes(), drumEditor.getDrumPatterns(), [0,1], 2).map(({beat,midi})=>({beat,midi})),
+        [{beat:0,midi:1},{beat:0,midi:0},{beat:4,midi:0},{beat:4,midi:1},{beat:5,midi:2}])
+
+      drumEditor.setNotes([{beat:.125,duration:.25,midi:1}, {beat:-1,duration:.25,midi:0}])
+      drumEditor.setDrumPatterns([null,null,null,null])
+      await nextTick()
+      assert.match(drumHost.textContent, /16分の位置以外に1音/)
+      drumHost.querySelector('[aria-label="パターン0"]').click()
+      await nextTick()
+      assert.equal(drumHost.querySelector('[data-pad-index="0"][data-step="12"]').getAttribute('aria-pressed'), 'true')
+      assert.ok(drumHost.querySelector('.arrange-drum-pickup [data-step="11"]'))
+      assert.equal(drumEditor.getNotes().length, 2)
+
+      drumEditor.setNotes([])
+      drumEditor.setDrumPatterns([null,null,null,null])
+      await nextTick()
+      const grid = drumHost.querySelector('.arrange-drum-grid:not(.arrange-drum-pickup)')
+      grid.setPointerCapture = () => {}
+      const cell = step => drumHost.querySelector(`[data-pad-index="0"][data-step="${step}"]`)
+      const pointer = (target, type) => {
+        const event = new dom.window.MouseEvent(type, {bubbles:true, cancelable:true, button:0})
+        Object.defineProperties(event, {pointerId:{value:1}, isPrimary:{value:true}})
+        target.dispatchEvent(event)
+      }
+      document.elementFromPoint = () => cell(3)
+      pointer(cell(0), 'pointerdown')
+      pointer(grid, 'pointermove')
+      pointer(grid, 'pointerup')
+      assert.deepEqual(drumEditor.getDrumPatterns()[0].map(note => note.beat), [0,.25,.5,.75])
+      drumHost.getClientRects = () => [drumHost.getBoundingClientRect()]
+      drumHost.dispatchEvent(new dom.window.KeyboardEvent('keydown', {code:'KeyZ', metaKey:true, bubbles:true, cancelable:true}))
+      assert.equal(drumEditor.getDrumPatterns()[0], null)
+      delete document.elementFromPoint
+
     } finally {
       drumEditor.destroy()
     }
@@ -83,7 +200,7 @@ test('a half note entered on beat four displays tied quarter notes and stays one
     const bassEditor = mountMelodyEditor(bassHost, {empty:true, part:'bass', defaultKeyboardOctaves:2})
     try {
       assert.deepEqual(bassEditor.getNotes(), [])
-      assert.ok(bassHost.querySelector('[aria-label="8分音符"]'))
+      assert.ok(bassHost.querySelector('[aria-label="音価を選択"]'))
       assert.ok(bassHost.querySelector('[aria-label="8分休符"]'))
       bassEditor.midiAttack(36)
       await nextTick()

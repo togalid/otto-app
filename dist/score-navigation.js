@@ -1,17 +1,17 @@
 import { h } from './vendor/vue.runtime.esm-browser.prod.js'
 import { midiKey } from './keyboard.js'
 
-/** @param {{page:number, pageSize:number, totalBars:number, label:string, onPageChange:(page:number)=>void, maxBars?:number, leadingLabel?:string}} options */
-export function scorePagination({page, pageSize, totalBars, label, onPageChange, maxBars = totalBars, leadingLabel}) {
-  const first = page * pageSize + 1
-  const last = Math.min(totalBars, (page + 1) * pageSize)
+/** @param {{page:number, pageSize:number, totalBars:number, label:string, onPageChange:(page:number)=>void, maxBars?:number, leadingLabel?:string, minPage?:number}} options */
+export function scorePagination({page, pageSize, totalBars, label, onPageChange, maxBars = totalBars, leadingLabel, minPage = 0}) {
+  const first = page < 0 ? 0 : page * pageSize + 1
+  const last = page < 0 ? 0 : Math.min(totalBars, (page + 1) * pageSize)
   return h('div', {class:'tutorial-score-pagination', role:'group', 'aria-label':label}, [
     leadingLabel ? h('span', {class:'score-page-label', 'aria-hidden':'true'}, leadingLabel) : null,
     h('div', {class:'style-stepper part-choice-steps'}, [
-      h('button', {type:'button', 'aria-label':`前の${pageSize}小節`, disabled:page === 0, onClick:()=>onPageChange(page - 1)}, '←'),
+      h('button', {type:'button', 'aria-label':`前の${pageSize}小節`, disabled:page <= minPage, onClick:()=>onPageChange(page - 1)}, '←'),
       h('button', {type:'button', 'aria-label':`次の${pageSize}小節`, disabled:last >= totalBars && last >= maxBars, onClick:()=>onPageChange(page + 1)}, '→'),
     ]),
-    h('span', {class:leadingLabel ? 'sr-only' : undefined, 'aria-live':'polite'}, `${first}-${last}`),
+    h('span', {class:leadingLabel ? 'sr-only' : undefined, 'aria-live':'polite'}, page < 0 ? '0小節目' : `${first}-${last}`),
   ])
 }
 

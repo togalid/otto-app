@@ -1004,6 +1004,47 @@ test('Studio bass starts silent and schedules only entered notes', async () => {
   assert.deepEqual(bassCalls, [[36, .05, .5, .8]])
 })
 
+test('shuffle delays eighth-note offbeats for every Studio part', () => {
+  const {player, calls} = fixture()
+  const melody = [], bass = [], drums = []
+  player.melody = {playAt(...args) { melody.push(args) }}
+  player.bass = {playAt(...args) { bass.push(args) }}
+  player.drums = {hitPadAt(...args) { drums.push(args) }}
+  const notes = [{beat:0, duration:.5, midi:0, velocity:.8}, {beat:.5, duration:.5, midi:0, velocity:.8}]
+  player.nextTime = 0
+  player.nextStep = 0
+  player.beatsPerBar = 4
+  player.studioMelody = () => notes
+  for (const swing of [0, 100]) {
+    player.swing = swing
+    melody.length = bass.length = drums.length = calls.length = 0
+    player.scheduleStudioMelody('', 0, 4)
+    player.scheduleStudioBass(notes, 0, 4)
+    player.scheduleStudioAccompaniment(notes, 0, 4, 1)
+    player.scheduleStudioAccompaniment(notes, 0, 4, 1, true)
+    const expected = swing ? 2 / 3 : .5
+    for (const time of [melody[1][1], bass[1][1], calls[1][1], drums[1][1]]) assert.ok(Math.abs(time - expected) < 1e-9)
+  }
+})
+
+test('repeated pitches have a short audible gap while other notes keep their lengths', () => {
+  const {player} = fixture()
+  const played = []
+  player.melody = {playAt(...args) { played.push(args) }}
+  player.beatsPerBar = 4
+  player.studioMelody = () => [
+    {beat:0, duration:.5, midi:60, velocity:.8},
+    {beat:.5, duration:.5, midi:60, velocity:.8},
+    {beat:1, duration:1, midi:62, velocity:.8},
+    {beat:2, duration:1, midi:62, velocity:.8},
+  ]
+  player.scheduleStudioMelody('', 0, 2)
+  assert.ok(Math.abs(played[0][2] - .225) < 1e-9)
+  assert.equal(played[1][2], .25)
+  assert.ok(Math.abs(played[2][2] - .475) < 1e-9)
+  assert.equal(played[3][2], .5)
+})
+
 test('Studio backing voices and drum pads replace patterns on the shared score grid', async () => {
   const {player, calls} = fixture()
   const drums = []
@@ -1016,4 +1057,19 @@ test('Studio backing voices and drum pads replace patterns on the shared score g
   player.stop()
   assert.deepEqual(calls, [[[33, 60, 64], .05, .375, .8]])
   assert.deepEqual(drums, [[3, .05, .8, 0]])
+})
+
+test('song start inserts one pickup bar only when a Studio part has pickup content', async () => {
+  for (const part of ['none', 'studioMelody', 'studioBass', 'studioBacking', 'studioDrums']) {
+    const {player} = fixture()
+    if (part !== 'none') {
+      player[part] = () => [{beat:-3.5, duration:.25, midi:part === 'studioDrums' ? 0 : 60, velocity:.8}]
+    }
+    const bars = []
+    player.onScheduleBar = (bar, beat, time) => bars.push({bar, beat, time})
+    await player.start(0, part === 'none' ? -1 : 0)
+    player.stop()
+    assert.equal(bars[0].bar, part === 'none' ? 0 : -1, part)
+    if (part !== 'none') assert.ok(Math.abs(player.playbackStartTime - bars[0].time - player.meterForBar(0) * 60 / player.bpm) < 1e-9)
+  }
 })

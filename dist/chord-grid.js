@@ -171,7 +171,7 @@ export function mountScorePaging({scorePage, sectionBars, refreshLabels, changeB
   if (scoreHeading && scoreSettings) scoreSettings.after(scoreHeading)
   if (!host) return
   createApp({render:()=>[scorePagination({
-    page:scorePage.value, pageSize:16, totalBars:sectionBars.value, maxBars:Math.max(100, sectionBars.value), label:'コード進行のページ',
+    page:scorePage.value, pageSize:16, totalBars:sectionBars.value, maxBars:Math.max(100, sectionBars.value), label:'コード進行のページ', leadingLabel:'page',
     onPageChange:page=>{
       if (page * 16 >= sectionBars.value) changeBarCount(Math.min(16, 100 - sectionBars.value))
       scorePage.value = page

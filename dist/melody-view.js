@@ -126,6 +126,9 @@ if (notation) {
   notation.addEventListener('change', sync)
   sync()
   melodyChoices.append(melodyNotation)
+  const pagination = document.createElement('div')
+  pagination.id = 'melody-score-pagination'
+  melodyChoices.append(pagination)
 }
 const melodyStyleField = melodyLabHost?.querySelector('.otto-style-choice')
 if (melodyStyleField) melodyChoices.append(melodyStyleField)

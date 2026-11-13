@@ -13,6 +13,7 @@ import { mountMelodyVoiceChoice } from './part-steppers.js'
  *   displayParts: (id: string, key: number) => {main:string, suffix:string},
  *   previewTimbre: NonNullable<EditorOptions['previewTimbre']>,
  *   previewBass: NonNullable<EditorOptions['previewBass']>,
+ *   previewDrum: NonNullable<EditorOptions['previewDrum']>,
  *   bassTimbre: HTMLSelectElement,
  *   onMelodyMounted: (editor: StudioEditor) => void,
  *   onBassMounted: (editor: StudioEditor) => void,
@@ -21,7 +22,7 @@ import { mountMelodyVoiceChoice } from './part-steppers.js'
  */
 export function mountStudioEditors({
   progression, seekMelodyBar, togglePlayback, readChordRevision, displayParts,
-  previewTimbre, previewBass, bassTimbre, onMelodyMounted, onBassMounted, onAccompanimentMounted,
+  previewTimbre, previewBass, previewDrum, bassTimbre, onMelodyMounted, onBassMounted, onAccompanimentMounted,
 }) {
   const studioMelodyHost = document.createElement('section')
   studioMelodyHost.className = 'melody-arrange tutorial-screen studio-melody-editor'
@@ -31,6 +32,7 @@ export function mountStudioEditors({
     /** @type {Parameters<typeof mountMelodyEditor>[1]} */
     const editorOptions = {
       empty:true,
+      paginationTarget:'#melody-score-pagination',
       defaultKeyboardOctaves:window.matchMedia('(min-width: 701px)').matches ? 2 : 1,
       barCount:()=>progression.barCount(),
       selectBar:seekMelodyBar,
@@ -64,8 +66,7 @@ export function mountStudioEditors({
       host.setAttribute('aria-label', label + 'を編集')
       document.querySelector('.studio-accompaniment-scores')?.append(host)
       const editor = mountMelodyEditor(host, {
-        ...editorOptions, part,
-        pickupTarget:`.accompaniment-choice-row[data-studio-part="${part}"]`,
+        ...editorOptions, part, paginationTarget:part === 'drums' ? '#drum-score-pagination' : '#backing-score-pagination', previewDrum:part === 'drums' ? previewDrum : undefined,
         keyForBar:part === 'drums' ? undefined : editorOptions.keyForBar,
       })
       onAccompanimentMounted(part, editor)
@@ -75,14 +76,21 @@ export function mountStudioEditors({
     const bassControls = document.createElement('div')
     bassControls.className = 'melody-choice-row bass-choice-row'
     const {element: bassVoiceChoice} = mountMelodyVoiceChoice(bassTimbre, 'ベース')
-    bassControls.append(bassVoiceChoice)
+    const bassToneButton = document.createElement('div')
+    bassToneButton.id = 'bass-tone-button-host'
+    const bassPagination = document.createElement('div')
+    bassPagination.id = 'bass-score-pagination'
+    bassControls.append(bassVoiceChoice, bassToneButton, bassPagination)
     const bassHost = document.createElement('section')
     bassHost.className = studioMelodyHost.className
     bassHost.setAttribute('aria-label', 'ベースを編集')
-    bassDetail.append(bassControls, bassHost)
+    bassDetail.prepend(bassControls)
+    bassDetail.append(bassHost)
+    document.dispatchEvent(new Event('bass-editor-ready'))
     const bassEditor = mountMelodyEditor(bassHost, {
       ...editorOptions,
       part:'bass',
+      paginationTarget:'#bass-score-pagination',
       previewBass,
     })
     onBassMounted(bassEditor)

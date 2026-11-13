@@ -279,6 +279,15 @@ export function defaultChord(pitch) {
 
 /** @param {string} id @param {number} key @param {'number'|'roman'|'chord'} notation */
 export function displayChordParts(id, key, notation) {
+  const config = chordConfig(id)
+  const shape = config.quality === 'slash' && config.extension.startsWith('pad_') ? orderedSlashShapes.get(config.extension) : undefined
+  if (shape) {
+    const bass = rootPitch(id)
+    const upper = (bass + shape.upper) % 12
+    const names = notation === 'chord' ? chromaticNames : notation === 'roman' ? romanDegrees : degreeNames
+    const transpose = notation === 'chord' ? key : 0
+    return {main:names[(upper + transpose) % 12], suffix:shape.quality + '/' + names[(bass + transpose) % 12]}
+  }
   const parts = chordParts(id, key, notation !== 'chord')
   return {
     ...parts,

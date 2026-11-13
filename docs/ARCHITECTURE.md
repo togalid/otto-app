@@ -162,4 +162,4 @@ The Studio drum kit UI lives in `quick-mixer.js`. `DrumSynth` in `rhythm.js` own
 
 Studio drum display order and WAV slot labels share the layout in `rhythm.js`. Display positions are separate from the pad IDs stored in version-1 scores.
 
-Local drum kits are discovered from folders under `~/Desktop/Otto用素材/電子ドラムサンプル/` by `server/drum-kits.mjs`. The existing drum timbre control selects a kit. `app.js` loads and decodes the files together, with a generation guard for changes while loading. Arrangement settings store the folder name, not audio files; static hosting does not expose local kits.
+Bundled drum kits are listed in `dist/drum-kit-manifest.js` and served from `dist/samples/` by both static hosting and the development server. `npm run drum:kits` copies the source WAVs and regenerates the manifest. Local drum kits are also discovered from folders under `~/Desktop/Otto用素材/電子ドラムサンプル/` by `server/drum-kits.mjs`. The existing drum timbre control selects a kit. `app.js` loads and decodes the files together, with a generation guard for changes while loading. Arrangement settings store the folder name, not audio files; static hosting only exposes bundled kits.

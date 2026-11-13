@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { createDrumKitHandler, discoverDrumKits } from '../server/drum-kits.mjs'
+import { createStaticHandler } from '../server/static.mjs'
+import { bundledDrumKits } from '../dist/drum-kit-manifest.js'
 
 function response() {
   return Object.assign(new EventEmitter(), {
@@ -57,5 +59,21 @@ test('local drum kits are discovered on each request and reject unsafe files', a
     assert.deepEqual(JSON.parse(updated.body).map(kit => kit.name), ['04_Microhouse', '05_New'])
   } finally {
     await rm(root, {recursive:true, force:true})
+  }
+})
+
+
+test('bundled kit is served without access to the local source directory', async () => {
+  const kit = bundledDrumKits.find(item => item.id === '04_Microhouse')
+  assert.ok(kit)
+  assert.equal(kit.samples.length, 8)
+  const serve = createStaticHandler()
+  for (const sample of kit.samples) {
+    const res = response()
+    const url = `/samples/${encodeURIComponent(kit.id)}/${encodeURIComponent(sample.file)}`
+    await serve({url, method:'GET', headers:{}}, res)
+    assert.equal(res.status, 200)
+    assert.equal(res.body.toString('ascii', 0, 4), 'RIFF')
+    assert.equal(res.body.toString('ascii', 8, 12), 'WAVE')
   }
 })

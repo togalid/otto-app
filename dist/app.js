@@ -1,6 +1,7 @@
 import { applySavedControl, arrangementControlRules } from './arrangement-controls.js'
 import { decodeStudioStyle } from './studio-style.js'
 import { mountStudioEditors } from './studio-editors.js'
+import { bundledDrumKits } from './drum-kit-manifest.js'
 import { createPartSettings } from './part-settings.js'
 import { mountQuickMixer, bassPadNotes } from './quick-mixer.js'
 import { mountReferenceTiming } from './reference-timing-view.js'
@@ -13,7 +14,7 @@ import { mountBassDetail } from './bass-detail.js'
 import { mountStyleChoices, mountPresetChoices } from './arrangement-selects.js'
 import { mountBasicParts, mountReferenceControls, mountReferenceDetail, bindKnobDrag, bindTempoKnob, mountPartIcons, mountSectionControls } from './main-controls.js'
 import { ref } from './vendor/vue.runtime.esm-browser.prod.js'
-import { drumPadNames, mountMelodyVoiceChoice, mountPartSteppers, mountTimbreSteppers } from './part-steppers.js'
+import { drumPadNames, drumPadTypes, drumPadType, drumPadState, drumPadPlayable, mountMelodyVoiceChoice, mountPartSteppers, mountTimbreSteppers } from './part-steppers.js'
 import { mountChordGrid, mountScoreContext, mountScoreBarCount, mountScorePaging, mountMobileScoreTools } from './chord-grid.js'
 import { createChoiceMenu, mountSelectMenus } from './choice-menu.js'
 import { mountTransport, mountPlayhead } from './transport-view.js'
@@ -985,7 +986,7 @@ partSettings.bind(bassPattern, () => {
 const drumTimbre = /** @type {HTMLSelectElement} */ (
   document.querySelector('#drum-timbre')
 )
-/** @typedef {{id:string, name:string, samples:{id:number,label:string,file:string}[], skipped:number}} DrumKit */
+/** @typedef {{id:string, name:string, samples:{id:number,label:string,file:string}[], skipped:number, bundled?:boolean}} DrumKit */
 /** @type {DrumKit[]} */
 let drumKits = []
 let drumKitGeneration = 0
@@ -994,10 +995,18 @@ const drumKitHeaders = {'X-Otto-Local':'1'}
 async function refreshDrumKits() {
   const ticket = ++drumKitCatalogGeneration
   try {
-    const response = await fetch('./api/drum-kits', {headers:drumKitHeaders})
-    if (!response.ok) return
     /** @type {DrumKit[]} */
-    const kits = await response.json()
+    let localKits = []
+    try {
+      const response = await fetch('./api/drum-kits', {headers:drumKitHeaders})
+      if (response.ok) localKits = await response.json()
+    } catch {
+      // Bundled kits also work with static hosting.
+    }
+    const kits = [
+      ...bundledDrumKits.map(kit => ({...kit, bundled:true})),
+      ...localKits.filter(kit => !bundledDrumKits.some(bundled => bundled.id === kit.id)),
+    ]
     if (ticket !== drumKitCatalogGeneration) return
     const previous = drumTimbre.value
     drumKits = kits
@@ -1035,20 +1044,28 @@ function selectDrumTimbre() {
     drums.samplesEnabled = false
     drums.sampleReady = Promise.resolve()
     drumPadNames.value = {}
+    drumPadTypes.value = {}
+    drumPadState.value = {status:'ready', samples:null}
     drums.timbre = selected
     updatePartIcons()
     return
   }
   drums.samplesEnabled = true
+  drumPadState.value = {status:'loading', samples:kit.samples.map(sample => sample.id)}
   drums.samples.clear()
   drumPadNames.value = Object.fromEntries(kit.samples.map(sample => [sample.id, sample.label]))
+  drumPadTypes.value = Object.fromEntries(kit.samples.map(sample => [sample.id, drumPadType(sample.label + ' ' + sample.file)]))
   if (progressionStatus) progressionStatus.textContent = kit.name + 'を読み込み中'
   const context = audioContext()
   drums.sampleReady = Promise.all(kit.samples.map(async sample => {
-    const url = new URL('./api/drum-kit-sample', location.href)
-    url.searchParams.set('kit', kit.id)
-    url.searchParams.set('file', sample.file)
-    const response = await fetch(url, {headers:drumKitHeaders})
+    const url = kit.bundled
+      ? new URL(`./samples/${encodeURIComponent(kit.id)}/${encodeURIComponent(sample.file)}`, import.meta.url)
+      : new URL('./api/drum-kit-sample', location.href)
+    if (!kit.bundled) {
+      url.searchParams.set('kit', kit.id)
+      url.searchParams.set('file', sample.file)
+    }
+    const response = await fetch(url, kit.bundled ? undefined : {headers:drumKitHeaders})
     if (!response.ok) throw new Error('WAVを読み込めませんでした')
     const bytes = await response.arrayBuffer()
     const header = new TextDecoder()
@@ -1060,9 +1077,12 @@ function selectDrumTimbre() {
   })).then(entries => {
     if (ticket !== drumKitGeneration) return
     drums.samples = new Map(/** @type {[number,AudioBuffer][]} */ (entries))
+    drumPadState.value = {status:'ready', samples:kit.samples.map(sample => sample.id)}
     if (progressionStatus) progressionStatus.textContent = kit.skipped ? '8個を超えるWAVは読み込んでいません' : ''
   }).catch(error => {
-    if (ticket === drumKitGeneration && progressionStatus) progressionStatus.textContent = kit.name + 'を読み込めませんでした: ' + String(error)
+    if (ticket !== drumKitGeneration) return
+    drumPadState.value = {status:'error', samples:kit.samples.map(sample => sample.id)}
+    if (progressionStatus) progressionStatus.textContent = kit.name + 'を読み込めませんでした: ' + String(error)
   })
   updatePartIcons()
 }
@@ -1120,6 +1140,7 @@ trackGrid.addEventListener('click', event => {
 })
 /** @param {'drums'|'bass'|'chord'} part @param {number} index */
 async function playAccompanimentPad(part, index) {
+  if (part === 'drums' && !drumPadPlayable(index)) return
   if (part === 'drums') studioAccompanimentEditors.drums?.recordStep([index])
   try {
     await chordInstrument.ready()

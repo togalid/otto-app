@@ -1,5 +1,12 @@
+import { bundledDrumKits } from '../dist/drum-kit-manifest.js'
+
 // Explicit public files: server code, configuration, and user files are never exposed.
 export const routes = new Map([
+  ['/drum-kit-manifest.js', ['drum-kit-manifest.js', 'text/javascript']],
+  ...bundledDrumKits.flatMap(kit => kit.samples.map(sample => [
+    `/samples/${encodeURIComponent(kit.id)}/${encodeURIComponent(sample.file)}`,
+    [`samples/${encodeURIComponent(kit.id)}/${encodeURIComponent(sample.file)}`, 'audio/wav'],
+  ])),
   ['/arrangement-controls.js', ['arrangement-controls.js', 'text/javascript']],
   ['/score-midi.js', ['score-midi.js', 'text/javascript']],
   ['/studio-editors.js', ['studio-editors.js', 'text/javascript']],
@@ -12,6 +19,7 @@ export const routes = new Map([
   ['/selection-browser.css', ['selection-browser.css', 'text/css']],
   ...['tutorial.js', 'tutorial-view.js', 'drum-tutorial.js'].map(file => [`/${file}`, [file, 'text/javascript']]),
   ['/features.js', ['features.js', 'text/javascript']],
+  ['/edition.js', ['edition.js', 'text/javascript']],
   ['/song-score.js', ['song-score.js', 'text/javascript']],
   ['/score-navigation.js', ['score-navigation.js', 'text/javascript']],
   ['/score-pad.js', ['score-pad.js', 'text/javascript']],

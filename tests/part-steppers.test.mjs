@@ -7,7 +7,7 @@ const dom = new JSDOM('<!doctype html><html><body></body></html>', {url:'http://
 for (const name of ['window', 'document', 'Element', 'HTMLElement', 'SVGElement', 'HTMLSelectElement', 'HTMLOptGroupElement', 'Event']) {
   globalThis[name] = name === 'window' ? dom.window : name === 'document' ? dom.window.document : dom.window[name]
 }
-const { mountMelodyVoiceChoice, mountAccompanimentPlay, selectStepperView } = await import('../dist/part-steppers.js')
+const { drumPadState, drumPadType, drumPadTypes, mountMelodyVoiceChoice, mountAccompanimentPlay, selectStepperView } = await import('../dist/part-steppers.js')
 const { createApp, nextTick } = await import('../dist/vendor/vue.runtime.esm-browser.prod.js')
 
 test('shared melody picker keeps source values, option groups and step boundaries in sync', async () => {
@@ -57,6 +57,21 @@ test('accompaniment Vue surface maps studio pad positions to saved IDs and prese
   pads[4].click()
   pads[6].click()
   assert.deepEqual(played, [0, 2])
+  drumPadState.value = {status:'loading', samples:[0,2]}
+  await nextTick()
+  assert.equal(pads.every(pad => pad.disabled), true)
+  assert.equal(view.element.querySelectorAll('.drum-pad-status').length, 8)
+  pads[4].click()
+  assert.deepEqual(played, [0, 2])
+  drumPadState.value = {status:'error', samples:[0,2]}
+  await nextTick()
+  assert.match(pads[4].getAttribute('aria-label'), /読込失敗/)
+  drumPadState.value = {status:'ready', samples:[0,2]}
+  await nextTick()
+  assert.equal(pads[4].disabled, false)
+  assert.equal(pads[5].disabled, true)
+  drumPadState.value = {status:'ready', samples:null}
+  await nextTick()
   const otto = view.element.querySelector('input[value="otto"]')
   otto.click()
   await nextTick()
@@ -66,6 +81,29 @@ test('accompaniment Vue surface maps studio pad positions to saved IDs and prese
   view.unmount()
   assert.equal(view.element.childElementCount, 0)
   view.element.remove()
+})
+
+test('drum pad light follows the assigned sound, including unknown samples', async () => {
+  assert.equal(drumPadType('68_Kick_SP_06.wav'), 'kick')
+  assert.equal(drumPadType('CyberneticHipHop_Snare_SP_02.wav'), 'snare')
+  assert.equal(drumPadType('ResampledLiveDrums_London_03_HH_01_SP.wav'), 'hat')
+  assert.equal(drumPadType('AlienBeatscapes_HighClap_SP_01.wav'), 'clap')
+  assert.equal(drumPadType('TearoutDnB_Perc_28_454.wav'), 'other')
+  assert.equal(drumPadType('open'), 'hat')
+
+  const view = mountAccompanimentPlay('drums', 'auto', null, () => {}, () => {})
+  document.body.append(view.element)
+  try {
+    const pad = view.element.querySelector('[data-pad-index="5"]')
+    assert.equal(pad.dataset.drumType, 'other')
+    drumPadTypes.value = {5:'clap'}
+    await nextTick()
+    assert.equal(pad.dataset.drumType, 'clap')
+  } finally {
+    drumPadTypes.value = {}
+    view.unmount()
+    view.element.remove()
+  }
 })
 
 test('backing iframe preserves the key synchronization load hook', () => {

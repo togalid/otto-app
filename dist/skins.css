@@ -4365,3 +4365,26 @@ main:not([data-mixer-part='drums']) [data-studio-part='drums'] { display:none; }
   min-width:44px;
   padding-inline:8px;
 }
+
+.accompaniment-play .drum-tutorial-pad:disabled {
+  cursor: default;
+  color: var(--oto-display-ink);
+  background: var(--oto-case-low);
+  box-shadow: var(--oto-recess);
+}
+.drum-pad-status { font-size: 12px; line-height: 1; }
+
+/* Drum-pad light colors follow the sound assigned to each pad. */
+:root {
+  --oto-drum-glow-blue: radial-gradient(ellipse 52% 58% at center, rgb(255 255 255 / .72) 0%, rgb(183 221 255 / .75) 22%, rgb(74 156 244 / .38) 52%, rgb(74 156 244 / 0) 100%);
+  --oto-drum-glow-yellow: radial-gradient(ellipse 52% 58% at center, rgb(255 255 255 / .72) 0%, rgb(255 239 165 / .78) 22%, rgb(245 198 55 / .40) 52%, rgb(245 198 55 / 0) 100%);
+  --oto-drum-glow-pink: radial-gradient(ellipse 52% 58% at center, rgb(255 255 255 / .72) 0%, rgb(255 198 229 / .78) 22%, rgb(241 115 187 / .38) 52%, rgb(241 115 187 / 0) 100%);
+  --oto-drum-glow-orange: radial-gradient(ellipse 52% 58% at center, rgb(255 255 255 / .72) 0%, rgb(255 217 167 / .78) 22%, rgb(245 153 57 / .40) 52%, rgb(245 153 57 / 0) 100%);
+}
+:is(.drum-tutorial, .accompaniment-play) .drum-tutorial-pad:is([data-lit], [data-placement], [data-sequencer-note], :active):not(:disabled) {
+  background:var(--drum-pad-glow, var(--oto-note-glow)), var(--oto-key);
+}
+.drum-tutorial-pad:is([data-drum-type='snare'], [data-sound='snare']) { --drum-pad-glow:var(--oto-drum-glow-blue); }
+.drum-tutorial-pad:is([data-drum-type='hat'], [data-sound='hat'], [data-sound='open']) { --drum-pad-glow:var(--oto-drum-glow-yellow); }
+.drum-tutorial-pad[data-drum-type='clap'] { --drum-pad-glow:var(--oto-drum-glow-pink); }
+.drum-tutorial-pad[data-drum-type='other'] { --drum-pad-glow:var(--oto-drum-glow-orange); }

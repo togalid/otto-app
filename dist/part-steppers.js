@@ -4,6 +4,21 @@ import { padIcon } from './drum-tutorial.js'
 import * as Vue from './vendor/vue.runtime.esm-browser.prod.js'
 const {createApp, h, ref} = Vue
 export const drumPadNames = ref(/** @type {Record<number,string>} */ ({}))
+export const drumPadTypes = ref(/** @type {Record<number,string>} */ ({}))
+/** @param {string} name */
+export function drumPadType(name) {
+  if (/clap|クラップ/i.test(name)) return 'clap'
+  if (/snare|スネア/i.test(name)) return 'snare'
+  if (/^open$|hi[ -]?hat|hat|(?:^|[_ -])hh(?:[_ .-]|$)|ハイハット|クローズHH|オープンHH/i.test(name)) return 'hat'
+  if (/kick|bass[ _-]?drum|キック/i.test(name)) return 'kick'
+  return 'other'
+}
+export const drumPadState = ref(/** @type {{status:'ready'|'loading'|'error', samples:number[]|null}} */ ({status:'ready', samples:null}))
+/** @param {number} id */
+export function drumPadPlayable(id) {
+  const state = drumPadState.value
+  return state.status === 'ready' && (state.samples === null || state.samples.includes(id))
+}
 const Teleport = Reflect.get(Vue, 'Teleport')
 
 export function mountPartSteppers() {
@@ -122,6 +137,7 @@ export function mountAccompanimentPlay(part, initialMode, face, setMode, play, o
     const index = studioDrumLayout.findIndex(pad => pad.key === event.key.toLowerCase())
     if (index < 0) return
     event.preventDefault()
+    if (!drumPadPlayable(studioDrumLayout[index].id)) return
     const button = element.querySelectorAll('.drum-tutorial-pad')[index]
     button?.setAttribute('data-lit', '')
     window.setTimeout(() => button?.removeAttribute('data-lit'), 120)
@@ -145,11 +161,23 @@ export function mountAccompanimentPlay(part, initialMode, face, setMode, play, o
   const app = createApp({ render: () => [
     headingHost ? h(Teleport, {to:headingHost}, heading()) : heading(),
     part === 'drums'
-      ? h('div', {class:'drum-pad-grid', role:'group', 'aria-label':'ドラムキット'}, studioDrumLayout.map((pad) =>
-        h('button', {type:'button', class:'drum-tutorial-pad', 'data-pad-index':String(pad.id), 'aria-label':`${drumPadNames.value[pad.id] ?? pad.name} ${pad.key}キー`,
-          onPointerdown:(/** @type {PointerEvent} */ event) => { if(event.button!==0)return; event.preventDefault(); play(pad.id) },
-          onClick:(/** @type {MouseEvent} */ event) => { if(event.detail===0)play(pad.id) },
-        }, [h('span',{class:'drum-pad-name'},[padIcon(pad.sound),h('strong',drumPadNames.value[pad.id] ?? pad.name)]), h('kbd',pad.key.toUpperCase())])))
+      ? h('div', [
+        h('span', {class:'sr-only', role:'status', 'aria-live':'polite'},
+          drumPadState.value.status === 'loading' ? 'ドラム音色をロード中。パッドはまだ鳴りません。'
+            : drumPadState.value.status === 'error' ? 'ドラム音色を読み込めませんでした。' : ''),
+        h('div', {class:'drum-pad-grid', role:'group', 'aria-label':'ドラムキット', 'aria-busy':drumPadState.value.status === 'loading'}, studioDrumLayout.map((pad) => {
+          const state = drumPadState.value
+          const message = state.status === 'loading' ? 'ロード中' : state.status === 'error' ? '読込失敗'
+            : !drumPadPlayable(pad.id) ? '未設定' : ''
+          const name = drumPadNames.value[pad.id] ?? pad.name
+          return h('button', {type:'button', class:'drum-tutorial-pad', 'data-pad-index':String(pad.id), 'data-drum-type':drumPadTypes.value[pad.id] ?? drumPadType(pad.sound),
+            'aria-label':`${name} ${pad.key}キー${message ? ' ' + message : ''}`, disabled:!!message,
+            onPointerdown:(/** @type {PointerEvent} */ event) => { if(event.button!==0 || !drumPadPlayable(pad.id))return; event.preventDefault(); play(pad.id) },
+            onClick:(/** @type {MouseEvent} */ event) => { if(event.detail===0 && drumPadPlayable(pad.id))play(pad.id) },
+          }, [h('span',{class:'drum-pad-name'},[padIcon(pad.sound),h('strong',name)]),
+            message ? h('span', {class:'drum-pad-status', 'aria-hidden':'true'}, message) : h('kbd',pad.key.toUpperCase())])
+        })),
+      ])
       : part === 'chord'
       ? h('iframe', { class: 'backing-chord-pads', title: 'バッキングのコードパッド', src: './chord-pad.html?embedded=1&backing=1', onLoad: onFrameLoad })
       : h('div', { class: 'accompaniment-pads', role: 'group', 'aria-label': '演奏パッド' },

@@ -8,7 +8,8 @@
     "test": "node --test tests/*.test.mjs",
     "typecheck": "../node_modules/.bin/tsc -p jsconfig.json",
     "style:default": "node scripts/set-style-default.mjs",
-    "melody:preset": "node scripts/set-melody-preset.mjs"
+    "melody:preset": "node scripts/set-melody-preset.mjs",
+    "drum:kits": "node scripts/sync-drum-kits.mjs"
   },
   "dependencies": {
     "tone": "15.1.22"

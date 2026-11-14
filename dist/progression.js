@@ -31,6 +31,11 @@ function repeatedNoteDuration(notes, note, seconds) {
   return Math.max(.001, seconds - Math.min(.025, seconds * .1))
 }
 
+/** @param {number} seconds */
+function studioNoteDuration(seconds) {
+  return seconds - Math.min(.035, seconds * .12)
+}
+
 /** @typedef {typeof barMeters[number]} BarMeter */
 /** @typedef {{bpm?:number, meter?:BarMeter, key?:number}} BarSettings */
 /** @typedef {{slots:string[], beatSlots:(string|null)[][], modulation:number[], name?:string, key?:number, style?:string, backingSteps?:{enabled:boolean,duration:number,level:number}[], backingExpression?:{length:number,dynamics:number,touch?:string,voicing?:string}, advance:boolean, startBar?:number, endBar?:number, bpm?:number, meter?:number, barCount?:number, partSettings?:Record<string,string>, performance?:CapturedPerformance}} Section */
@@ -337,7 +342,7 @@ export class Progression {
           const from = swungBassBeat((note.beat - barBeat) * 2, this.swing)
           const to = swungBassBeat((note.beat - barBeat + note.duration) * 2, this.swing)
           this.melody.playAt([note.midi], this.nextTime + (from - swungBassBeat(startBeat * 2, this.swing)) * secondsPerBeat,
-            repeatedNoteDuration(notes, note, (to - from) * secondsPerBeat), note.velocity)
+            editedMelody === undefined ? repeatedNoteDuration(notes, note, (to - from) * secondsPerBeat) : studioNoteDuration((to - from) * secondsPerBeat), note.velocity)
         }
       }
     }
@@ -359,7 +364,7 @@ export class Progression {
       const to = swungBassBeat((note.beat - barBeat + note.duration) * 2, this.swing)
       const time = this.nextTime + (from * this.beatsPerBar / 4 - swungBassBeat(startBeat * 8 / this.beatsPerBar, this.swing) * this.beatsPerBar / 4) * duration / this.beatsPerBar
       this.queuePadHit(time, {part:'bass', midi:note.midi})
-      this.bass.playAt(note.midi, time, repeatedNoteDuration(notes, note, (to - from) * duration / 4), note.velocity)
+      this.bass.playAt(note.midi, time, studioNoteDuration((to - from) * duration / 4), note.velocity)
     }
   }
 
@@ -395,6 +400,7 @@ export class Progression {
   }
 
   /** @param {number} [bar] @param {number} [beat] @param {number} [startTime] AudioContext time, for a synchronized count-in. */
+  recordingCountIn = false
   async start(bar = 0, beat = 0, startTime = 0) {
     if (!Number.isInteger(bar) || bar < 0 || bar >= this.barCount() || !Number.isFinite(beat) || (beat < 0 && !(bar === 0 && beat === -1)) || beat >= this.meterForBar(bar))
       throw new RangeError('再生位置が正しくありません')
@@ -420,6 +426,13 @@ export class Progression {
       beat = Math.max(0, beat)
       this.startBeat = beat
       this.nextTime = Math.max((this.instrument.context?.currentTime ?? 0) + (startTime ? 0.02 : 0.05), startTime)
+      if (this.recordingCountIn && !startTime) {
+        const pulse = 60 / this.bpmForBar(bar)
+        for (let count = 0; count < 2; count++) {
+          this.drums?.hitAt('hat', this.nextTime + count * pulse, count === 0 ? .9 : .65, .06)
+        }
+        this.nextTime += 2 * pulse
+      }
       if (pickup) {
         const secondsPerBeat = 60 / this.bpmForBar(0)
         const pickupDuration = this.meterForBar(0) * secondsPerBeat
@@ -429,14 +442,14 @@ export class Progression {
           if (note.beat >= 0 || note.beat < -4) continue
           const from = swungBassBeat(note.beat * 2, this.swing)
           const to = swungBassBeat((note.beat + note.duration) * 2, this.swing)
-          this.melody?.playAt([note.midi], this.nextTime + (from + 4) * secondsPerGridBeat, repeatedNoteDuration(pickupTracks[0] ?? [], note, (to - from) * secondsPerGridBeat), note.velocity)
+          this.melody?.playAt([note.midi], this.nextTime + (from + 4) * secondsPerGridBeat, studioNoteDuration((to - from) * secondsPerGridBeat), note.velocity)
         }
         for (const note of pickupTracks[1] ?? []) {
           if (note.beat >= 0 || note.beat < -4) continue
           const from = swungBassBeat(note.beat * 2, this.swing)
           const to = swungBassBeat((note.beat + note.duration) * 2, this.swing)
           this.bass?.playAt(note.midi, this.nextTime + (from + 4) * secondsPerGridBeat,
-            repeatedNoteDuration(pickupTracks[1] ?? [], note, (to - from) * secondsPerGridBeat), note.velocity)
+            studioNoteDuration((to - from) * secondsPerGridBeat), note.velocity)
         }
         if (this.accompanimentModes.chord !== 'manual') {
           this.scheduleStudioAccompaniment(pickupTracks[2] ?? [], -4, 0, secondsPerGridBeat)

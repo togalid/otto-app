@@ -7,7 +7,7 @@ export const studioPitchRange = {
   drums: {min: 0, max: 7},
 }
 
-/** @typedef {{beat:number, duration:number, midi:number}} StudioNote */
+/** @typedef {{beat:number, duration:number, midi:number, role?:'R'}} StudioNote */
 
 /** @returns {(StudioNote[]|null)[]} */
 export function defaultDrumPatterns() {
@@ -49,6 +49,7 @@ export function decodeStudioStyle(json) {
   if (typeof arrangement !== 'string' ||
       !validNotes(melody, studioPitchRange.melody) ||
       !validNotes(bass, studioPitchRange.bass) ||
+      !bass.every(note => note.role === undefined || note.role === 'R') ||
       (bassTechniques !== undefined && (!bassTechniques || typeof bassTechniques !== 'object' || Array.isArray(bassTechniques) ||
         !Object.entries(bassTechniques).every(([page, technique]) => /^(0|[1-9][0-9]{0,2})$/.test(page) &&
           ['none','previous','straight8','straight4','straight16','offbeat','support_hold','custom'].includes(typeof technique === 'string' ? technique : '') &&

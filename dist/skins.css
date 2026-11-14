@@ -4109,6 +4109,7 @@ main {
 
 /* Studio score: prioritize the notation and leave less space below it. */
 .studio-melody-editor .arrange-note .tutorial-note-label { display:none; }
+.arrange-note-role { position:absolute; inset:auto 0 1px; text-align:center; font-size:10px; line-height:1; font-weight:600; color:var(--oto-secondary); pointer-events:none; }
 .studio-melody-editor .arrange-staff.tutorial-pitch-lane {
   height:140px;
   min-height:140px;
@@ -4425,7 +4426,7 @@ main:not([data-mixer-part='drums']) [data-studio-part='drums'] { display:none; }
 .arrange-bass-accent input { position:absolute; opacity:0; }
 :root .segmented-control.arrange-bass-accent label > span { min-height:30px; padding:0 12px; }
 .arrange-bass-accent input:focus-visible + span { filter:brightness(.9); }
-.melody-arrange .arrange-duration-values .arrange-step-row .arrange-clear-page { width:auto; min-width:0; margin-left:4px; padding-inline:8px; white-space:nowrap; }
+.melody-arrange .arrange-duration-values .arrange-step-row :is(.arrange-clear-page, .arrange-swing-step) { width:auto; min-width:0; margin-left:4px; padding-inline:8px; white-space:nowrap; }
 
 .melody-arrange .arrange-duration-values .arrange-step-row button[aria-label='直前の音を伸ばす'] {
   width:auto;
@@ -4597,7 +4598,7 @@ main:not([data-mixer-part='chord']) #backing-score-pagination { display:none; }
 .arrange-duration-chevron { font-size:12px; }
 @media (min-width:701px) { .studio-melody-editor .arrange-duration-select { min-height:36px; } }
 @media (min-width:701px) { .studio-melody-editor .arrange-duration-values .arrange-duration-select { width:36px; } }
-@media (min-width:701px) { :is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-duration-values .arrange-step-row .arrange-clear-page { width:auto; min-width:0; padding-inline:8px; } }
+@media (min-width:701px) { :is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-duration-values .arrange-step-row :is(.arrange-clear-page, .arrange-swing-step) { width:auto; min-width:0; padding-inline:8px; } }
 :is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor :is(.arrange-duration-select, .arrange-duration-values .arrange-step-row button, .arrange-record .mix-button) {
   box-sizing:border-box;
   height:32px;
@@ -4613,4 +4614,47 @@ main:not([data-mixer-part='chord']) #backing-score-pagination { display:none; }
     margin-block:8px;
   }
   .tutorial-screen .arrange-drum-grid .arrange-drum-bank-hidden { display:none; }
+}
+
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-keyboard-toolbar :is(.shared-octave-control .style-stepper, .arrange-octave-width, .arrange-bar-toggle, .arrange-undo) {
+  box-sizing:border-box;
+  height:32px;
+  min-height:32px;
+}
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-keyboard-toolbar .shared-octave-control .style-stepper > button {
+  height:100%;
+  min-height:0;
+}
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-keyboard-toolbar .arrange-octave-width label {
+  display:flex;
+  align-items:stretch;
+}
+:is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-keyboard-toolbar .arrange-octave-width span {
+  display:flex;
+  align-items:center;
+  padding-block:0;
+}
+
+/* Studio melody rhythm palette */
+.arrange-score-and-rhythms { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:8px; align-items:start; }
+@media (max-width:700px) {
+  .arrange-score-and-rhythms { grid-template-columns:minmax(0, 1fr); }
+}
+.arrange-rhythm-list { list-style:none; margin:0; padding:0; }
+.arrange-rhythm-columns { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:24px; }
+.arrange-rhythm-group + .arrange-rhythm-group { margin-top:12px; }
+.arrange-rhythm-group-label { display:block; padding:0 8px; color:var(--oto-muted); font-size:11px; }
+.arrange-rhythm-list button { display:flex; justify-content:space-between; gap:36px; width:100%; border:0; background:transparent; color:var(--oto-ink); font:inherit; font-size:12px; line-height:16px; padding:0 8px; text-align:left; cursor:pointer; }
+.arrange-rhythm-group .arrange-rhythm-list button { justify-content:flex-start; gap:6px; }
+.arrange-rhythm-list button[aria-pressed="true"] { color:var(--oto-secondary); font-weight:700; }
+.arrange-rhythm-list button:disabled { color:var(--oto-muted); opacity:.55; cursor:default; }
+.arrange-rhythm-list button:focus-visible { outline:2px solid var(--oto-accent); }
+.arrange-rhythm-notation { display:flex; align-items:center; min-width:0; gap:1px; overflow-x:auto; }
+.arrange-rhythm-notation .arrange-rhythm-icon { display:block; width:16px; height:22px; flex:none; }
+.arrange-rhythm-notation .arrange-beamed-notes { display:block; height:22px; width:auto; flex:none; }
+.arrange-rhythm-preview { position:absolute; transform:translateY(-50%); box-sizing:border-box; height:30px; padding:4px; border-radius:5px; background:rgba(100, 160, 220, .22); color:var(--oto-ink); font-size:14px; font-weight:700; white-space:nowrap; pointer-events:none; z-index:5; }
+.arrange-rhythm-preview .arrange-rhythm-icon { display:block; width:16px; height:22px; }
+.arrange-rhythm-preview-rest { background:rgba(110, 110, 110, .2); }
+:is(#detail-melody, .mixer-quick-edit) .studio-melody-editor .arrange-score-and-rhythms .arrange-score {
+  margin-inline: 0;
 }

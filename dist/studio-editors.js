@@ -54,7 +54,7 @@ export function mountStudioEditors({
       },
       togglePlayback,
     }
-    const editor = mountMelodyEditor(studioMelodyHost, {...editorOptions, previewTimbre})
+    const editor = mountMelodyEditor(studioMelodyHost, {...editorOptions, previewTimbre, rhythmPalette:true})
     onMelodyMounted(editor)
     progression.studioMelody = () => {
       const notes = editor.getNotes()
@@ -98,7 +98,7 @@ export function mountStudioEditors({
         const bar = Math.max(0, Math.min(progression.barCount() - 1, Math.floor(beat / 4)))
         const section = progression.songMode ? progression.songSectionAt(bar) : progression.selectedSection
         const score = progression.sections[section]
-        let slot = Math.min(progression.chordBeatsForBar(bar) - 1, Math.floor(Math.max(0, beat - bar * 4) / progression.chordBeatLength(bar)))
+        let slot = Math.min(progression.chordBeatsForBar(bar) - 1, Math.floor(Math.max(0, beat - bar * 4) * progression.chordBeatsForBar(bar) / 4))
         let chord = slot > 0 ? score.beatSlots[bar]?.[slot] : score.slots[bar]
         while (!chord && slot > 0) {
           slot--

@@ -1001,7 +1001,7 @@ test('Studio bass starts silent and schedules only entered notes', async () => {
   player.studioBass = () => [{beat:0, midi:36, duration:1, velocity:.8}]
   await player.start()
   player.stop()
-  assert.deepEqual(bassCalls, [[36, .05, .5, .8]])
+  assert.deepEqual(bassCalls, [[36, .05, .5 - .035, .8]])
 })
 
 test('Studio bass plays a joined note as one sustained attack between eighth notes', async () => {
@@ -1017,7 +1017,7 @@ test('Studio bass plays a joined note as one sustained attack between eighth not
   await player.start()
   player.stop()
   assert.equal(bassCalls.length, 3)
-  assert.deepEqual(bassCalls.map(call => [call[0], call[2]]), [[36,.25], [36,.475], [36,.25]])
+  assert.deepEqual(bassCalls.map(call => [call[0], call[2]]), [[36,.22], [36,.5 - .035], [36,.22]])
 })
 
 test('shuffle delays eighth-note offbeats for every Studio part', () => {
@@ -1043,7 +1043,7 @@ test('shuffle delays eighth-note offbeats for every Studio part', () => {
   }
 })
 
-test('repeated pitches have a short audible gap while other notes keep their lengths', () => {
+test('Studio melody playback shortens both repeated and changing pitches', () => {
   const {player} = fixture()
   const played = []
   player.melody = {playAt(...args) { played.push(args) }}
@@ -1052,13 +1052,12 @@ test('repeated pitches have a short audible gap while other notes keep their len
     {beat:0, duration:.5, midi:60, velocity:.8},
     {beat:.5, duration:.5, midi:60, velocity:.8},
     {beat:1, duration:1, midi:62, velocity:.8},
-    {beat:2, duration:1, midi:62, velocity:.8},
+    {beat:2, duration:1, midi:64, velocity:.8},
   ]
   player.scheduleStudioMelody('', 0, 2)
-  assert.ok(Math.abs(played[0][2] - .225) < 1e-9)
-  assert.equal(played[1][2], .25)
-  assert.ok(Math.abs(played[2][2] - .475) < 1e-9)
-  assert.equal(played[3][2], .5)
+  assert.deepEqual(played.map(([,time]) => time - player.nextTime), [0, .25, .5, 1])
+  assert.deepEqual(played.map(([, , duration]) => duration), [.22, .22, .5 - .035, .5 - .035])
+  assert.deepEqual(player.studioMelody().map(note => note.duration), [.5,.5,1,1])
 })
 
 test('Studio backing voices and drum pads replace patterns on the shared score grid', async () => {

@@ -190,7 +190,7 @@ export function mountKeyboard(source) {
 }
 
 /** MIDI input is explicitly enabled by a user gesture; SysEx is never requested.
- * @param {{ready:()=>Promise<void>,attack:(note:number)=>void,release:(note:number)=>void,bend?:(value:number)=>void,modulation?:(value:number)=>void,transpose?:()=>number}} source */
+ * @param {{ready:()=>Promise<void>,attack:(note:number,receivedAt?:number)=>void,release:(note:number,receivedAt?:number)=>void,bend?:(value:number)=>void,modulation?:(value:number)=>void,transpose?:()=>number}} source */
 export function mountMidiInput(source) {
  const button=document.createElement('button')
  button.type='button';button.className='reference-remove-key melody-midi-button';button.textContent='MIDIを接続'
@@ -211,8 +211,8 @@ export function mountMidiInput(source) {
     const kind=status&0xf0
     let notes=held.get(input.id)
     if(!notes){notes=new Map();held.set(input.id,notes)}
-    if(kind===0x90&&velocity>0){const previous=notes.get(note);if(previous!==undefined)source.release(previous);const pitch=Math.max(0,Math.min(127,note+(source.transpose?.()??0)));notes.set(note,pitch);source.attack(pitch)}
-    else if(kind===0x80||(kind===0x90&&velocity===0)){const pitch=notes.get(note);notes.delete(note);if(pitch!==undefined)source.release(pitch)}
+    if(kind===0x90&&velocity>0){const previous=notes.get(note);if(previous!==undefined)source.release(previous,event.timeStamp);const pitch=Math.max(0,Math.min(127,note+(source.transpose?.()??0)));notes.set(note,pitch);source.attack(pitch,event.timeStamp)}
+    else if(kind===0x80||(kind===0x90&&velocity===0)){const pitch=notes.get(note);notes.delete(note);if(pitch!==undefined)source.release(pitch,event.timeStamp)}
     else if(kind===0xe0)source.bend?.((((velocity<<7)|note)-8192)/8192)
     else if(kind===0xb0&&note===1)source.modulation?.(velocity/127)
     else if(kind===0xb0&&(note===120||note===123))releasePort(input.id)

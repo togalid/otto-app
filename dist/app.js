@@ -483,6 +483,9 @@ function togglePlayback() {
   if (progressionStatus) progressionStatus.textContent = ''
   if (!tempo.reportValidity()) return
   progression.bpm = Number(tempo.value)
+  progression.recordingCountIn = workspace.dataset.workspaceView === 'mixer' &&
+    ((workspace.dataset.mixerPart === 'melody' && !!studioEditor?.isRecordingEnabled()) ||
+     (workspace.dataset.mixerPart === 'bass' && !!studioBassEditor?.isRecordingEnabled()))
   const playbackHead = playbackHeads.get(progression.selectedSection)
   if(buddyController?.autoPlay && progression.studioMelody() === undefined){void buddyController.start(false,resumeMelodyBar)}
   else if (playbackHead !== undefined) {
@@ -1280,19 +1283,19 @@ const midiInput = mountMidiInput({
   bend:value=>{ if(document.body.dataset.appMode !== 'free')return; if(midiPart==='melody')instrument.setPitchBend(value); else if(midiPart==='chord')chordInstrument.setPitchBend(value); else if(midiPart==='bass')bass.setPitchBend(value); else if(midiPart==='drums')drums.setPitchBend(value) },
   modulation:value=>{if(document.body.dataset.appMode !== 'free')return;if(midiPart==='melody'){instrument.setModulation(value);buddyController?.rememberModulation(value)}else if(midiPart==='bass')bass.setModulation(value)},
   ready: async () => { await Promise.all([instrument.ready(), chordInstrument.ready()]) },
-  attack:midi=>{
+  attack:(midi,receivedAt)=>{
     if(document.body.dataset.appMode === 'tutorial') { midiDestinations.set(midi,'tutorial'); tutorialView?.midiAttack(midi); return }
     if(document.body.dataset.appMode === 'song-session') { midiDestinations.set(midi,'song-session'); tutorialView?.songMidiAttack(midi); return }
     if(document.body.dataset.appMode !== 'free')return
     const part=midiPart
     if (part === 'melody' && workspace.dataset.workspaceView === 'mixer' && workspace.dataset.mixerPart === 'melody' && studioEditor) {
       midiDestinations.set(midi, 'studio-melody')
-      studioEditor.midiAttack(midi)
+      studioEditor.midiAttack(midi,receivedAt)
       return
     }
     if (workspace.dataset.workspaceView === 'mixer' && workspace.dataset.mixerPart === 'bass' && studioBassEditor) {
       midiDestinations.set(midi, 'studio-bass')
-      studioBassEditor.midiAttack(midi)
+      studioBassEditor.midiAttack(midi,receivedAt)
       return
     }
     midiDestinations.set(midi,part)
@@ -1310,7 +1313,7 @@ const midiInput = mountMidiInput({
       if(time!==undefined)drums.hitPadAt(index,time+.01,.85)
     }
   },
-  release:midi=>{const part=midiDestinations.get(midi);midiDestinations.delete(midi);if(part==='tutorial')tutorialView?.midiRelease(midi);else if(part==='song-session')tutorialView?.songMidiRelease(midi);else if(part==='studio-melody')studioEditor?.midiRelease(midi);else if(part==='studio-bass')studioBassEditor?.midiRelease(midi);else if(part==='melody')magicVoice.release(midi);else if(part==='chord')chordInstrument.release(midi)},
+  release:(midi,receivedAt)=>{const part=midiDestinations.get(midi);midiDestinations.delete(midi);if(part==='tutorial')tutorialView?.midiRelease(midi);else if(part==='song-session')tutorialView?.songMidiRelease(midi);else if(part==='studio-melody')studioEditor?.midiRelease(midi,receivedAt);else if(part==='studio-bass')studioBassEditor?.midiRelease(midi,receivedAt);else if(part==='melody')magicVoice.release(midi);else if(part==='chord')chordInstrument.release(midi)},
 })
 buddyController = mountBuddy({
   progression, instrument, drums,

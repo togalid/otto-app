@@ -242,12 +242,13 @@ export function scoreEighthGroups(notes) {
 /** @param {readonly {beat:number, length:number, midi:number}[]} notes */
 export function scoreRhythmGroups(notes) {
   const groups = scoreEighthGroups(notes)
+  const isBeamable = (/** @type {number} */ length) => length === .25 || length === .5 || length === .75
   for (let index = 0; index < notes.length;) {
     const first = notes[index]
-    if (first.length !== .25 && first.length !== .5) { index++; continue }
+    if (!isBeamable(first.length)) { index++; continue }
     const group = [index++]
     const beatEnd = Math.floor(first.beat) + 1
-    while (index < notes.length && (notes[index].length === .25 || notes[index].length === .5) &&
+    while (index < notes.length && isBeamable(notes[index].length) &&
            notes[index].beat + notes[index].length <= beatEnd &&
            notes[index].beat === notes[index - 1].beat + notes[index - 1].length) {
       group.push(index++)
@@ -267,6 +268,7 @@ export function tutorialPitchSymbol({midi,duration,beam=false,staccato=false,dot
       duration < 4 ? h('path',{d:down ? `M1.2 19V${19 + stemLength}` : `M8.8 19V${19 - stemLength}`,fill:'none',stroke:'currentColor','stroke-width':1.5}) : null,
       !beam && duration <= .75 ? h('path',{d:down ? 'M1.2 36c1.4 -2.4 5 -3 4.2 -7' : 'M9 2c1.4 2.4 5 3 4.2 7',fill:'none',stroke:'currentColor','stroke-width':1.5,'stroke-linecap':'round'}) : null,
       duration < .5 && !staccato && !beam ? h('path',{d:down ? 'M1.2 32c1.4 -2.4 5 -3 4.2 -7' : 'M9 6c1.4 2.4 5 3 4.2 7',fill:'none',stroke:'currentColor','stroke-width':1.5,'stroke-linecap':'round'}) : null,
+      duration === .125 && !staccato && !beam ? h('path',{d:down ? 'M1.2 28c1.4 -2.4 5 -3 4.2 -7' : 'M9 10c1.4 2.4 5 3 4.2 7',fill:'none',stroke:'currentColor','stroke-width':1.5,'stroke-linecap':'round'}) : null,
       staccato ? h('circle',{cx:5,cy:25,r:1.3,fill:'currentColor'}) : null,
       (duration === 1.5 || duration === .75 || duration === .375 || duration === 3) ? h('circle',{cx:13,cy:dotY,r:1.3,fill:'currentColor'}) : null,
     ])])

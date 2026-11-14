@@ -4,15 +4,18 @@ import { JSDOM } from 'jsdom'
 
 test('a half note entered on beat four displays tied quarter notes and stays one playback event', async () => {
   const dom = new JSDOM('<div class="melody-choice-row"></div><div id="editor"></div>', {pretendToBeVisual:true})
-  const globals = ['window', 'document', 'Element', 'SVGElement', 'HTMLElement', 'HTMLInputElement', 'Event', 'cancelAnimationFrame', 'requestAnimationFrame']
+  const globals = ['window', 'document', 'Element', 'SVGElement', 'HTMLElement', 'HTMLInputElement', 'Event', 'matchMedia', 'cancelAnimationFrame', 'requestAnimationFrame']
   const previous = globals.map(name => Object.getOwnPropertyDescriptor(globalThis, name))
   globals.forEach(name => Object.defineProperty(globalThis, name, {configurable:true, writable:true, value:dom.window[name]}))
+  globalThis.matchMedia = () => ({matches:true})
   let editor
   try {
     const {mountMelodyEditor} = await import('../dist/melody-arrange.js')
-    const {nextTick} = await import('../dist/vendor/vue.runtime.esm-browser.prod.js')
+    const {nextTick, ref} = await import('../dist/vendor/vue.runtime.esm-browser.prod.js')
     const host = document.querySelector('#editor')
     editor = mountMelodyEditor(host, {empty:true, togglePlayback() {}})
+    assert.equal(editor.isRecordingEnabled(), false)
+    host.querySelector('[aria-label="メロディ入力"]').click()
     editor.setNotes([{beat:0,duration:.5,midi:60}, {beat:.5,duration:.5,midi:60}, {beat:1,duration:.5,midi:62}])
     await nextTick()
     const firstNote = host.querySelector('.arrange-note[data-note-index="0"]')
@@ -66,22 +69,113 @@ test('a half note entered on beat four displays tied quarter notes and stays one
     editor.midiAttack(60)
     assert.equal(editor.getNotes()[0].beat, .5)
     editor.setNotes([])
+    await nextTick()
+    host.querySelector('[aria-label="1小節目 1拍から入力"]').click()
+    await nextTick()
+    const rhythmButton = host.querySelector('.arrange-swing-step')
+    rhythmButton.click()
+    editor.midiAttack(60)
+    editor.midiAttack(62)
+    editor.midiAttack(64)
+    await nextTick()
+    assert.deepEqual(editor.getNotes().map(({beat,duration}) => [beat,duration]), [[0,.75],[.75,.25],[1,.5]])
+    assert.equal(rhythmButton.getAttribute('aria-pressed'), 'false')
+    assert.equal(host.querySelectorAll('.arrange-note-beam').length, 2)
+    for (const base of [.25, .5, 1]) {
+      for (const [label, ratio] of [['タータ', 1.5], ['タカー', .5]]) {
+        editor.setNotes([])
+        await nextTick()
+        const durationSelect = host.querySelector('[aria-label="音価を選択"]')
+        assert.deepEqual([...durationSelect.options].map(option => option.value), ['0.25','0.5','1','2'])
+        durationSelect.value = String(base)
+        durationSelect.dispatchEvent(new dom.window.Event('change', {bubbles:true}))
+        host.querySelector('[aria-label="1小節目 1拍から入力"]').click()
+        await nextTick()
+        host.querySelector(`[aria-label="${label}"]`).click()
+        editor.midiAttack(60)
+        editor.midiAttack(62)
+        editor.midiAttack(64)
+        assert.deepEqual(editor.getNotes().map(({beat,duration}) => [beat,duration]), [
+          [0,base * ratio], [base * ratio,base * (2 - ratio)], [base * 2,base],
+        ])
+      }
+    }
+    for (const [label, firstLength] of [['タータ', .75], ['タカー', .25]]) {
+      editor.setNotes([{beat:0,duration:.5,midi:60}, {beat:.5,duration:.5,midi:62}, {beat:2,duration:.5,midi:64}])
+      await nextTick()
+      const noteButtons = host.querySelectorAll('.arrange-note')
+      noteButtons[0].click()
+      for (const note of [...noteButtons].slice(1)) {
+        note.dispatchEvent(new dom.window.MouseEvent('click', {bubbles:true,shiftKey:true}))
+      }
+      await nextTick()
+      host.querySelector(`[aria-label="${label}"]`).click()
+      assert.deepEqual(editor.getNotes().map(({beat,duration}) => [beat,duration]), [
+        [0,firstLength], [firstLength,1-firstLength], [2,.5],
+      ])
+      await nextTick()
+    }
+    await nextTick()
+    editor.setNotes([{beat:0,duration:.5,midi:60}, {beat:.5,duration:.5,midi:62}, {beat:2,duration:.5,midi:64}])
+    await nextTick()
+    const score = host.querySelector('.arrange-score')
+    score.setPointerCapture = () => {}
+    const bars = [...score.querySelectorAll('.arrange-note')]
+    bars.forEach((bar, index) => {
+      const left = 10 + index * 40
+      bar.getBoundingClientRect = () => ({left,right:left + 30,top:20,bottom:40})
+    })
+    const gridBeat = score.querySelector('.arrange-beat')
+    for (const [type, target, x, y] of [
+      ['pointerdown', gridBeat, 25, 15],
+      ['pointermove', score, 75, 45],
+      ['pointerup', score, 75, 45],
+    ]) {
+      const event = new dom.window.MouseEvent(type, {bubbles:true,cancelable:true,clientX:x,clientY:y})
+      Object.defineProperties(event, {pointerId:{value:1},isPrimary:{value:true},pointerType:{value:'mouse'}})
+      target.dispatchEvent(event)
+    }
+    gridBeat.dispatchEvent(new dom.window.MouseEvent('click', {bubbles:true,detail:1}))
+    await nextTick()
+    assert.deepEqual([...score.querySelectorAll('.arrange-note')].map(bar => bar.getAttribute('aria-pressed')), ['true','true','false'])
+    host.querySelector('[aria-label="タータ"]').click()
+    assert.deepEqual(editor.getNotes().map(note => note.duration), [.75,.25,.5])
+    await nextTick()
+    const eighthSelect = host.querySelector('[aria-label="音価を選択"]')
+    eighthSelect.value = '0.5'
+    eighthSelect.dispatchEvent(new dom.window.Event('change', {bubbles:true}))
+    editor.setNotes([])
     const frame = globalThis.requestAnimationFrame
     globalThis.requestAnimationFrame = () => 1
-    const transport = {currentTime:11.12}
+    const transport = {currentTime:11.24}
     try {
       editor.schedulePlaybackBar(1, 0, 10, .5, 4, transport)
-      editor.midiAttack(64)
-      assert.deepEqual(editor.getNotes().map(({beat,midi}) => ({beat,midi})), [{beat:6.25,midi:64}])
+      editor.midiAttack(64, performance.now() - 240)
+      assert.deepEqual(editor.getNotes().map(({beat,midi}) => ({beat,midi})), [{beat:6,midi:64}])
+      transport.currentTime = 12.1
+      editor.midiRelease(64, performance.now() - 100)
+      assert.equal(editor.getNotes()[0].duration, 2)
+      transport.currentTime = 11.19
+      editor.midiAttack(67)
+      transport.currentTime = 11.43
+      editor.midiRelease(67)
+      const recorded = editor.getNotes().find(note => note.midi === 67)
+      assert.equal(recorded.beat * 4, Math.round(recorded.beat * 4))
+      assert.equal(recorded.duration * 4, Math.round(recorded.duration * 4))
+      const beforeDisabledInput = editor.getNotes().length
       host.querySelector('[aria-label="メロディ入力"]').click()
       transport.currentTime = 11.6
       editor.midiAttack(65)
-      assert.equal(editor.getNotes().length, 1)
+      assert.equal(editor.getNotes().length, beforeDisabledInput)
       host.querySelector('[aria-label="メロディ入力"]').click()
     } finally {
       editor.stopPlaybackPosition()
       globalThis.requestAnimationFrame = frame
     }
+    assert.equal(editor.isRecordingEnabled(), false)
+    await nextTick()
+    assert.equal(host.querySelector('[aria-label="メロディ入力"]').getAttribute('aria-pressed'), 'false')
+    host.querySelector('[aria-label="メロディ入力"]').click()
     editor.setNotes([])
     host.querySelector('[aria-label="音価を選択"]').value = '0.25'
     host.querySelector('[aria-label="音価を選択"]').dispatchEvent(new Event('change', {bubbles:true}))
@@ -112,6 +206,29 @@ test('a half note entered on beat four displays tied quarter notes and stays one
       {beat:0,duration:1.25}, {beat:1.25,duration:.5},
     ])
     assert.equal(host.querySelector('[aria-label="直前の音を伸ばす"]').disabled, true)
+    host.querySelector('[aria-label="メロディ入力"]').click()
+    host.querySelector('.arrange-note[data-note-index="1"]').click()
+    await nextTick()
+    const extendSelected = host.querySelector('[aria-label="直前の音を伸ばす"]')
+    assert.equal(extendSelected.disabled, false)
+    extendSelected.click()
+    assert.equal(editor.getNotes()[1].duration, 1)
+    const draggedNote = host.querySelector('.arrange-note[data-note-index="1"]')
+    draggedNote.closest('.arrange-staff').getBoundingClientRect = () => ({width:800})
+    draggedNote.setPointerCapture = () => {}
+    const dragPointer = (target, type, clientY) => {
+      const event = new dom.window.MouseEvent(type, {bubbles:true, button:0, clientY})
+      Object.defineProperties(event, {pointerId:{value:1}, isPrimary:{value:true}, pointerType:{value:'mouse'}})
+      target.dispatchEvent(event)
+    }
+    dragPointer(draggedNote, 'pointerdown', 100)
+    dragPointer(window, 'pointermove', 80)
+    assert.equal(editor.getNotes()[1].midi, 63)
+    dragPointer(window, 'pointermove', 120)
+    assert.equal(editor.getNotes()[1].midi, 61)
+    dragPointer(window, 'pointerup', 120)
+
+    host.querySelector('[aria-label="メロディ入力"]').click()
     editor.setNotes([])
     await nextTick()
     host.querySelector('[aria-label="1小節目 4拍から入力"]').click()
@@ -274,9 +391,11 @@ test('a half note entered on beat four displays tied quarter notes and stays one
 
     const bassHost = document.createElement('section')
     document.body.append(bassHost)
-    const bassEditor = mountMelodyEditor(bassHost, {empty:true, part:'bass', defaultKeyboardOctaves:2, barCount:()=>8, togglePlayback() {}, rootForBeat:beat=>beat < 4 ? 0 : 1})
+    const changedHarmony = ref(false)
+    const bassEditor = mountMelodyEditor(bassHost, {empty:true, part:'bass', defaultKeyboardOctaves:2, barCount:()=>8, togglePlayback() {}, rootForBeat:beat=>changedHarmony.value ? (beat < 2 ? 5 : beat < 16 ? 7 : 9) : beat < 4 ? 0 : 1})
     try {
       assert.deepEqual(bassEditor.getNotes(), [])
+      bassHost.querySelector('[aria-label="ベース入力"]').click()
       bassEditor.initializeBass()
       assert.equal(bassEditor.getNotes().length, 64)
       assert.deepEqual(bassEditor.getPlaybackNotes().slice(0,2).map(note=>note.velocity), [.95,.65])
@@ -285,6 +404,19 @@ test('a half note entered on beat four displays tied quarter notes and stays one
       assert.deepEqual(bassEditor.getNotes().slice(0,2).map(note=>note.velocity), [.8,.8])
       assert.equal(bassEditor.getNotes()[0].midi, 36)
       assert.equal(bassEditor.getNotes()[8].midi, 37)
+      await nextTick()
+      assert.equal(bassHost.querySelector('.arrange-note-role')?.textContent, 'R')
+      const savedBass = bassEditor.getNotes()
+      const savedTechniques = bassEditor.getBassTechniques()
+      bassEditor.setNotes(savedBass)
+      bassEditor.setBassTechniques(savedTechniques)
+      changedHarmony.value = true
+      await nextTick()
+      assert.deepEqual(bassEditor.getPlaybackNotes().slice(0, 8).map(note => note.midi), [41,41,41,41,43,43,43,43])
+      assert.equal(bassEditor.getPlaybackNotes().find(note => note.beat === 16)?.midi, 45)
+      assert.ok(bassHost.querySelector('.arrange-note').getAttribute('aria-label').includes('ファ2'))
+      assert.equal(bassEditor.getBassTechniques()[0], 'straight8')
+      changedHarmony.value = false
       await nextTick()
       const technique = bassHost.querySelector('[aria-label="表示中のページに適用するベースの奏法"]')
       technique.value = 'straight4'
@@ -305,6 +437,8 @@ test('a half note entered on beat four displays tied quarter notes and stays one
         bassEditor.stopPlaybackPosition()
         globalThis.requestAnimationFrame = frame
       }
+      assert.equal(bassEditor.isRecordingEnabled(), false)
+      bassHost.querySelector('[aria-label="ベース入力"]').click()
       bassHost.querySelector('[aria-label="次の4小節"]').click()
       await nextTick()
       bassHost.querySelector('[aria-label="表示中のページのノートを消す"]').click()

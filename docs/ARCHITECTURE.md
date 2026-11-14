@@ -49,7 +49,7 @@ The browser loads authored native ES modules from `dist/`. The transport, score,
 | Basic accompaniment | `backing.js`, `groove.js`, `rhythm.js` | matching tests |
 | Ornament arrangement | `ornaments.js`, `ornament-audio.js`, `style-ornaments.js` | matching tests |
 | Style and progression selectors | `arrangement-selects.js`, arrangement handlers in `app.js` | browser |
-| Studio melody, bass, backing and drum editor mounting, step entry and playback | `studio-editors.js`, `melody-arrange.js`, `progression.js` | `melody-arrange`, `progression`, browser |
+| Studio melody, bass, backing and drum editor mounting, rhythm palette and score preview for melody, step entry and playback | `studio-editors.js`, `melody-arrange.js`, `progression.js` | `melody-arrange`, `progression`, browser |
 | Studio style envelope and shared pitch bounds | `studio-style.js`; apply order in `app.js` | `studio-style`, `app-settings` |
 | Basic parts, section knobs and reference header | `main-controls.js` | browser |
 | Phone tempo entry and shared knob handling | `main-controls.js`, `reference-timing-view.js` | `tempo-entry`, browser |

@@ -12,7 +12,7 @@ import { scoreNavigation, scorePagination, scoreNote, scoreAccidental, scoreAcci
 
 /**
  * @param {HTMLElement} host
- * @param {{empty?:boolean, defaultKeyboardOctaves?:1|2, barCount?:()=>number, previewTimbre?:()=>string, previewDrum?:(id:number)=>void, part?:'bass'|'backing'|'drums', previewBass?:{ready:()=>Promise<AudioContext|undefined>,playAt:(midi:number,time:number)=>void}, keyForBar?:(bar:number)=>number, rootForBeat?:(beat:number)=>number|null, chordChanges?:(bar:number)=>{beat:number,position:number,label:string}[], togglePlayback?:()=>void, selectBar?:(bar:number, pickup?:boolean, beat?:number)=>void, paginationTarget?:string}} [options]
+ * @param {{empty?:boolean, hideKeyboardControls?:boolean, rhythmPalette?:boolean, defaultKeyboardOctaves?:1|2, barCount?:()=>number, previewTimbre?:()=>string, previewDrum?:(id:number)=>void, part?:'bass'|'backing'|'drums', previewBass?:{ready:()=>Promise<AudioContext|undefined>,playAt:(midi:number,time:number)=>void}, keyForBar?:(bar:number)=>number, rootForBeat?:(beat:number)=>number|null, chordChanges?:(bar:number)=>{beat:number,position:number,label:string}[], togglePlayback?:()=>void, selectBar?:(bar:number, pickup?:boolean, beat?:number)=>void, paginationTarget?:string}} [options]
  */
 export function mountMelodyEditor(host, options = {}) {
 // [beat, length in beats, MIDI pitch]
@@ -69,13 +69,31 @@ bass.setVolume(.45)
 drums.setVolume(.23)
 
 if (options.empty) original.length = 0
-const notes = ref(original.map(([beat, length, midi]) => ({beat, length, midi})))
+/** @typedef {{beat:number,length:number,midi:number,role?:'R'}} ArrangeNote */
+const notes = ref(/** @type {ArrangeNote[]} */ (original.map(([beat, length, midi]) => ({beat, length, midi}))))
+
+/** @param {ArrangeNote} note */
+function soundingMidi(note) {
+  const root = isBass && note.role === 'R' ? options.rootForBeat?.(note.beat) : null
+  return root == null ? note.midi : 36 + root
+}
+
+const scoreNotes = () => isBass
+  ? notes.value.map(note => ({...note, midi:soundingMidi(note)}))
+  : notes.value
+
+/** @param {ArrangeNote} note @param {number} midi */
+function setFixedPitch(note, midi) {
+  note.midi = midi
+  delete note.role
+}
 const selected = ref(-1)
 const showNoteBars = ref(true)
 const selection = ref(/** @type {number[]} */ ([]))
 const selectionBox = ref(/** @type {{left:number,top:number,right:number,bottom:number}|null} */ (null))
 /** @type {{pointer:number,x:number,y:number}|null} */
 let selectionStart = null
+let suppressSelectionClick = false
 
 /** @param {number} index */
 function selectNote(index) {
@@ -85,15 +103,17 @@ function selectNote(index) {
 
 /** @param {PointerEvent} event */
 function startSelection(event) {
+  suppressSelectionClick = false
   if (!event.isPrimary || event.button !== 0 || event.pointerType !== 'mouse' ||
-      !matchMedia('(min-width: 701px)').matches || !(event.target instanceof Element) ||
+      !(event.target instanceof Element) ||
       !event.target.closest('.arrange-staff') ||
-      event.target.closest('button:not(.arrange-beat)')) return
+      (event.target.closest('button:not(.arrange-beat)') &&
+        !(event.shiftKey && event.target.closest('.arrange-note')))) return
   selectionStart = {pointer:event.pointerId, x:event.clientX, y:event.clientY}
 }
 
 /** @param {PointerEvent} event */
-function moveSelection(event) {
+function moveSelectionBox(event) {
   const start = selectionStart
   const score = event.currentTarget
   if (!start || start.pointer !== event.pointerId || !(score instanceof HTMLElement)) return
@@ -102,6 +122,7 @@ function moveSelection(event) {
     score.setPointerCapture(event.pointerId)
     score.focus({preventScroll:true})
   }
+  event.preventDefault()
   selectionBox.value = {
     left:Math.min(start.x,event.clientX), right:Math.max(start.x,event.clientX),
     top:Math.min(start.y,event.clientY), bottom:Math.max(start.y,event.clientY),
@@ -114,16 +135,28 @@ function finishSelection(event) {
   const box = selectionBox.value
   cancelSelection()
   if (!box || event.type !== 'pointerup') return
+  suppressSelectionClick = true
   const indices = new Set()
-  for (const head of Array.from(host.querySelectorAll('.arrange-note[data-note-index] .tutorial-note-symbol ellipse'))) {
-    const {left,right,top,bottom} = head.getBoundingClientRect()
+  const hitTargets = showNoteBars.value
+    ? '.arrange-note[data-note-index]'
+    : '.arrange-note[data-note-index] .tutorial-note-symbol ellipse'
+  for (const target of Array.from(host.querySelectorAll(hitTargets))) {
+    const {left,right,top,bottom} = target.getBoundingClientRect()
+    if (right <= left || bottom <= top) continue
     if (right >= box.left && left <= box.right && bottom >= box.top && top <= box.bottom) {
-      indices.add(Number(head.closest('.arrange-note')?.getAttribute('data-note-index')))
+      indices.add(Number(target.closest('.arrange-note')?.getAttribute('data-note-index')))
     }
   }
   stepCursor.value = null
   selectNote(-1)
   selection.value = [...indices]
+}
+
+/** @param {MouseEvent} event */
+function consumeSelectionClick(event) {
+  if (!suppressSelectionClick || event.detail === 0) return false
+  suppressSelectionClick = false
+  return true
 }
 
 /** @param {PointerEvent} [event] */
@@ -136,7 +169,7 @@ function cancelSelection(event) {
 /** @param {number} delta */
 function canTransposeSelection(delta) {
   return selection.value.length > 0 && selection.value.every(index => {
-    const midi = notes.value[index].midi + delta
+    const midi = soundingMidi(notes.value[index]) + delta
     return midi >= minMidi && midi <= maxMidi
   })
 }
@@ -145,7 +178,7 @@ function canTransposeSelection(delta) {
 function transposeSelection(delta) {
   if (!canTransposeSelection(delta)) return
   remember()
-  for (const index of selection.value) notes.value[index].midi += delta
+  for (const index of selection.value) setFixedPitch(notes.value[index], soundingMidi(notes.value[index]) + delta)
 }
 
 /** @param {{index:number,beat:number,length:number}[]} group @param {number} delta */
@@ -173,8 +206,11 @@ function moveSelection(delta) {
   for (const note of group) notes.value[note.index].beat = note.beat + offset
 }
 const stepCursor = ref(/** @type {number|null} */ (options.empty ? 0 : null))
+const rhythmPreview = ref(/** @type {number[]|null} */ (null))
 const stepDuration = ref(.5)
-const inputEnabled = ref(true)
+const swingStep = ref(0)
+const swingStepLabels = new Map([[.125, "32分"], [.25, "16分"], [.375, "付点16分"], [.5, "8分"], [.75, "付点8分"], [1.5, "付点4分"]])
+const inputEnabled = ref(false)
 const playbackStart = ref(0)
 const pickupStart = -4
 const playing = ref(false)
@@ -186,18 +222,28 @@ const scheduledBars = []
 let playbackFrame = 0
 /** @type {AudioContext | null} */
 let playbackContext = null
-function currentPlaybackBar() {
-  const now = playbackContext?.currentTime
-  if (now === undefined) return undefined
-  while (scheduledBars.length > 1 && scheduledBars[1].time <= now) scheduledBars.shift()
-  return scheduledBars[0]
+/** @param {number} [receivedAt] */
+function recordingTime(receivedAt) {
+  if (!playbackContext) return undefined
+  const age = receivedAt === undefined ? 0 : performance.now() - receivedAt
+  return playbackContext.currentTime - (Number.isFinite(age) ? Math.max(0, age) / 1000 : 0)
 }
+/** @param {number} time */
+function playbackBarAt(time) {
+  for (let i = scheduledBars.length - 1; i >= 0; i--) {
+    if (scheduledBars[i].time <= time) return scheduledBars[i]
+  }
+}
+/** @type {Map<number,{beat:number,time:number,secondsPerGridBeat:number}>} */
+const liveHeldNotes = new Map()
+let recordedDuringPlayback = false
 const liveNoteInput = () => (!options.part || isBass) && !!options.togglePlayback && playbackContext !== null
 
 function updatePlaybackPosition() {
   if (!playbackContext || !scheduledBars.length) { playbackFrame = 0; return }
   const now = playbackContext.currentTime
-  const current = currentPlaybackBar()
+  while (scheduledBars.length > 2 && scheduledBars[1].time < now - 1) scheduledBars.shift()
+  const current = playbackBarAt(now)
   if (current && now >= current.time) {
     const beat = current.beat + (now - current.time) / current.secondsPerBeat
     position.value = current.bar < 0 ? -4 + Math.min(beat / current.meter, .999999) * 4 : current.bar * 4 + Math.min(beat / current.meter, 0.999999) * 4
@@ -207,18 +253,22 @@ function updatePlaybackPosition() {
   playbackFrame = requestAnimationFrame(updatePlaybackPosition)
 }
 function stopPlaybackPosition() {
+  for (const midi of liveHeldNotes.keys()) finishLiveNote(midi)
+  liveHeldNotes.clear()
+  if (recordedDuringPlayback) inputEnabled.value = false
+  recordedDuringPlayback = false
   cancelAnimationFrame(playbackFrame)
   playbackFrame = 0
   playbackContext = null
   scheduledBars.length = 0
   position.value = -Infinity
 }
-/** @typedef {{notes:{beat:number,length:number,midi:number}[],cursor:number|null,page:number,patterns:({beat:number,duration:number,midi:number}[]|null)[],bassTechniques:Record<number,string>}} EditSnapshot */
+/** @typedef {{notes:ArrangeNote[],cursor:number|null,page:number,swingStep:number,patterns:({beat:number,duration:number,midi:number}[]|null)[],bassTechniques:Record<number,string>}} EditSnapshot */
 const history = ref(/** @type {EditSnapshot[]} */ ([]))
 const redoHistory = /** @type {EditSnapshot[]} */ ([])
 
 function exportMidi() {
-  const bytes = encodeScoreMidi(notes.value, bpm.value, -pickupStart)
+  const bytes = encodeScoreMidi(notes.value.map(note => ({...note, midi:soundingMidi(note)})), bpm.value, -pickupStart)
   const url = URL.createObjectURL(new Blob([bytes],{type:'audio/midi'}))
   const link = document.createElement('a')
   link.href = url
@@ -231,6 +281,7 @@ function captureEdit() {
   return {
     notes:notes.value.map(note => ({...note})),
     cursor:stepCursor.value,
+    swingStep:swingStep.value,
     page:scorePage.value,
     bassTechniques:{...bassTechniquesByPage.value},
     patterns:drumPatterns.value.map(pattern => pattern?.map(note => ({...note})) ?? null),
@@ -250,6 +301,7 @@ function restoreEdit(snapshot) {
   bassTechniquesByPage.value = snapshot.bassTechniques
   if (isBass) syncBassPages()
   stepCursor.value = snapshot.cursor
+  swingStep.value = snapshot.swingStep
   scorePage.value = snapshot.page
   if (isDrums && snapshot.cursor !== null) drumBar.value = Math.floor(snapshot.cursor / 4)
   if (snapshot.cursor !== null && snapshot.cursor < 0) options.selectBar?.(0, true)
@@ -277,12 +329,13 @@ const bassTechniques = /** @type {const} */ ([['none','なし'], ['previous','�
 /** @param {string} technique @param {number} start @param {number} end */
 function makeBassTechnique(technique, start, end) {
   const step = technique === 'straight16' ? .25 : technique === 'straight4' ? 1 : technique === 'support_hold' ? 4 : .5
-  const result = []
+  const result = /** @type {ArrangeNote[]} */ ([])
   for (let beat = start; beat < end; beat += step) {
     if (technique === 'offbeat' && Math.floor(beat * 2) % 2 === 0) continue
     const root = options.rootForBeat?.(beat)
-    if (root === null || root === undefined) continue
-    result.push({beat, length:Math.min(step, end - beat), midi:36 + root})
+    if (root == null && technique !== 'straight8') continue
+    result.push({beat, length:Math.min(step, end - beat), midi:36 + (root ?? 0),
+      ...(technique === 'straight8' ? {role:'R'} : {})})
   }
   return result
 }
@@ -294,7 +347,7 @@ function bassPageNotes(source, page) {
   return source.flatMap(note => {
     const beat = Math.max(start, note.beat)
     const length = Math.min(end, note.beat + note.length) - beat
-    return length > 0 ? [{beat, length, midi:note.midi}] : []
+    return length > 0 ? [{...note, beat, length}] : []
   })
 }
 
@@ -459,25 +512,44 @@ function setPitchHeld(midi, held) {
   heldPitches.value = held ? [...new Set([...heldPitches.value, midi])] : heldPitches.value.filter(pitch => pitch !== midi)
 }
 
-/** @param {number} midi */
-function choosePitch(midi) {
+/** @param {number} midi @param {number} [receivedAt] */
+function choosePitch(midi, receivedAt) {
   if (midi < minMidi || midi > maxMidi) return
   const index = selected.value
-  if (inputEnabled.value && liveNoteInput()) {
-    const bar = currentPlaybackBar()
-    const now = playbackContext?.currentTime
-    if (bar && now !== undefined && now >= bar.time) {
+  if (liveNoteInput()) {
+    const now = recordingTime(receivedAt)
+    const bar = now === undefined ? undefined : playbackBarAt(now)
+    if (inputEnabled.value && bar && now !== undefined && now >= bar.time) {
       const beat = (bar.beat + (now - bar.time) / bar.secondsPerBeat) * 4 / bar.meter
       if (beat < 4) {
-        const offset = Math.min(3.75, Math.round(beat * 4) / 4)
-        writeStep([midi], (bar.bar < 0 ? -4 : bar.bar * 4) + offset, true)
+        const offset = Math.max(0, Math.min(3.75, Math.round(beat * 4) / 4))
+        finishLiveNote(midi, receivedAt)
+        const start = (bar.bar < 0 ? -4 : bar.bar * 4) + offset
+        if (writeStep([midi], start, true)) {
+          recordedDuringPlayback = true
+          liveHeldNotes.set(midi, {beat:start, time:now, secondsPerGridBeat:bar.secondsPerBeat * bar.meter / 4})
+        }
       }
     }
+  } else if (options.rhythmPalette && index >= 0) {
+    const note = notes.value[index]
+    remember()
+    setFixedPitch(note, midi)
+    const next = notes.value.map((candidate, nextIndex) => ({candidate, nextIndex}))
+      .filter(({candidate}) => candidate.beat > note.beat)
+      .sort((a, b) => a.candidate.beat - b.candidate.beat)[0]
+    selectNote(next?.nextIndex ?? -1)
+    if (next) scorePage.value = Math.floor(next.candidate.beat / 16)
   } else if (inputEnabled.value && stepCursor.value !== null) writeStep([midi])
-  else if (inputEnabled.value && index >= 0 && notes.value[index].midi !== midi) {
+  else if (inputEnabled.value && index >= 0 && (notes.value[index].role || notes.value[index].midi !== midi)) {
     if (!drag) remember()
-    notes.value[index].midi = midi
+    setFixedPitch(notes.value[index], midi)
   }
+  previewPitch(midi)
+}
+
+/** @param {number} midi */
+function previewPitch(midi) {
   const request = ++previewGeneration
   const ready = options.previewBass
     ? options.previewBass.ready()
@@ -526,11 +598,37 @@ function deleteSelectedNote() {
   })
 }
 
+/** @param {number} midi @param {number} [receivedAt] */
+function finishLiveNote(midi, receivedAt) {
+  const held = liveHeldNotes.get(midi)
+  if (!held) return
+  liveHeldNotes.delete(midi)
+  const note = notes.value.find(item => item.beat === held.beat && item.midi === midi)
+  const now = recordingTime(receivedAt)
+  if (!note || now === undefined) return
+  const length = Math.max(.25, Math.round((now - held.time) / held.secondsPerGridBeat * 4) / 4)
+  const end = Math.min(totalBeats(), note.beat + length)
+  notes.value = notes.value.flatMap(other => {
+    if (other === note || other.beat >= end || other.beat + other.length <= note.beat) return [other]
+    const otherEnd = other.beat + other.length
+    return otherEnd > end ? [{...other, beat:end, length:otherEnd - end}] : []
+  })
+  note.length = end - note.beat
+}
+
 /** @param {readonly number[]} pitches @param {number|null} start @param {boolean} realtime */
 function writeStep(pitches, start = stepCursor.value, realtime = false) {
   if (start === null || start >= totalBeats()) return false
   remember()
-  const end = Math.min(totalBeats(), start + stepDuration.value)
+  const base = stepDuration.value
+  const pairBeatsRemaining = Math.abs(swingStep.value) === 2
+    ? base * (swingStep.value < 0 ? 1.5 : .5)
+    : base * 2
+  const paired = !realtime && pitches.length > 0 && swingStep.value !== 0 &&
+    swingStepLabels.has(base * .5) && swingStepLabels.has(base * 1.5) &&
+    start + pairBeatsRemaining <= totalBeats()
+  const duration = paired ? stepDuration.value * (swingStep.value === 1 || swingStep.value === -2 ? 1.5 : .5) : stepDuration.value
+  const end = Math.min(totalBeats(), start + duration)
   const updated = []
   for (const note of notes.value) {
     const noteEnd = note.beat + note.length
@@ -545,6 +643,7 @@ function writeStep(pitches, start = stepCursor.value, realtime = false) {
   notes.value = updated.sort((a,b) => a.beat - b.beat)
   selectNote(-1)
   if (realtime) return true
+  if (paired) swingStep.value = Math.abs(swingStep.value) === 1 ? swingStep.value * 2 : 0
   stepCursor.value = end
   if (isDrums && end < totalBeats()) drumBar.value = Math.floor(end / 4)
   if (end >= 0 && end < totalBeats() && Math.floor(Math.max(0, start) / 16) !== Math.floor(end / 16)) {
@@ -554,38 +653,44 @@ function writeStep(pitches, start = stepCursor.value, realtime = false) {
 }
 
 function extensionTarget() {
-  if (!inputEnabled.value || stepCursor.value === null) return null
-  const cursor = stepCursor.value
-  const index = notes.value.findIndex(note => Math.abs(note.beat + note.length - cursor) < 1e-7)
-  if (index < 0 || cursor + stepDuration.value > totalBeats()) return null
+  if (selection.value.length) return null
+  const selectedNote = notes.value[selected.value]
+  if (!selectedNote && !inputEnabled.value) return null
+  const cursor = selectedNote ? selectedNote.beat + selectedNote.length : stepCursor.value
+  if (cursor === null) return null
+  const index = selectedNote ? selected.value : notes.value.findIndex(note => Math.abs(note.beat + note.length - cursor) < 1e-7)
+  if (index < 0) return null
   const indices = isBacking ? notes.value.flatMap((note, i) => Math.abs(note.beat - notes.value[index].beat) < 1e-7 && Math.abs(note.beat + note.length - cursor) < 1e-7 ? [i] : []) : [index]
   const next = notes.value.reduce((earliest, note, other) => {
     if (indices.includes(other) || note.beat + note.length <= cursor) return earliest
     return Math.min(earliest, Math.max(cursor, note.beat))
   }, totalBeats())
   const end = Math.min(cursor + stepDuration.value, next)
-  return end > cursor + 1e-7 ? {indices, end} : null
+  return end > cursor + 1e-7 ? {indices, cursor, end} : null
 }
 
 function extendPreviousNote() {
   const target = extensionTarget()
-  if (!target || stepCursor.value === null) return
+  if (!target) return
   remember()
-  for (const index of target.indices) notes.value[index].length += target.end - stepCursor.value
+  for (const index of target.indices) notes.value[index].length += target.end - target.cursor
+  if (selected.value >= 0) return
   stepCursor.value = target.end
   if (target.end < totalBeats()) scorePage.value = Math.floor(Math.max(0, target.end) / 16)
 }
 
 function nextSelectedNote() {
   const current = notes.value[selected.value]
-  if (!inputEnabled.value || !current || selection.value.length) return -1
+  if (!current || selection.value.length) return -1
   return notes.value.reduce((next, note, index) =>
     note.beat > current.beat && (next < 0 || note.beat < notes.value[next].beat) ? index : next, -1)
 }
 
 function connectTarget() {
   const next = nextSelectedNote()
-  return next >= 0 && notes.value[next].midi === notes.value[selected.value].midi ? next : -1
+  const first = notes.value[selected.value]
+  const second = notes.value[next]
+  return second && first.role === second.role && soundingMidi(first) === soundingMidi(second) ? next : -1
 }
 
 function connectSelectedNote() {
@@ -617,8 +722,25 @@ function selectAdjacentNote(direction) {
   })
 }
 
+function selectedRhythmPairs() {
+  const indices = new Set(selection.value)
+  const pairs = []
+  for (const index of [...indices].sort((a, b) => a - b)) {
+    if (!indices.has(index) || !indices.has(index + 1)) continue
+    const first = notes.value[index]
+    const second = notes.value[index + 1]
+    if (!first || !second || first.length !== second.length ||
+        first.beat + first.length !== second.beat ||
+        !swingStepLabels.has(first.length * .5) || !swingStepLabels.has(first.length * 1.5)) continue
+    pairs.push([first, second])
+    indices.delete(index + 1)
+  }
+  return pairs
+}
+
 /** @param {number} beat */
 function setStepCursor(beat) {
+  swingStep.value = 0
   selectNote(-1)
   stepCursor.value = beat
   if (isDrums && beat >= 0) drumBar.value = Math.floor(beat / 4)
@@ -677,6 +799,7 @@ async function playRestClick() {
 
 /** @param {number} duration @param {boolean} rest */
 function useDuration(duration, rest) {
+  swingStep.value = 0
   if (rest) {
     if (!inputEnabled.value || stepCursor.value === null || stepCursor.value >= totalBeats()) return
     stepDuration.value = duration
@@ -700,7 +823,7 @@ const dragPitch = ref(/** @type {number|null} */ (null))
 
 /** @param {PointerEvent} event @param {number} index @param {'length'|'pitch'|null} axis */
 function startDrag(event, index, axis) {
-  if (drag || !event.isPrimary || event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) return
+  if ((!isDrums && axis === null && event.shiftKey) || drag || !event.isPrimary || event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) return
   const track = event.currentTarget.closest('.arrange-staff')
   const width = track?.getBoundingClientRect().width
   if (!width) return
@@ -709,10 +832,11 @@ function startDrag(event, index, axis) {
   window.addEventListener('pointerup', endDrag)
   window.addEventListener('pointercancel', endDrag)
   stepCursor.value = null
-  const {beat, length, midi} = notes.value[index]
+  const {beat, length} = notes.value[index]
+  const midi = soundingMidi(notes.value[index])
   const originRow = Array.from(host.querySelectorAll('.arrange-staff')).indexOf(/** @type {Element} */ (track))
   const group = !isDrums && axis === null && event.pointerType === 'mouse' && selection.value.length > 1 && selection.value.includes(index)
-    ? selection.value.map(index => ({index, ...notes.value[index]}))
+    ? selection.value.map(index => ({index, ...notes.value[index], midi:soundingMidi(notes.value[index])}))
     : []
   drag = {pointer:event.pointerId, index, x:event.clientX, y:event.clientY, width, beats:beat < 0 ? 4 : 8, beat, length, midi, originRow,
     changed:false, sharedEnd: axis === 'length' ? sharedBoundaryEnd(index) : null, group, axis}
@@ -764,9 +888,9 @@ function moveDrag(event) {
     }
     const pitches = drag.group.map(note => note.midi)
     const delta = Math.max(minMidi - Math.min(...pitches), Math.min(maxMidi - Math.max(...pitches), Math.round(-dy / 20)))
-    if (drag.group.every(({index,midi}) => notes.value[index].midi === midi + delta)) return
+    if (drag.group.every(({index,midi}) => soundingMidi(notes.value[index]) === midi + delta)) return
     if (!drag.changed) { remember(); drag.changed = true }
-    for (const {index,midi} of drag.group) notes.value[index].midi = midi + delta
+    for (const {index,midi} of drag.group) setFixedPitch(notes.value[index], midi + delta)
     return
   }
   if (!drag.axis) {
@@ -777,9 +901,10 @@ function moveDrag(event) {
   if (!drag.changed) { remember(); drag.changed = true }
   if (drag.axis === 'pitch') {
     const nextPitch = Math.max(minMidi, Math.min(maxMidi, midi - Math.round(dy / 20)))
-    if (notes.value[index].midi !== nextPitch) {
+    if (soundingMidi(notes.value[index]) !== nextPitch) {
       dragPitch.value = nextPitch
-      choosePitch(nextPitch)
+      setFixedPitch(notes.value[index], nextPitch)
+      previewPitch(nextPitch)
     }
     return
   }
@@ -820,6 +945,7 @@ const noteName = midi => isDrums ? (drumPadNames.value[midi] ?? drumPadSound(mid
 const noteKeys = 'QWERTYU'
 const restKeys = 'ASDFGHJ'
 const durations = [[.25,'16分'],[.5,'8分'],[.75,'付点8分'],[1,'4分'],[1.5,'付点4分'],[2,'2分']]
+const selectableDurations = durations.filter(([value]) => value !== .75 && value !== 1.5)
 
 /** @param {number} duration */
 function noteIcon(duration) {
@@ -845,6 +971,40 @@ function restIcon(duration) {
         base === .25 ? h('path', {d:'M14 15c-2 4-7 7-11 4l1-1c4 1 7-1 10-5z M6 16.5a2.6 2.6 0 1 1-5.2 0 2.6 2.6 0 0 1 5.2 0',fill:'currentColor'}) : null,
       ]
   return h('svg', {class:'arrange-rhythm-icon',viewBox:'0 0 24 32','aria-hidden':'true'}, [shape, [.375,.75,1.5].includes(duration) ? h('circle',{cx:20,cy:16,r:1.5,fill:'currentColor'}) : null])
+}
+
+/** @param {number[]} durations */
+function prototypeRhythmNotation(durations) {
+  const items = []
+  for (let i = 0; i < durations.length;) {
+    const duration = durations[i]
+    if (duration < 0) { items.push(restIcon(-duration)); i++; continue }
+    let end = i + 1
+    if (duration <= .75) while (end < durations.length && durations[end] > 0 && durations[end] <= .75) end++
+    if (end - i < 2) { items.push(noteIcon(duration)); i++; continue }
+    const group = durations.slice(i, end)
+    const spacing = 16
+    const firstStem = 11
+    const children = group.flatMap((length, index) => {
+      const x = firstStem + index * spacing
+      return [h('ellipse', {cx:x - 4.5,cy:25,rx:5,ry:3.2,transform:`rotate(-22 ${x - 4.5} 25)`,fill:'currentColor'}),
+        h('path', {d:`M${x} 25V4`,stroke:'currentColor','stroke-width':1.8}),
+        length === .75 ? h('circle', {cx:x + 5,cy:25,r:1.5,fill:'currentColor'}) : null]
+    })
+    children.push(h('path', {d:`M${firstStem} 4H${firstStem + (group.length - 1) * spacing}`,stroke:'currentColor','stroke-width':3}))
+    for (let j = 0; j < group.length;) {
+      if (group[j] > .25) { j++; continue }
+      const first = j
+      while (j + 1 < group.length && group[j + 1] <= .25) j++
+      const left = firstStem + first * spacing
+      const right = first === j ? left + (first === group.length - 1 ? -6 : 6) : firstStem + j * spacing
+      children.push(h('path', {d:`M${left} 9H${right}`,stroke:'currentColor','stroke-width':3}))
+      j++
+    }
+    items.push(h('svg', {class:'arrange-beamed-notes', viewBox:`0 0 ${group.length * spacing + 4} 32`, width:group.length * spacing + 4, height:32, 'aria-hidden':'true'}, children))
+    i = end
+  }
+  return items
 }
 
 /** @param {number} bar */
@@ -1038,6 +1198,111 @@ function drumNavigation() {
   ])
 }
 
+/** @param {number[]} durations @param {number} [scale] */
+function prototypeRhythmReadings(durations, scale = 1) {
+  const patterns = new Map([
+    ['1',['ター']], ['0.75,0.25',['ター','ラ']], ['0.25,0.75',['タ','ラー']],
+    ['0.5,0.5',['タ','タ']], ['0.25,0.25,0.5',['タ','タ','ター']],
+    ['0.25,0.5,0.25',['タ','ター','タ']], ['0.5,0.25,0.25',['ター','タ','タ']],
+    ['0.25,0.25,0.25,0.25',['タ','ラ','ラ','ラ']],
+  ])
+  const normalized = durations.map(duration => duration / scale)
+  const exact = patterns.get(normalized.join(','))
+  if (exact) return exact
+  return normalized.map((duration, index) => duration < 0
+    ? '(ウン)'.repeat(Math.floor(-duration)) + ((-duration % 1) >= .5 ? '(ウ)' : '') + ((-duration % .5) >= .25 ? '(ッ)' : '')
+    : duration >= 1 ? 'タ' + 'ー'.repeat(Math.floor(duration)) + (duration % 1 >= .5 ? 'ン' : '')
+      : duration >= .75 ? (index > 0 && durations[index - 1] > 0 ? 'ラー' : 'ター')
+      : duration >= .5 ? 'タン' : index > 0 && durations[index - 1] > 0 ? 'ラ' : 'タ')
+}
+
+
+function rhythmChoices(palette = false) {
+  const rhythmPairs = selectedRhythmPairs()
+  const editingRhythm = selection.value.length > 0
+  const scale = 1
+  const basePatterns = [[1],[.5,.5],[.75,.25],[.25,.75],[.25,.25,.5],[.25,.5,.25],[.5,.25,.25],[.25,.25,.25,.25]]
+  const generatedPatterns = [...basePatterns, ...basePatterns.flatMap(durations => Array.from({length:(1 << durations.length) - 1}, (_, mask) =>
+    durations.map((duration, i) => (mask + 1) & (1 << i) ? -duration : duration)))].map(durations => durations.reduce(/** @param {number[]} result */ (result, duration) => {
+      if (duration < 0 && (result.at(-1) ?? 0) < 0) result[result.length - 1] += duration
+      else result.push(duration)
+      return result
+    }, []))
+  const prototypePhrases = generatedPatterns.filter((durations, index) => generatedPatterns.findIndex(candidate => candidate.join(',') === durations.join(',')) === index)
+    .sort((a, b) => a[0] < 0 && b[0] < 0 ? a[0] - b[0] : a[0] < 0 ? 1 : b[0] < 0 ? -1 : 0).map(durations => ({durations}))
+  const sixteenthPatterns = prototypePhrases.filter(phrase => phrase.durations.length > 1 && phrase.durations.some(duration => Math.abs(duration) % .5 !== 0))
+  return (palette ? prototypePhrases.map((_, index) => index).filter(index => {
+    const number = sixteenthPatterns.findIndex(phrase => phrase === prototypePhrases[index]) + 1
+    return ![7, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 24, 26, 28].includes(number)
+  }) : [1, -1]).map(direction => {
+              if (palette) {
+                const {durations} = prototypePhrases[direction]
+                const readings = prototypeRhythmReadings(durations, scale)
+                const label = readings.join('')
+                const phraseLength = durations.reduce((sum, value) => sum + Math.abs(value), 0)
+                const selectedNote = selected.value >= 0 ? notes.value[selected.value] : undefined
+                const insertionStart = selectedNote?.beat ?? stepCursor.value
+                return h('button', {
+                  key:direction, type:'button', class:'arrange-swing-step', 'aria-label':label, 'data-starts-with-rest':durations[0] < 0, 'data-rhythm-group':durations.length === 1 ? 4 : durations.every(duration => Math.abs(duration) % .5 === 0) ? 8 : 16,
+                  disabled:insertionStart === null || insertionStart + phraseLength > totalBeats() || liveNoteInput(),
+                  onPointerenter:()=>{ rhythmPreview.value = durations },
+                  onPointerleave:()=>{ rhythmPreview.value = null },
+                  onFocus:()=>{ rhythmPreview.value = durations },
+                  onBlur:()=>{ rhythmPreview.value = null },
+                  onClick:()=>{
+                    if (insertionStart === null || insertionStart + phraseLength > totalBeats() || liveNoteInput()) return
+                    const start = insertionStart
+                    const pitch = selectedNote?.midi ?? 76
+                    remember()
+                    notes.value = notes.value.flatMap(note => {
+                      const end = note.beat + note.length
+                      if (end <= start || note.beat >= start + phraseLength) return [note]
+                      return [
+                        ...(note.beat < start ? [{...note, length:start - note.beat}] : []),
+                        ...(end > start + phraseLength ? [{...note, beat:start + phraseLength, length:end - start - phraseLength}] : []),
+                      ]
+                    })
+                    let beat = start
+                    for (const length of durations) {
+                      if (length > 0) notes.value.push({beat, length, midi:pitch})
+                      beat += Math.abs(length)
+                    }
+                    notes.value.sort((a,b) => a.beat - b.beat)
+                    selectNote(-1)
+                    stepCursor.value = start + phraseLength
+                    swingStep.value = 0
+                  },
+                }, [h('span', {class:'arrange-rhythm-notation', 'aria-hidden':'true'}, prototypeRhythmNotation(durations))])
+              }
+              const label = direction === 1 ? 'タータ' : 'タカー'
+              const active = Math.sign(swingStep.value) === direction
+              const short = swingStepLabels.get(stepDuration.value * .5)
+              const long = swingStepLabels.get(stepDuration.value * 1.5)
+              const first = direction === 1 ? long : short
+              const second = direction === 1 ? short : long
+              return h('button', {key:direction, type:'button', class:'arrange-swing-step',
+                'aria-label':label, title:editingRhythm ? '選択した音符のリズムを変更' : short && long ? `${first} → ${second}` : "4分・8分・16分で使えます", 'aria-pressed':!editingRhythm && active,
+                disabled:editingRhythm ? rhythmPairs.length === 0 || liveNoteInput() : !inputEnabled.value || stepCursor.value === null ||
+                  (!active && (!short || !long || stepCursor.value + stepDuration.value * 2 > totalBeats())) || liveNoteInput(),
+                onClick:()=>{
+                  if (editingRhythm) {
+                    remember()
+                    const selectedNotes = selection.value.map(index => notes.value[index])
+                    for (const [firstNote, secondNote] of rhythmPairs) {
+                      const shift = firstNote.length * direction * .5
+                      firstNote.length += shift
+                      secondNote.beat += shift
+                      secondNote.length -= shift
+                    }
+                    notes.value.sort((a, b) => a.beat - b.beat)
+                    selection.value = selectedNotes.map(note => notes.value.indexOf(note))
+                  } else swingStep.value = active ? 0 : direction
+                  const score = host.querySelector('.arrange-score')
+                  if (score instanceof HTMLElement) score.focus()
+                }}, label)
+  })
+}
+
 const app = createApp({ render: () => [
   h('button', {type:'button', onClick:exportMidi}, 'MIDIを書き出す'),
   h('div', {class:'arrange-controls'}, [
@@ -1052,9 +1317,10 @@ const app = createApp({ render: () => [
     options.togglePlayback ? null : h('button', {type:'button', disabled:notes.value.length === original.length && notes.value.every(({beat,length,midi}, index) => beat === original[index][0] && length === original[index][1] && midi === original[index][2]), onClick:reset}, 'お手本に戻す'),
   ]),
   error.value ? h('p', {role:'alert'}, error.value) : null,
-  isDrums ? drumNavigation() : scoreNavigation({attrs:{
+  isDrums ? drumNavigation() : (() => {
+  const score = scoreNavigation({attrs:{
     class:['tutorial-navigation-advanced arrange-score', {'arrange-hide-note-bars':isDrums || !showNoteBars.value, 'arrange-pickup-page':scorePage.value < 0}], 'aria-label':partLabel + 'の楽譜', tabindex:-1,
-    onPointerdown:startSelection, onPointermove:moveSelection, onPointerup:finishSelection,
+    onPointerdown:startSelection, onPointermove:moveSelectionBox, onPointerup:finishSelection,
     onPointercancel:cancelSelection, onLostpointercapture:cancelSelection,
     onPointerleave:()=>{ if (!selectionBox.value) cancelSelection() },
   }, header:[selectionBox.value ? h('div', {
@@ -1076,9 +1342,10 @@ const app = createApp({ render: () => [
     const gridDuration = notes.value[selected.value]?.length ?? stepDuration.value
     const gridStep = gridDuration === .25 || gridDuration === .75 ? .25 : gridDuration === .5 || gridDuration === 1.5 ? .5 : 1
     const keyForBar = options.keyForBar
-    const keyed = keyForBar ? scoreKeyedNotes(notes.value, keyForBar) : null
-    const staffMidi = (/** @type {number} */ index) => keyed?.[index].staffMidi ?? notes.value[index].midi
-    const accidental = (/** @type {number} */ index) => isDrums ? '' : keyed?.[index].sign ?? scoreAccidentalForNote(notes.value, index)
+    const displayedNotes = scoreNotes()
+    const keyed = keyForBar ? scoreKeyedNotes(displayedNotes, keyForBar) : null
+    const staffMidi = (/** @type {number} */ index) => keyed?.[index].staffMidi ?? displayedNotes[index].midi
+    const accidental = (/** @type {number} */ index) => isDrums ? '' : keyed?.[index].sign ?? scoreAccidentalForNote(displayedNotes, index)
     const firstBar = Math.max(0, start / 4)
     const fifths = !isDrums && keyForBar ? scoreKeyFifths(keyForBar(firstBar)) : 0
     const nextFifths = !isDrums && keyForBar && !pickup && firstBar + 1 < totalBars()
@@ -1092,7 +1359,7 @@ const app = createApp({ render: () => [
       ? [0, 1].flatMap(offset => options.chordChanges?.(start / 4 + offset)
         .map(change => ({...change, position: offset * 4 + change.position, bar: start / 4 + offset + 1})) ?? [])
       : null
-    const laneNotes = notes.value.map((note,index)=>({...note,index})).filter(({beat,length})=>beat < start + laneBeats && beat + length > start)
+    const laneNotes = displayedNotes.map((note,index)=>({...note,index})).filter(({beat,length})=>beat < start + laneBeats && beat + length > start)
     const farthestStep = Math.max(0, ...laneNotes.map(({index}) => Math.abs(scoreStaffStep(staffMidi(index)) + clef.stepOffset - 6)))
     const minHeight = clefIndex.value && farthestStep > 8 ? `${farthestStep * 9 + 88}px` : undefined
     return {
@@ -1100,7 +1367,8 @@ const app = createApp({ render: () => [
       ...Array.from({length:laneBeats / gridStep}, (_, i) => { const offset = i * gridStep; const beat = start + offset; const whole = Number.isInteger(offset); return h('button', {
         type:'button', class:['arrange-beat', {'arrange-grid-subdivision':!whole, 'arrange-cursor-beat':stepCursor.value === beat}],
         style:{left:`${offset * percent}%`, width:`${gridStep * percent}%`}, 'aria-label':pickup ? `0小節目の${offset + 1}拍から入力` : `${Math.floor(beat / 4) + 1}小節目 ${offset % 4 + 1}拍から入力`,
-        onClick:()=>{
+        onClick:(/** @type {MouseEvent} */ event)=>{
+          if (consumeSelectionClick(event)) return
           setStepCursor(beat)
           if (pickup) options.selectBar?.(0, true)
           else options.selectBar?.(Math.floor(beat / 4), false, beat % 4)
@@ -1119,6 +1387,22 @@ const app = createApp({ render: () => [
       !playbackContext && stepCursor.value !== null && stepCursor.value >= start && stepCursor.value < start + laneBeats
         ? h('span',{class:'arrange-step-cursor',style:{left:`${(stepCursor.value-start)*percent}%`},'aria-hidden':'true'}) : null,
       tutorialStaffLines(),
+      ...(() => {
+        const selectedNote = selected.value >= 0 ? notes.value[selected.value] : undefined
+        const previewStart = selectedNote?.beat ?? stepCursor.value
+        if (!options.rhythmPalette || !rhythmPreview.value || previewStart === null) return []
+        const end = previewStart + rhythmPreview.value.reduce((sum, duration) => sum + Math.abs(duration), 0)
+        if (liveNoteInput() || end > totalBeats()) return []
+        let beat = previewStart
+        return rhythmPreview.value.flatMap(duration => {
+          const current = beat
+          beat += Math.abs(duration)
+          const visibleStart = Math.max(current, start)
+          const visibleEnd = Math.min(beat, start + laneBeats)
+          if (visibleStart >= visibleEnd) return []
+          return [h('span', {class:['arrange-rhythm-preview', {'arrange-rhythm-preview-rest':duration < 0}], 'aria-hidden':'true', style:{left:`${(visibleStart - start) * percent}%`, width:`${(visibleEnd - visibleStart) * percent}%`, top:noteTop(selectedNote?.midi ?? 76)}}, duration > 0 && current >= start ? [noteIcon(duration)] : [])]
+        })
+      })(),
       options.togglePlayback && !isDrums ? h('span', {
         class:'arrange-clef', role:'img', 'aria-label':clef.label,
         style:{top:scoreTrebleTop(clef.bass ? 74 : 67)},
@@ -1186,7 +1470,7 @@ const app = createApp({ render: () => [
         return beams
       }),
       ], notes:laneNotes,
-      note:({beat,length,midi,index}) => {
+      note:({beat,length,midi,role,index}) => {
         const end = beat + length
         const group = rhythmGroups.find(group => group.includes(index))
         const beamLayout = group ? scoreBeamLayout(group.map(noteIndex => ({midi:staffMidi(noteIndex)})), clef.stepOffset) : undefined
@@ -1218,12 +1502,23 @@ const app = createApp({ render: () => [
           rendered.push(scoreNote('button', {
             key:`note-${index}-${Math.floor(segmentStart / 4)}`, type:'button', class:['tutorial-pitch-note', 'arrange-note', {active, 'tutorial-accidental-note':!!sign}], 'data-note-index':index, 'aria-pressed':selected.value === index || selection.value.includes(index),
             style:{'--arrange-signature-shift':`${signatureShift(segmentStart)}px`},
-            'aria-label':`${beat < 0 ? '0小節目' : `${Math.floor(beat / 4) + 1}小節目、${beat % 4 + 1}拍`}、${noteName(midi)}、長さ${length}拍`,
-            onClick:()=>{ stepCursor.value = null; if (!selection.value.includes(index)) selectNote(index) },
+            'aria-label':`${beat < 0 ? '0小節目' : `${Math.floor(beat / 4) + 1}小節目、${beat % 4 + 1}拍`}、${noteName(midi)}${role === 'R' ? '、ルートに追従' : ''}、長さ${length}拍`,
+            onClick:(/** @type {MouseEvent} */ event)=>{
+              if (consumeSelectionClick(event)) return
+              stepCursor.value = null
+              if (!isDrums && event.shiftKey) {
+                const indices = new Set(selection.value.length ? selection.value : selected.value >= 0 ? [selected.value] : [])
+                if (indices.has(index)) indices.delete(index)
+                else indices.add(index)
+                selectNote(-1)
+                selection.value = [...indices]
+              } else if (!selection.value.includes(index)) selectNote(index)
+            },
             ...dragEvents(index, null),
           }, [
             scoreAccidental(sign),
             isDrums ? h('span', {class:['arrange-drum-symbol', {'arrange-drum-cymbal':[2,3,5,7].includes(midi)}], 'aria-hidden':'true'}, [h('span', {class:'arrange-drum-head'}), h('span', {class:'arrange-drum-stem'}), segmentEnd - segmentStart <= .5 ? h('span', {class:'arrange-drum-flag'}) : null, segmentEnd - segmentStart <= .25 ? h('span', {class:'arrange-drum-flag arrange-drum-flag-second'}) : null]) : tutorialPitchSymbol({midi, duration:segmentEnd - segmentStart, beam:!!group, stemDown, stemLength:beamLayout && group ? beamLayout.stemLengths[group.indexOf(index)] : undefined, ledgerOffsets:scoreLedgerOffsets(staffMidi(index), clef.stepOffset)}),
+            role === 'R' ? h('span', {class:'arrange-note-role', 'aria-hidden':'true'}, 'R') : null,
             h('span', {class:'tutorial-note-label'}, noteName(midi).replace(/\d+$/, '')),
           ], {beat:segmentStart - start, duration:segmentEnd - segmentStart, laneBeats, top}))
           segmentStart = segmentEnd
@@ -1246,16 +1541,28 @@ const app = createApp({ render: () => [
       position.value >= start && position.value < start + laneBeats ? h('span', {class:'tutorial-playhead',style:{left:`${(position.value-start)*percent}%`}}) : null,
     ]}
     },
-  }),
+  })
+  if (!options.rhythmPalette) return score
+  const patterns = rhythmChoices(true)
+  const palette = h('aside', {class:'arrange-rhythm-columns', 'aria-label':'リズムパターン'}, [false, true].map(rest =>
+    h('div', {class:'arrange-rhythm-column'}, [4, 8, 16].map(group =>
+      h('section', {class:'arrange-rhythm-group'}, [
+        h('span', {class:'arrange-rhythm-group-label'}, `${group}分`),
+        h('ul', {class:'arrange-rhythm-list', 'aria-label':rest ? `${group}分・休符から始まる` : `${group}分・音から始まる`},
+          patterns.filter(choice => choice.props?.['data-starts-with-rest'] === rest && choice.props?.['data-rhythm-group'] === group)
+            .map(choice => h('li', [choice]))),
+      ])))))
+  return h('div', {class:'arrange-score-and-rhythms'}, [score, palette])
+  })(),
   h('div', {class:'arrange-input-dock'}, [
   h('div', {class:'arrange-entry-row'}, [
   isDrums ? null : h('section', {class:'arrange-step-controls', 'aria-label':'ステップ入力'}, [
     stepCursor.value === null ? null : h('div', {class:'arrange-step-status',role:'status'}, stepCursor.value >= totalBeats() ? '入力終了' : `${stepCursor.value < 0 ? '0小節目' : `${Math.floor(stepCursor.value / 4) + 1}小節目 · ${stepCursor.value % 4 + 1}拍目`}から入力`),
     (() => {
       const current = notes.value[selected.value]?.length ?? stepDuration.value
-      const found = durations.findIndex(([duration]) => duration === current)
-      const index = found < 0 ? durations.findIndex(([duration]) => duration === stepDuration.value) : found
-      const [duration, label] = durations[index]
+      const [duration, label] = selectableDurations.find(([value]) => value === current)
+        ?? selectableDurations.find(([value]) => value === stepDuration.value)
+        ?? [.5, '8分']
       return h('div', {class:'arrange-duration-picker', role:'group', 'aria-label':'音価'}, [
         h('div', {class:'arrange-duration-values'}, [
           h('label', {class:'arrange-duration-select'}, [
@@ -1266,13 +1573,14 @@ const app = createApp({ render: () => [
                 const score = host.querySelector('.arrange-score')
                 if (score instanceof HTMLElement) score.focus()
               }},
-              durations.map(([value, name]) => h('option', {value:String(value), disabled:!canSetDuration(Number(value))}, `${name}音符`))),
+              selectableDurations.map(([value, name]) => h('option', {value:String(value), disabled:!canSetDuration(Number(value))}, `${name}音符`))),
           ]),
           h('div', {class:'arrange-step-row'}, [
             h('button', {type:'button', 'aria-label':`${label}休符`, title:`${label}休符 (Z)`, 'aria-keyshortcuts':'Z',
               disabled:!inputEnabled.value || stepCursor.value === null || stepCursor.value >= totalBeats(),
               onClick:()=>useDuration(Number(duration), true)}, restIcon(Number(duration))),
             h('button', {type:'button', 'aria-label':connectTarget() >= 0 ? '次の同じ音につなぐ' : '直前の音を伸ばす', title:connectTarget() >= 0 ? '次の同じ音につなぐ (X)' : '直前の音を選択した音価分伸ばす (X)', 'aria-keyshortcuts':'X', disabled:connectTarget() < 0 && !extensionTarget(), onClick:()=>connectTarget() >= 0 ? connectSelectedNote() : extendPreviousNote()}, connectTarget() >= 0 ? '→繋' : '→伸'),
+            rhythmChoices(),
             h('button', {type:'button', class:'arrange-clear-page', 'aria-label':'表示中のページのノートを消す', disabled:!notes.value.some(note => { const [start, end] = pageBounds(); return note.beat < end && note.beat + note.length > start }), onClick:clearPage}, 'ページを消す'),
           ]),
           isBass ? h('div', {class:'segmented-control arrange-bass-accent', role:'group', 'aria-label':'ベースのアクセント'}, /** @type {const} */ ([['front','表'], ['back','裏']]).map(([value,label]) => h('label', [
@@ -1299,8 +1607,8 @@ const app = createApp({ render: () => [
   ]),
   ]),
   h('div', {class:'arrange-keyboard-toolbar'}, [
-    isAccompaniment ? null : octaveControl(octave.value - baseOctave, delta => { octave.value += delta }, {min:minOctaveOffset,max:(isBass ? 1 : 2) - keyboardOctaves.value}),
-    isAccompaniment ? null : h('div', {class:'arrange-octave-display'}, [
+    isAccompaniment || options.hideKeyboardControls ? null : octaveControl(octave.value - baseOctave, delta => { octave.value += delta }, {min:minOctaveOffset,max:(isBass ? 1 : 2) - keyboardOctaves.value}),
+    isAccompaniment || options.hideKeyboardControls ? null : h('div', {class:'arrange-octave-display'}, [
     h('div', {class:'segmented-control arrange-octave-width', role:'group', 'aria-label':'鍵盤の表示範囲'}, [1,2].map(count =>
       h('label', [
         h('input', {type:'radio', name:isBass ? 'bass-arrange-octaves' : 'arrange-octaves', value:count, 'aria-label':`${count}オクターブ`, checked:keyboardOctaves.value === count,
@@ -1311,11 +1619,11 @@ const app = createApp({ render: () => [
         h('span', `${count}oct`),
       ]))),
     ]),
-    isDrums ? null : h('button', {type:'button', class:'arrange-bar-toggle', 'aria-pressed':showNoteBars.value, onClick:()=>{ showNoteBars.value = !showNoteBars.value }}, 'バー'),
+    isDrums || options.hideKeyboardControls ? null : h('button', {type:'button', class:'arrange-bar-toggle', 'aria-pressed':showNoteBars.value, onClick:()=>{ showNoteBars.value = !showNoteBars.value }}, 'バー'),
     isDrums ? null : h('button', {type:'button', class:'arrange-undo', disabled:history.value.length === 0, onClick:undo}, undoLabel()),
   ]),
   isAccompaniment ? null : h('div', {class:'tutorial-keyboard arrange-keyboard', style:{'--tutorial-key-count':String(keyboardOctaves.value * 7 + 1)},role:'group','aria-label':partLabel + 'を試す鍵盤'}, Array.from({length:keyboardOctaves.value * 12 + 1}, (_, i) => midiKey((octave.value + 1) * 12 + i)).map(key => h('button', {
-    type:'button', class:[key.black ? 'tutorial-black' : 'tutorial-white', {active:heldPitches.value.includes(key.midi) || dragPitch.value === key.midi || (playing.value && notes.value.some(note => note.midi === key.midi && position.value >= note.beat && position.value < note.beat + note.length * .9))}],
+    type:'button', class:[key.black ? 'tutorial-black' : 'tutorial-white', {active:heldPitches.value.includes(key.midi) || dragPitch.value === key.midi || (playing.value && notes.value.some(note => soundingMidi(note) === key.midi && position.value >= note.beat && position.value < note.beat + note.length * .9))}],
     style:key.black ? {left:`${Array.from({length:keyboardOctaves.value * 12 + 1}, (_, i) => midiKey((octave.value + 1) * 12 + i)).filter(note => !note.black && note.midi < key.midi).length * (100 / (keyboardOctaves.value * 7 + 1))}%`} : undefined,
     'aria-label':key.label + (isBass && options.rootForBeat?.(Number.isFinite(position.value) ? position.value : stepCursor.value ?? notes.value[selected.value]?.beat ?? playbackStart.value) === key.midi % 12 ? '（ルート）' : ''), disabled:key.midi < minMidi || key.midi > maxMidi,
     onPointerdown:(/** @type {PointerEvent} */ event)=>{
@@ -1326,10 +1634,10 @@ const app = createApp({ render: () => [
         choosePitch(key.midi)
       }
     },
-    onPointerup:()=>setPitchHeld(key.midi, false),
-    onPointercancel:()=>setPitchHeld(key.midi, false),
-    onLostpointercapture:()=>setPitchHeld(key.midi, false),
-    onPointerleave:(/** @type {PointerEvent} */ event)=>{if (event.buttons) setPitchHeld(key.midi, false)},
+    onPointerup:()=>{ finishLiveNote(key.midi); setPitchHeld(key.midi, false) },
+    onPointercancel:()=>{ finishLiveNote(key.midi); setPitchHeld(key.midi, false) },
+    onLostpointercapture:()=>{ finishLiveNote(key.midi); setPitchHeld(key.midi, false) },
+    onPointerleave:(/** @type {PointerEvent} */ event)=>{if (event.buttons) { finishLiveNote(key.midi); setPitchHeld(key.midi, false) }},
     onClick:(/** @type {MouseEvent} */ event)=>{ if (!liveNoteInput() || event.detail === 0) choosePitch(key.midi) },
   }, [isBass && options.rootForBeat?.(Number.isFinite(position.value) ? position.value : stepCursor.value ?? notes.value[selected.value]?.beat ?? playbackStart.value) === key.midi % 12 ? h('span', {class:'arrange-root-mark', 'aria-label':'ルート'}, 'R') : null,
     key.black || key.midi % 12 !== 0 ? '' : `C${Math.floor(key.midi / 12) - 1}`]))),
@@ -1369,7 +1677,7 @@ const handleKey = (/** @type {KeyboardEvent} */ event) => {
       event.preventDefault()
       event.stopPropagation()
       const current = notes.value[selected.value]?.length ?? stepDuration.value
-      const values = durations.map(([value]) => Number(value))
+      const values = selectableDurations.map(([value]) => Number(value))
       const next = event.code === 'KeyA' ? values.filter(value => value < current).at(-1) : values.find(value => value > current)
       if (next !== undefined) useDuration(next, false)
       return
@@ -1412,9 +1720,9 @@ const handleKey = (/** @type {KeyboardEvent} */ event) => {
     if (selection.value.length) transposeSelection(delta)
     else {
       const note = notes.value[selected.value]
-      if (note && note.midi + delta >= minMidi && note.midi + delta <= maxMidi) {
+      if (note && soundingMidi(note) + delta >= minMidi && soundingMidi(note) + delta <= maxMidi) {
         remember()
-        note.midi += delta
+        setFixedPitch(note, soundingMidi(note) + delta)
       }
     }
   } else if (event.code === 'Space') {
@@ -1425,6 +1733,7 @@ const handleKey = (/** @type {KeyboardEvent} */ event) => {
 document.addEventListener('keydown', handleKey, true)
 window.addEventListener('pagehide', stop)
 return {
+  isRecordingEnabled() { return inputEnabled.value },
   getBassTechniques() { return {...bassTechniquesByPage.value} },
   /** @param {Record<number,string>} techniques */
   setBassTechniques(techniques) { bassTechniquesByPage.value = techniques; syncBassPages() },
@@ -1445,10 +1754,12 @@ return {
     if (!playbackFrame) playbackFrame = requestAnimationFrame(updatePlaybackPosition)
   },
   stopPlaybackPosition,
-  /** @param {{beat:number,duration:number,midi:number}[]} saved */
+  /** @param {import('./studio-style.js').StudioNote[]} saved */
   setNotes(saved) {
     stop()
-    notes.value = saved.map(note => ({beat:note.beat, length:note.duration, midi:note.midi}))
+    notes.value = saved.map(note => ({beat:note.beat, length:note.duration, midi:note.midi,
+      ...(isBass && note.role === 'R' ? {role:note.role} : {})}))
+    swingStep.value = 0
     history.value = []
     bassTechniquesByPage.value = {}
     redoHistory.length = 0
@@ -1460,14 +1771,14 @@ return {
     drumZeroSelected.value = false
     selectedDrumBoundary.value = null
   },
-  /** @param {number} midi */
-  midiAttack(midi) {
+  /** @param {number} midi @param {number} [receivedAt] */
+  midiAttack(midi, receivedAt) {
     if (midi < minMidi || midi > maxMidi) return
     setPitchHeld(midi, true)
-    choosePitch(midi)
+    choosePitch(midi, receivedAt)
   },
-  /** @param {number} midi */
-  midiRelease(midi) { setPitchHeld(midi, false) },
+  /** @param {number} midi @param {number} [receivedAt] */
+  midiRelease(midi, receivedAt) { finishLiveNote(midi, receivedAt); setPitchHeld(midi, false) },
   /** @param {readonly number[]} pitches */
   recordStep(pitches) {
     if (liveNoteInput()) return false
@@ -1492,12 +1803,12 @@ return {
       const onBeat = Math.abs(fraction) < 1e-7 || Math.abs(fraction - 1) < 1e-7
       const offBeat = Math.abs(fraction - .5) < 1e-7
       const velocity = !isBass || !onBeat && !offBeat ? .8 : (bassAccent.value === 'front' ? onBeat : offBeat) ? .95 : .65
-      return {beat:note.beat, duration:note.length, midi:note.midi, velocity}
+      return {beat:note.beat, duration:note.length, midi:soundingMidi(note), velocity}
     })
     return isAccompaniment ? result.sort((a,b) => a.beat - b.beat) : result
   },
   getNotes() {
-    const result = notes.value.map(note => ({beat:note.beat, duration:note.length, midi:note.midi, velocity:.8}))
+    const result = notes.value.map(note => ({beat:note.beat, duration:note.length, midi:soundingMidi(note), velocity:.8, ...(note.role ? {role:note.role} : {})}))
     return isAccompaniment ? result.sort((a,b) => a.beat - b.beat) : result
   },
   destroy() {stopBassPageWatch?.();stopPlaybackPosition();stop();app.unmount();document.removeEventListener('keydown', handleKey, true);window.removeEventListener('pagehide',stop)}}

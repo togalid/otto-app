@@ -11,6 +11,9 @@ test('studio style validation uses separate pitch ranges for melody and bass', (
   const note = {beat:0, duration:1, midi:28}
   const saved = {arrangement:'{}', melody:[], bass:[note]}
   assert.deepEqual(decodeStudioStyle(JSON.stringify(saved)), saved)
+  const relative = {...saved, bass:[{...note, role:'R'}]}
+  assert.deepEqual(decodeStudioStyle(JSON.stringify(relative)), relative)
+  assert.throws(() => decodeStudioStyle(JSON.stringify({...saved, bass:[{...note, role:'invalid'}]})), /Invalid Studio style/)
   assert.equal(decodeStudioStyle(JSON.stringify({...saved, bassAccent:'back'})).bassAccent, 'back')
   assert.throws(() => decodeStudioStyle(JSON.stringify({...saved, bassAccent:'invalid'})), /Invalid Studio style/)
   assert.throws(() => decodeStudioStyle(JSON.stringify({...saved, melody:[note]})), /Invalid Studio style/)

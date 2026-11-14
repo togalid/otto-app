@@ -3853,6 +3853,10 @@ main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody { m
 .melody-arrange .arrange-note.active { background:var(--oto-selection); }
 .melody-arrange .arrange-note[aria-pressed='true'] { outline:2px solid var(--oto-accent); z-index:2; }
 .melody-arrange .arrange-keyboard button { padding:0 0 12px; }
+.melody-arrange .arrange-keyboard button { position:relative; }
+.melody-arrange .arrange-keyboard .tutorial-black { position:absolute; }
+.melody-arrange .arrange-root-mark { position:absolute; bottom:32px; left:50%; transform:translateX(-50%); font-size:11px; font-weight:600; color:var(--oto-secondary); opacity:.7; pointer-events:none; }
+.melody-arrange .arrange-keyboard .tutorial-black .arrange-root-mark { bottom:10px; color:var(--oto-key); opacity:.8; }
 @media (max-width:600px), (orientation:landscape) and (max-height:500px) {
   .melody-arrange { padding-bottom:calc(var(--oto-key-height) + 34px + env(safe-area-inset-bottom)); }
   .melody-arrange .arrange-keyboard {
@@ -3915,6 +3919,7 @@ main[data-workspace-view='mixer'][data-mixer-part='melody'] > #detail-melody { m
 .melody-arrange .arrange-score { gap:8px; }
 .melody-arrange .arrange-staff { flex:none; margin:0; overflow:visible; }
 .melody-arrange .arrange-beat { height:100%; border-left:1px solid var(--oto-seam); opacity:.6; z-index:1; }
+.melody-arrange .arrange-beat.arrange-grid-subdivision { border-left:1px dotted var(--oto-seam); }
 .melody-arrange .arrange-note { display:block; height:calc(2 * var(--tutorial-pitch-half-height)); min-height:0; margin-top:calc(-1 * var(--tutorial-pitch-half-height)); padding:0; border-right:3px solid var(--tutorial-background); background:var(--oto-key); border-radius:7px; overflow:visible; transform:none; box-shadow:none; z-index:2; }
 .melody-arrange .arrange-note .tutorial-note-symbol { width:calc(12px * var(--tutorial-staff-scale)); }
 .melody-arrange .arrange-note .tutorial-note-label { overflow:visible; }
@@ -4085,6 +4090,10 @@ main {
 .studio-melody-editor .arrange-chord-strip {
   background: var(--studio-measure-background);
 }
+.arrange-bass-technique { position:absolute; left:28px; top:0; height:100%; display:flex; align-items:center; gap:6px; font-size:12px; color:var(--oto-muted); pointer-events:auto; }
+.arrange-chord-strip.arrange-bass-technique-strip { z-index:3; }
+.arrange-bass-technique select { width:auto; max-width:120px; height:22px; min-height:0; padding:0 18px 0 3px; border:0; border-radius:4px; background-color:transparent; box-shadow:none; color:var(--oto-ink); font:inherit; cursor:pointer; }
+.arrange-bass-technique select:focus-visible { outline:2px solid var(--oto-secondary); outline-offset:1px; }
 :is(#detail-melody, #detail-bass, .mixer-quick-edit) .studio-melody-editor .arrange-score {
   --tutorial-background: var(--oto-key);
 }
@@ -4093,6 +4102,9 @@ main {
 }
 .studio-melody-editor .arrange-score:not(.arrange-hide-note-bars) .arrange-note {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--oto-seam) 52%, var(--studio-score-heading));
+}
+.studio-melody-editor .arrange-note[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 2px var(--oto-accent) !important;
 }
 
 /* Studio score: prioritize the notation and leave less space below it. */
@@ -4293,6 +4305,11 @@ input:focus-visible + span {
 .arrange-octave-display-label { font-size:12px; white-space:nowrap; }
 
 /* Give the Studio workspace the full available width while keeping the header centered. */
+html:has(body[data-app-mode='free']) {
+  scrollbar-gutter: auto;
+  scrollbar-width: none;
+}
+html:has(body[data-app-mode='free'])::-webkit-scrollbar { display:none; }
 body[data-app-mode='free'] .shell {
   max-width:none;
   padding-inline:0;
@@ -4404,6 +4421,10 @@ main:not([data-mixer-part='drums']) [data-studio-part='drums'] { display:none; }
 .arrange-duration-values .arrange-duration-select { width:44px; flex:none; }
 .arrange-duration-values .arrange-step-row { padding-bottom:6px; }
 .arrange-duration-values .arrange-step-row button { position:relative; }
+.arrange-bass-accent { align-self:flex-start; margin-left:8px; }
+.arrange-bass-accent input { position:absolute; opacity:0; }
+:root .segmented-control.arrange-bass-accent label > span { min-height:30px; padding:0 12px; }
+.arrange-bass-accent input:focus-visible + span { filter:brightness(.9); }
 .melody-arrange .arrange-duration-values .arrange-step-row .arrange-clear-page { width:auto; min-width:0; margin-left:4px; padding-inline:8px; white-space:nowrap; }
 
 .melody-arrange .arrange-duration-values .arrange-step-row button[aria-label='直前の音を伸ばす'] {
@@ -4581,4 +4602,15 @@ main:not([data-mixer-part='chord']) #backing-score-pagination { display:none; }
   box-sizing:border-box;
   height:32px;
   min-height:32px;
+}
+
+.tutorial-screen .arrange-drum-bank { display:none; }
+@media (max-width:700px) {
+  .tutorial-screen .arrange-drum-bank {
+    display:inline-flex;
+    align-self:start;
+    justify-self:start;
+    margin-block:8px;
+  }
+  .tutorial-screen .arrange-drum-grid .arrange-drum-bank-hidden { display:none; }
 }

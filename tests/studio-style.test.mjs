@@ -11,6 +11,8 @@ test('studio style validation uses separate pitch ranges for melody and bass', (
   const note = {beat:0, duration:1, midi:28}
   const saved = {arrangement:'{}', melody:[], bass:[note]}
   assert.deepEqual(decodeStudioStyle(JSON.stringify(saved)), saved)
+  assert.equal(decodeStudioStyle(JSON.stringify({...saved, bassAccent:'back'})).bassAccent, 'back')
+  assert.throws(() => decodeStudioStyle(JSON.stringify({...saved, bassAccent:'invalid'})), /Invalid Studio style/)
   assert.throws(() => decodeStudioStyle(JSON.stringify({...saved, melody:[note]})), /Invalid Studio style/)
   assert.throws(() => decodeStudioStyle(JSON.stringify({...saved, bass:[{...note, midi:61}]})), /Invalid Studio style/)
 })
@@ -54,4 +56,10 @@ test('new drum patterns begin with independent four-on-the-floor kick', async ()
   assert.deepEqual(drumPlaybackNotes([], patterns, [0,1], 2).map(note=>note.beat), [0,1,2,3,4,5,6,7])
   patterns[0].length = 0
   assert.equal(defaultDrumPatterns()[0].length, 4)
+})
+
+test('Studio styles preserve bass page links and reject links on the first page', () => {
+  const saved = {arrangement:'{}', melody:[], bass:[], bassTechniques:{0:'straight8',1:'previous',2:'none',3:'custom'}}
+  assert.deepEqual(decodeStudioStyle(JSON.stringify(saved)), saved)
+  assert.throws(() => decodeStudioStyle(JSON.stringify({...saved, bassTechniques:{0:'previous'}})), /Invalid Studio style/)
 })

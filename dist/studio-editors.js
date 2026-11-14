@@ -1,5 +1,6 @@
 import { melodyPresets } from './melody-presets.js'
 import { mountMelodyVoiceChoice } from './part-steppers.js'
+import { rootPitch } from './music.js'
 
 /** @typedef {ReturnType<typeof import('./melody-arrange.js').mountMelodyEditor>} StudioEditor */
 /** @typedef {NonNullable<Parameters<typeof import('./melody-arrange.js').mountMelodyEditor>[1]>} EditorOptions */
@@ -92,8 +93,22 @@ export function mountStudioEditors({
       part:'bass',
       paginationTarget:'#bass-score-pagination',
       previewBass,
+      rootForBeat:beat => {
+        readChordRevision()
+        const bar = Math.max(0, Math.min(progression.barCount() - 1, Math.floor(beat / 4)))
+        const section = progression.songMode ? progression.songSectionAt(bar) : progression.selectedSection
+        const score = progression.sections[section]
+        let slot = Math.min(progression.chordBeatsForBar(bar) - 1, Math.floor(Math.max(0, beat - bar * 4) / progression.chordBeatLength(bar)))
+        let chord = slot > 0 ? score.beatSlots[bar]?.[slot] : score.slots[bar]
+        while (!chord && slot > 0) {
+          slot--
+          chord = slot > 0 ? score.beatSlots[bar]?.[slot] : score.slots[bar]
+        }
+        return chord ? (rootPitch(chord) + progression.keyForBar(bar, section) + 12) % 12 : null
+      },
     })
+    bassEditor.initializeBass()
     onBassMounted(bassEditor)
-    progression.studioBass = bassEditor.getNotes
+    progression.studioBass = bassEditor.getPlaybackNotes
   })
 }

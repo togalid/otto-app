@@ -1004,6 +1004,22 @@ test('Studio bass starts silent and schedules only entered notes', async () => {
   assert.deepEqual(bassCalls, [[36, .05, .5, .8]])
 })
 
+test('Studio bass plays a joined note as one sustained attack between eighth notes', async () => {
+  const {player} = fixture()
+  const bassCalls = []
+  player.bass = {playAt(...args) { bassCalls.push(args) }, silence() {}}
+  player.bpm = 120
+  player.studioBass = () => [
+    {beat:0, midi:36, duration:.5, velocity:.8},
+    {beat:1, midi:36, duration:1, velocity:.8},
+    {beat:2, midi:36, duration:.5, velocity:.8},
+  ]
+  await player.start()
+  player.stop()
+  assert.equal(bassCalls.length, 3)
+  assert.deepEqual(bassCalls.map(call => [call[0], call[2]]), [[36,.25], [36,.475], [36,.25]])
+})
+
 test('shuffle delays eighth-note offbeats for every Studio part', () => {
   const {player, calls} = fixture()
   const melody = [], bass = [], drums = []

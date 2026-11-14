@@ -1504,15 +1504,17 @@ function captureArrangement() {
 }
 
 function captureStudioStyle() {
-  return JSON.stringify({arrangement:captureArrangement(), melody:studioEditor?.getNotes() ?? [], bass:studioBassEditor?.getNotes() ?? []})
+  return JSON.stringify({arrangement:captureArrangement(), melody:studioEditor?.getNotes() ?? [], bass:studioBassEditor?.getNotes() ?? [], bassTechniques:studioBassEditor?.getBassTechniques(), bassAccent:studioBassEditor?.getBassAccent() ?? 'front'})
 }
 
 /** @param {string} json */
 async function restoreStudioStyle(json) {
-  const {arrangement, melody, bass: bassNotes} = decodeStudioStyle(json)
+  const {arrangement, melody, bass: bassNotes, bassTechniques, bassAccent = 'front'} = decodeStudioStyle(json)
   await applyArrangementJson(arrangement)
   studioEditor?.setNotes(melody)
   studioBassEditor?.setNotes(bassNotes)
+  studioBassEditor?.setBassAccent(bassAccent)
+  if (bassTechniques) studioBassEditor?.setBassTechniques(bassTechniques)
 }
 
 function saveArrangement() {

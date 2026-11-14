@@ -45,13 +45,18 @@ export function decodeStudioAccompaniment(value) {
 
 /** @param {string} json */
 export function decodeStudioStyle(json) {
-  const {arrangement, melody, bass = []} = JSON.parse(json)
+  const {arrangement, melody, bass = [], bassAccent, bassTechniques} = JSON.parse(json)
   if (typeof arrangement !== 'string' ||
       !validNotes(melody, studioPitchRange.melody) ||
-      !validNotes(bass, studioPitchRange.bass)) {
+      !validNotes(bass, studioPitchRange.bass) ||
+      (bassTechniques !== undefined && (!bassTechniques || typeof bassTechniques !== 'object' || Array.isArray(bassTechniques) ||
+        !Object.entries(bassTechniques).every(([page, technique]) => /^(0|[1-9][0-9]{0,2})$/.test(page) &&
+          ['none','previous','straight8','straight4','straight16','offbeat','support_hold','custom'].includes(typeof technique === 'string' ? technique : '') &&
+          (page !== '0' || technique !== 'previous')))) ||
+      (bassAccent !== undefined && bassAccent !== 'front' && bassAccent !== 'back')) {
     throw new Error('Invalid Studio style')
   }
-  return {arrangement, melody, bass}
+  return {arrangement, melody, bass, ...(bassTechniques === undefined ? {} : {bassTechniques}), ...(bassAccent === undefined ? {} : {bassAccent:/** @type {'front'|'back'} */ (bassAccent)})}
 }
 
 /**

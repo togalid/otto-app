@@ -1,18 +1,18 @@
 import { encodeScoreMidi } from './score-midi.js'
 import { studioPitchRange, resolveDrumPattern, defaultDrumPatterns } from './studio-style.js'
 import * as Vue from './vendor/vue.runtime.esm-browser.prod.js'
-const {createApp, h, ref, Teleport} = Vue
+const {createApp, h, ref, Teleport, nextTick, watch} = Vue
 import { Instrument, audioContext } from './audio.js'
 import { DrumSynth, drumPadSound, studioDrumLayout } from './rhythm.js'
 import { genres } from './groove.js'
 import { midiKey, pianoWhiteLabel } from './keyboard.js'
 import { bindTempoKnob } from './main-controls.js'
 import { drumPadNames, drumPadState, drumPadPlayable, octaveControl } from './part-steppers.js'
-import { scoreNavigation, scorePagination, scoreNote, scoreAccidental, scoreAccidentalGlyph, scoreAccidentalForNote, scoreKeyFifths, scoreKeySignature, scoreKeyedNotes, scoreRhythmGroups, scoreBeamLayout, scoreTrebleTop, scoreStaffStep, scoreStemDown, scoreLedgerOffsets, tutorialStaffLines, tutorialSubdivisions, tutorialPitchSymbol } from './score-navigation.js'
+import { scoreNavigation, scorePagination, scoreNote, scoreAccidental, scoreAccidentalGlyph, scoreAccidentalForNote, scoreKeyFifths, scoreKeySignature, scoreKeyedNotes, scoreRhythmGroups, scoreBeamLayout, scoreTrebleTop, scoreStaffStep, scoreStemDown, scoreLedgerOffsets, tutorialStaffLines, tutorialPitchSymbol } from './score-navigation.js'
 
 /**
  * @param {HTMLElement} host
- * @param {{empty?:boolean, defaultKeyboardOctaves?:1|2, barCount?:()=>number, previewTimbre?:()=>string, previewDrum?:(id:number)=>void, part?:'bass'|'backing'|'drums', previewBass?:{ready:()=>Promise<AudioContext|undefined>,playAt:(midi:number,time:number)=>void}, keyForBar?:(bar:number)=>number, chordChanges?:(bar:number)=>{beat:number,position:number,label:string}[], togglePlayback?:()=>void, selectBar?:(bar:number, pickup?:boolean, beat?:number)=>void, paginationTarget?:string}} [options]
+ * @param {{empty?:boolean, defaultKeyboardOctaves?:1|2, barCount?:()=>number, previewTimbre?:()=>string, previewDrum?:(id:number)=>void, part?:'bass'|'backing'|'drums', previewBass?:{ready:()=>Promise<AudioContext|undefined>,playAt:(midi:number,time:number)=>void}, keyForBar?:(bar:number)=>number, rootForBeat?:(beat:number)=>number|null, chordChanges?:(bar:number)=>{beat:number,position:number,label:string}[], togglePlayback?:()=>void, selectBar?:(bar:number, pickup?:boolean, beat?:number)=>void, paginationTarget?:string}} [options]
  */
 export function mountMelodyEditor(host, options = {}) {
 // [beat, length in beats, MIDI pitch]
@@ -27,6 +27,7 @@ const bpm = ref(style?.bpm ?? 128)
 const isBass = options.part === 'bass'
 const isDrums = options.part === 'drums'
 const isBacking = options.part === 'backing'
+const bassAccent = ref(/** @type {'front'|'back'} */ ('front'))
 const isAccompaniment = isDrums || isBacking
 const partLabel = {bass:'ベース', melody:'メロディ', backing:'バッキング', drums:'ドラム'}[options.part ?? 'melody']
 const baseOctave = isBass ? 3 : 4
@@ -35,10 +36,12 @@ const {min: minMidi, max: maxMidi} = studioPitchRange[options.part ?? 'melody']
 const octave = ref(baseOctave + (isBass ? -1 : 0))
 const keyboardOctaves = ref(/** @type {number} */ (options.defaultKeyboardOctaves ?? 1))
 const scorePage = ref(0)
+const bassTechniquesByPage = ref(/** @type {Record<number,string>} */ ({}))
 const drumBar = ref(0)
 const selectedDrumBoundary = ref(/** @type {number|null} */ (null))
 const drumPatternIndex = ref(0)
 const drumZeroSelected = ref(false)
+const drumPadBank = ref(0)
 const drumAssignments = ref(/** @type {number[]} */ ([]))
 const drumPatterns = ref(isDrums ? defaultDrumPatterns() : /** @type {({beat:number,duration:number,midi:number}[]|null)[]} */ ([null,null,null,null]))
 const clefs = [
@@ -144,6 +147,31 @@ function transposeSelection(delta) {
   remember()
   for (const index of selection.value) notes.value[index].midi += delta
 }
+
+/** @param {{index:number,beat:number,length:number}[]} group @param {number} delta */
+function boundedGroupOffset(group, delta) {
+  const indices = new Set(group.map(note => note.index))
+  let min = -Infinity, max = Infinity
+  for (const note of group) {
+    min = Math.max(min, pickupStart - note.beat)
+    max = Math.min(max, totalBeats() - note.beat - note.length)
+    for (const [index, other] of notes.value.entries()) {
+      if (indices.has(index)) continue
+      if (other.beat + other.length <= note.beat) min = Math.max(min, other.beat + other.length - note.beat)
+      else if (other.beat >= note.beat + note.length) max = Math.min(max, other.beat - note.beat - note.length)
+    }
+  }
+  return Math.max(min, Math.min(max, delta))
+}
+
+/** @param {number} delta */
+function moveSelection(delta) {
+  const group = selection.value.map(index => ({index, ...notes.value[index]}))
+  const offset = boundedGroupOffset(group, delta)
+  if (!offset) return
+  remember()
+  for (const note of group) notes.value[note.index].beat = note.beat + offset
+}
 const stepCursor = ref(/** @type {number|null} */ (options.empty ? 0 : null))
 const stepDuration = ref(.5)
 const inputEnabled = ref(true)
@@ -158,12 +186,19 @@ const scheduledBars = []
 let playbackFrame = 0
 /** @type {AudioContext | null} */
 let playbackContext = null
+function currentPlaybackBar() {
+  const now = playbackContext?.currentTime
+  if (now === undefined) return undefined
+  while (scheduledBars.length > 1 && scheduledBars[1].time <= now) scheduledBars.shift()
+  return scheduledBars[0]
+}
+const liveNoteInput = () => (!options.part || isBass) && !!options.togglePlayback && playbackContext !== null
+
 function updatePlaybackPosition() {
   if (!playbackContext || !scheduledBars.length) { playbackFrame = 0; return }
   const now = playbackContext.currentTime
-  while (scheduledBars.length > 1 && scheduledBars[1].time <= now) scheduledBars.shift()
-  const current = scheduledBars[0]
-  if (now >= current.time) {
+  const current = currentPlaybackBar()
+  if (current && now >= current.time) {
     const beat = current.beat + (now - current.time) / current.secondsPerBeat
     position.value = current.bar < 0 ? -4 + Math.min(beat / current.meter, .999999) * 4 : current.bar * 4 + Math.min(beat / current.meter, 0.999999) * 4
     scorePage.value = current.bar < 0 ? -1 : Math.floor(current.bar / 4)
@@ -178,7 +213,7 @@ function stopPlaybackPosition() {
   scheduledBars.length = 0
   position.value = -Infinity
 }
-/** @typedef {{notes:{beat:number,length:number,midi:number}[],cursor:number|null,page:number,patterns:({beat:number,duration:number,midi:number}[]|null)[]}} EditSnapshot */
+/** @typedef {{notes:{beat:number,length:number,midi:number}[],cursor:number|null,page:number,patterns:({beat:number,duration:number,midi:number}[]|null)[],bassTechniques:Record<number,string>}} EditSnapshot */
 const history = ref(/** @type {EditSnapshot[]} */ ([]))
 const redoHistory = /** @type {EditSnapshot[]} */ ([])
 
@@ -197,6 +232,7 @@ function captureEdit() {
     notes:notes.value.map(note => ({...note})),
     cursor:stepCursor.value,
     page:scorePage.value,
+    bassTechniques:{...bassTechniquesByPage.value},
     patterns:drumPatterns.value.map(pattern => pattern?.map(note => ({...note})) ?? null),
   }
 }
@@ -211,6 +247,8 @@ function remember() {
 function restoreEdit(snapshot) {
   notes.value = snapshot.notes
   drumPatterns.value = snapshot.patterns
+  bassTechniquesByPage.value = snapshot.bassTechniques
+  if (isBass) syncBassPages()
   stepCursor.value = snapshot.cursor
   scorePage.value = snapshot.page
   if (isDrums && snapshot.cursor !== null) drumBar.value = Math.floor(snapshot.cursor / 4)
@@ -233,6 +271,88 @@ function undoLabel() {
 
 function pageBounds() {
   return scorePage.value < 0 ? [pickupStart, 0] : [scorePage.value * 16, (scorePage.value + 1) * 16]
+}
+
+const bassTechniques = /** @type {const} */ ([['none','なし'], ['previous','前ページと同じ'], ['straight8','8分刻み'], ['straight4','4分刻み'], ['straight16','16分刻み'], ['offbeat','裏拍'], ['support_hold','ロングトーン']])
+/** @param {string} technique @param {number} start @param {number} end */
+function makeBassTechnique(technique, start, end) {
+  const step = technique === 'straight16' ? .25 : technique === 'straight4' ? 1 : technique === 'support_hold' ? 4 : .5
+  const result = []
+  for (let beat = start; beat < end; beat += step) {
+    if (technique === 'offbeat' && Math.floor(beat * 2) % 2 === 0) continue
+    const root = options.rootForBeat?.(beat)
+    if (root === null || root === undefined) continue
+    result.push({beat, length:Math.min(step, end - beat), midi:36 + root})
+  }
+  return result
+}
+
+/** @param {typeof notes.value} source @param {number} page */
+function bassPageNotes(source, page) {
+  const start = page * 16
+  const end = start + 16
+  return source.flatMap(note => {
+    const beat = Math.max(start, note.beat)
+    const length = Math.min(end, note.beat + note.length) - beat
+    return length > 0 ? [{beat, length, midi:note.midi}] : []
+  })
+}
+
+/** @param {typeof notes.value} source @param {number} page @param {typeof notes.value} replacement */
+function replaceBassPage(source, page, replacement) {
+  const start = page * 16
+  const end = start + 16
+  const retained = source.flatMap(note => {
+    const noteEnd = note.beat + note.length
+    if (noteEnd <= start || note.beat >= end) return [note]
+    return [note.beat < start ? {...note, length:start - note.beat} : null, noteEnd > end ? {...note, beat:end, length:noteEnd - end} : null].filter(note => note !== null)
+  })
+  return [...retained, ...replacement].sort((a,b) => a.beat - b.beat)
+}
+
+/** @type {typeof notes.value} */
+let bassEditBaseline = []
+
+function syncBassPages() {
+  let updated = notes.value
+  for (const [key, technique] of Object.entries(bassTechniquesByPage.value)) {
+    if (technique !== 'previous') continue
+    const page = Number(key)
+    const copied = bassPageNotes(updated, page - 1).map(note => ({...note, beat:note.beat + 16}))
+    if (JSON.stringify(copied) !== JSON.stringify(bassPageNotes(updated, page))) {
+      updated = replaceBassPage(updated, page, copied)
+    }
+  }
+  if (updated !== notes.value) {
+    const prior = notes.value
+    selected.value = updated.indexOf(prior[selected.value])
+    selection.value = selection.value.map(index => updated.indexOf(prior[index])).filter(index => index >= 0)
+    notes.value = updated
+  }
+  bassEditBaseline = notes.value.map(note => ({...note}))
+}
+
+const stopBassPageWatch = isBass ? watch(notes, () => {
+  for (const [key, technique] of Object.entries(bassTechniquesByPage.value)) {
+    const page = Number(key)
+    if (technique !== 'custom' && JSON.stringify(bassPageNotes(notes.value, page)) !== JSON.stringify(bassPageNotes(bassEditBaseline, page))) {
+      bassTechniquesByPage.value[page] = 'custom'
+    }
+  }
+  syncBassPages()
+}, {deep:true}) : undefined
+
+/** @param {string} technique */
+function applyBassTechnique(technique) {
+  const page = scorePage.value
+  if (!bassTechniques.some(([id]) => id === technique) || page < 0 || (page === 0 && technique === 'previous')) return
+  const [start, pageEnd] = pageBounds()
+  const generated = technique === 'none' || technique === 'previous' ? [] : makeBassTechnique(technique, start, Math.min(pageEnd, totalBeats()))
+  remember()
+  selectNote(-1)
+  notes.value = replaceBassPage(notes.value, page, generated)
+  bassTechniquesByPage.value[page] = technique
+  syncBassPages()
 }
 
 function clearPage() {
@@ -343,7 +463,17 @@ function setPitchHeld(midi, held) {
 function choosePitch(midi) {
   if (midi < minMidi || midi > maxMidi) return
   const index = selected.value
-  if (inputEnabled.value && stepCursor.value !== null) writeStep([midi])
+  if (inputEnabled.value && liveNoteInput()) {
+    const bar = currentPlaybackBar()
+    const now = playbackContext?.currentTime
+    if (bar && now !== undefined && now >= bar.time) {
+      const beat = (bar.beat + (now - bar.time) / bar.secondsPerBeat) * 4 / bar.meter
+      if (beat < 4) {
+        const offset = Math.min(3.75, Math.round(beat * 4) / 4)
+        writeStep([midi], (bar.bar < 0 ? -4 : bar.bar * 4) + offset, true)
+      }
+    }
+  } else if (inputEnabled.value && stepCursor.value !== null) writeStep([midi])
   else if (inputEnabled.value && index >= 0 && notes.value[index].midi !== midi) {
     if (!drag) remember()
     notes.value[index].midi = midi
@@ -378,15 +508,28 @@ function deleteSelectedNote() {
   if (selected.value < 0 && !selection.value.length) return
   remember()
   const indices = new Set(selection.value.length ? selection.value : [selected.value])
+  const firstBeat = Math.min(...[...indices].map(index => notes.value[index]?.beat ?? Infinity))
   notes.value = notes.value.filter((_, index) => !indices.has(index))
-  selectNote(-1)
+  let previous = -1
+  for (let index = 0; index < notes.value.length; index++) {
+    if (notes.value[index].beat < firstBeat && (previous < 0 || notes.value[index].beat >= notes.value[previous].beat)) previous = index
+  }
+  selectNote(previous)
+  if (previous >= 0) {
+    const beat = notes.value[previous].beat
+    const [start, end] = pageBounds()
+    if (beat < start || beat >= end) scorePage.value = beat < 0 ? -1 : Math.floor(beat / 16)
+  }
+  void nextTick(() => {
+    const score = host.querySelector('.arrange-score')
+    if (score instanceof HTMLElement) score.focus()
+  })
 }
 
-/** @param {readonly number[]} pitches */
-function writeStep(pitches) {
-  if (stepCursor.value === null || stepCursor.value >= totalBeats()) return false
+/** @param {readonly number[]} pitches @param {number|null} start @param {boolean} realtime */
+function writeStep(pitches, start = stepCursor.value, realtime = false) {
+  if (start === null || start >= totalBeats()) return false
   remember()
-  const start = stepCursor.value
   const end = Math.min(totalBeats(), start + stepDuration.value)
   const updated = []
   for (const note of notes.value) {
@@ -401,6 +544,7 @@ function writeStep(pitches) {
   for (const midi of new Set(pitches)) updated.push({beat:start, length:end - start, midi})
   notes.value = updated.sort((a,b) => a.beat - b.beat)
   selectNote(-1)
+  if (realtime) return true
   stepCursor.value = end
   if (isDrums && end < totalBeats()) drumBar.value = Math.floor(end / 4)
   if (end >= 0 && end < totalBeats() && Math.floor(Math.max(0, start) / 16) !== Math.floor(end / 16)) {
@@ -430,6 +574,47 @@ function extendPreviousNote() {
   for (const index of target.indices) notes.value[index].length += target.end - stepCursor.value
   stepCursor.value = target.end
   if (target.end < totalBeats()) scorePage.value = Math.floor(Math.max(0, target.end) / 16)
+}
+
+function nextSelectedNote() {
+  const current = notes.value[selected.value]
+  if (!inputEnabled.value || !current || selection.value.length) return -1
+  return notes.value.reduce((next, note, index) =>
+    note.beat > current.beat && (next < 0 || note.beat < notes.value[next].beat) ? index : next, -1)
+}
+
+function connectTarget() {
+  const next = nextSelectedNote()
+  return next >= 0 && notes.value[next].midi === notes.value[selected.value].midi ? next : -1
+}
+
+function connectSelectedNote() {
+  const next = connectTarget()
+  if (next < 0) return
+  remember()
+  const current = notes.value[selected.value]
+  current.length = Math.max(current.beat + current.length, notes.value[next].beat + notes.value[next].length) - current.beat
+  notes.value.splice(next, 1)
+  if (next < selected.value) selected.value--
+  void nextTick(() => {
+    const score = host.querySelector('.arrange-score')
+    if (score instanceof HTMLElement) score.focus()
+  })
+}
+
+/** @param {number} direction */
+function selectAdjacentNote(direction) {
+  const ordered = notes.value.map((note, index) => ({beat:note.beat, index})).sort((a,b) => a.beat - b.beat || a.index - b.index)
+  const position = ordered.findIndex(note => note.index === selected.value)
+  const adjacent = ordered[position + direction]
+  if (position < 0 || !adjacent) return
+  selectNote(adjacent.index)
+  const [start, end] = pageBounds()
+  if (adjacent.beat < start || adjacent.beat >= end) scorePage.value = adjacent.beat < 0 ? -1 : Math.floor(adjacent.beat / 16)
+  void nextTick(() => {
+    const score = host.querySelector('.arrange-score')
+    if (score instanceof HTMLElement) score.focus()
+  })
 }
 
 /** @param {number} beat */
@@ -508,7 +693,7 @@ function useDuration(duration, rest) {
   stepDuration.value = duration
 }
 
-/** @type {{pointer:number,index:number,x:number,y:number,width:number,beats:number,beat:number,length:number,midi:number,originRow:number,sharedEnd:number|null,group:{index:number,midi:number}[],changed:boolean,axis:'length'|'time'|'pitch'|null}|null} */
+/** @type {{pointer:number,index:number,x:number,y:number,width:number,beats:number,beat:number,length:number,midi:number,originRow:number,sharedEnd:number|null,group:{index:number,midi:number,beat:number,length:number}[],changed:boolean,axis:'length'|'time'|'pitch'|null}|null} */
 let drag = null
 const heldPitches = ref(/** @type {number[]} */ ([]))
 const dragPitch = ref(/** @type {number|null} */ (null))
@@ -527,9 +712,9 @@ function startDrag(event, index, axis) {
   const {beat, length, midi} = notes.value[index]
   const originRow = Array.from(host.querySelectorAll('.arrange-staff')).indexOf(/** @type {Element} */ (track))
   const group = !isDrums && axis === null && event.pointerType === 'mouse' && selection.value.length > 1 && selection.value.includes(index)
-    ? selection.value.map(index => ({index, midi:notes.value[index].midi}))
+    ? selection.value.map(index => ({index, ...notes.value[index]}))
     : []
-  drag = {pointer:event.pointerId, index, x:event.clientX, y:event.clientY, width, beats:beat < 0 ? 1 : 8, beat, length, midi, originRow,
+  drag = {pointer:event.pointerId, index, x:event.clientX, y:event.clientY, width, beats:beat < 0 ? 4 : 8, beat, length, midi, originRow,
     changed:false, sharedEnd: axis === 'length' ? sharedBoundaryEnd(index) : null, group, axis}
   if (!group.length) selectNote(index)
 }
@@ -563,6 +748,20 @@ function moveDrag(event) {
   const dx = event.clientX - x
   const dy = event.clientY - y
   if (drag.group.length) {
+    if (!drag.axis) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return
+      drag.axis = Math.abs(dy) > Math.abs(dx) ? 'pitch' : 'time'
+    }
+    if (drag.axis === 'time') {
+      const staffs = Array.from(host.querySelectorAll('.arrange-staff'))
+      const target = staffs.find(staff => { const rect = staff.getBoundingClientRect(); return event.clientY >= rect.top && event.clientY <= rect.bottom })
+      const rowOffset = target ? Number(target.getAttribute('data-start-beat')) - Number(staffs[drag.originRow]?.getAttribute('data-start-beat')) : 0
+      const offset = boundedGroupOffset(drag.group, Math.round((dx * beats / width + rowOffset) * 8) / 8)
+      if (drag.group.every(note => notes.value[note.index].beat === note.beat + offset)) return
+      if (!drag.changed) { remember(); drag.changed = true }
+      for (const note of drag.group) notes.value[note.index].beat = note.beat + offset
+      return
+    }
     const pitches = drag.group.map(note => note.midi)
     const delta = Math.max(minMidi - Math.min(...pitches), Math.min(maxMidi - Math.max(...pitches), Math.round(-dy / 20)))
     if (drag.group.every(({index,midi}) => notes.value[index].midi === midi + delta)) return
@@ -766,11 +965,17 @@ function drumGrid(bar) {
   const offGrid = viewNotes.filter(note => note.beat >= start && note.beat < start + 4 &&
     Math.abs(note.beat * 4 - Math.round(note.beat * 4)) > 1e-7).length
   return [
+    h('div', {class:'segmented-control arrange-drum-bank', role:'group', 'aria-label':'表示するドラムパッド'}, ['1–4', '5–8'].map((label, bank) => h('label', [
+      h('input', {type:'radio', name:'studio-drum-pad-bank', checked:drumPadBank.value === bank, onChange:()=>{ drumPadBank.value = bank }}),
+      h('span', label),
+    ]))),
     offGrid ? h('p', {class:'arrange-drum-offgrid', role:'status'}, `16分の位置以外に${offGrid}音あります。`) : null,
     h('div', {class:['drum-sequencer arrange-drum-grid', {'arrange-drum-pickup':bar < 0}], 'data-bar':bar, role:'group', 'aria-label':bar < 0 ? '0小節目の16ステップ' : `${bar + 1}小節目の16ステップ`,
       onPointerdown:startDrumStroke, onPointermove:moveDrumStroke, onPointerup:endDrumStroke, onPointercancel:endDrumStroke, onLostpointercapture:endDrumStroke}, [
-      ...[...studioDrumLayout.slice(4), ...studioDrumLayout.slice(0, 4)].reverse().flatMap(pad => [
-        h('button', {type:'button', class:'drum-row-label arrange-drum-name', 'data-loading':drumPadState.value.status === 'loading' ? '' : undefined,
+      ...[...studioDrumLayout.slice(4), ...studioDrumLayout.slice(0, 4)].reverse().flatMap(pad => {
+        const hidden = (pad.id < 4 ? 0 : 1) !== drumPadBank.value
+        return [
+        h('button', {type:'button', class:['drum-row-label arrange-drum-name', {'arrange-drum-bank-hidden':hidden}], 'data-loading':drumPadState.value.status === 'loading' ? '' : undefined,
           'aria-label':`${drumRowName(pad)}を試聴${drumPadState.value.status === 'loading' ? '（ロード中）' : drumPadState.value.status === 'error' ? '（読込失敗）' : !drumPadPlayable(pad.id) ? '（未設定）' : ''}`,
           title:drumRowName(pad), disabled:!options.previewDrum || !drumPadPlayable(pad.id),
           onClick:()=>options.previewDrum?.(pad.id)}, drumRowName(pad)),
@@ -780,14 +985,15 @@ function drumGrid(bar) {
           const current = Number.isFinite(position.value) && position.value >= start && position.value < start + 4 &&
             Math.floor((position.value - start) * 4) === step
           return h('button', {
-            type:'button', class:['drum-step', {'beat-start':step % 4 === 0, playing:current}],
+            type:'button', class:['drum-step', {'beat-start':step % 4 === 0, playing:current, 'arrange-drum-bank-hidden':hidden}],
             'data-step':step, 'data-pad-index':pad.id,
             'aria-label':`${drumRowName(pad)}、${bar < 0 ? '0小節目' : `${bar + 1}小節目`}、${(Math.floor(step / 4) + 1)}拍目の${step % 4 + 1}ステップ`,
             'aria-pressed':on, disabled:beat < pickupStart,
             onClick:(/** @type {MouseEvent} */ event)=>{ if (event.detail === 0) toggleDrumStep(pad.id, beat, bar) },
           })
         }),
-      ]),
+        ]
+      }),
     ]),
   ]
 }
@@ -867,6 +1073,8 @@ const app = createApp({ render: () => [
     const pickup = start < 0
     const laneBeats = pickup ? 4 : 8
     const percent = 100 / laneBeats
+    const gridDuration = notes.value[selected.value]?.length ?? stepDuration.value
+    const gridStep = gridDuration === .25 || gridDuration === .75 ? .25 : gridDuration === .5 || gridDuration === 1.5 ? .5 : 1
     const keyForBar = options.keyForBar
     const keyed = keyForBar ? scoreKeyedNotes(notes.value, keyForBar) : null
     const staffMidi = (/** @type {number} */ index) => keyed?.[index].staffMidi ?? notes.value[index].midi
@@ -889,16 +1097,19 @@ const app = createApp({ render: () => [
     const minHeight = clefIndex.value && farthestStep > 8 ? `${farthestStep * 9 + 88}px` : undefined
     return {
     attrs:{class:['arrange-staff tutorial-pitch-lane', {'arrange-drum-lane':isDrums}], role:'group', style:{minHeight, '--arrange-clef-clearance':clef.bass ? '23px' : '27px', '--arrange-sign-width':`${signature.length * signatureSpacing}px`}, 'data-start-beat':start, 'aria-label':pickup ? '0' : `${start / 4 + 1}〜${start / 4 + 2}小節`}, before:[
-      ...Array.from({length:laneBeats}, (_, i) => h('button', {
-        type:'button', class:['arrange-beat', {'arrange-cursor-beat':stepCursor.value === start + i}],
-        style:{left:`${i * percent}%`}, 'aria-label':pickup ? `0小節目の${i + 1}拍から入力` : `${Math.floor((start + i) / 4) + 1}小節目 ${i % 4 + 1}拍から入力`,
+      ...Array.from({length:laneBeats / gridStep}, (_, i) => { const offset = i * gridStep; const beat = start + offset; const whole = Number.isInteger(offset); return h('button', {
+        type:'button', class:['arrange-beat', {'arrange-grid-subdivision':!whole, 'arrange-cursor-beat':stepCursor.value === beat}],
+        style:{left:`${offset * percent}%`, width:`${gridStep * percent}%`}, 'aria-label':pickup ? `0小節目の${offset + 1}拍から入力` : `${Math.floor(beat / 4) + 1}小節目 ${offset % 4 + 1}拍から入力`,
         onClick:()=>{
-          setStepCursor(start + i)
+          setStepCursor(beat)
           if (pickup) options.selectBar?.(0, true)
-          else options.selectBar?.(Math.floor((start + i) / 4), false, (start + i) % 4)
+          else options.selectBar?.(Math.floor(beat / 4), false, beat % 4)
         },
-      }, pickup ? (i === 0 ? '0' : '') : i % 4 === 0 ? String((start + i) / 4 + 1) : '')),
-      chordChanges ? h('div', {class:'arrange-chord-strip', role:'group', 'aria-label':'コード進行'},
+      }, pickup ? (i === 0 ? '0' : '') : whole && offset % 4 === 0 ? String(beat / 4 + 1) : '') }),
+      isBass && !pickup && start === scorePage.value * 16 ? h('div', {class:'arrange-chord-strip arrange-bass-technique-strip'}, [
+        h('label', {class:'arrange-bass-technique'}, [h('span', '奏法'), h('select', {'aria-label':'表示中のページに適用するベースの奏法', value:'',
+          onChange:(/** @type {Event} */ event)=>{ const select = /** @type {HTMLSelectElement} */ (event.currentTarget); applyBassTechnique(select.value); select.value = '' }}, [h('option', {value:'', disabled:true}, bassTechniques.find(([id])=>id === bassTechniquesByPage.value[scorePage.value])?.[1] ?? 'オリジナル'), ...bassTechniques.map(([id, label])=>h('option', {value:id, disabled:id === 'previous' && scorePage.value === 0}, label))])])
+      ]) : isBass ? (!pickup ? h('div', {class:'arrange-chord-strip', 'aria-hidden':'true'}) : null) : chordChanges ? h('div', {class:'arrange-chord-strip', role:'group', 'aria-label':'コード進行'},
         chordChanges.map(({bar, beat, position, label}, index) => h('span', {
           class:['arrange-chord-change', {'arrange-chord-on-downbeat': beat === 0}],
           style:{left:`${position * percent}%`, width:`${((chordChanges[index + 1]?.position ?? laneBeats) - position) * percent}%`},
@@ -927,7 +1138,6 @@ const app = createApp({ render: () => [
         }}, [scoreAccidentalGlyph(sign)]))),
       pickup ? null : h('span', {class:'tutorial-measure-divider'}),
       h('span', {class:'tutorial-measure-divider arrange-end-barline', 'aria-hidden':'true'}),
-      ...tutorialSubdivisions(laneBeats),
       ...rhythmGroups.flatMap(group => {
         const firstIndex = group[0]
         const lastIndex = group[group.length - 1]
@@ -1037,14 +1247,6 @@ const app = createApp({ render: () => [
     ]}
     },
   }),
-  selection.value.length ? h('section', {class:'arrange-timing', 'aria-label':'選択した音符の編集'}, [
-    h('div', {role:'status'}, `${selection.value.length}音を選択中`),
-    h('div', {class:'arrange-timing-buttons'}, [
-      isDrums ? null : h('button', {type:'button', disabled:!canTransposeSelection(-1), onClick:()=>transposeSelection(-1)}, '半音下げる'),
-      isDrums ? null : h('button', {type:'button', disabled:!canTransposeSelection(1), onClick:()=>transposeSelection(1)}, '半音上げる'),
-      h('button', {type:'button', onClick:deleteSelectedNote}, '削除'),
-    ]),
-  ]) : null,
   h('div', {class:'arrange-input-dock'}, [
   h('div', {class:'arrange-entry-row'}, [
   isDrums ? null : h('section', {class:'arrange-step-controls', 'aria-label':'ステップ入力'}, [
@@ -1059,16 +1261,24 @@ const app = createApp({ render: () => [
           h('label', {class:'arrange-duration-select'}, [
             noteIcon(Number(duration)),
             h('select', {'aria-label':'音価を選択', value:String(duration),
-              onChange:(/** @type {Event} */ event)=>useDuration(Number((/** @type {HTMLSelectElement} */ (event.currentTarget)).value), false)},
+              onChange:(/** @type {Event} */ event)=>{
+                useDuration(Number((/** @type {HTMLSelectElement} */ (event.currentTarget)).value), false)
+                const score = host.querySelector('.arrange-score')
+                if (score instanceof HTMLElement) score.focus()
+              }},
               durations.map(([value, name]) => h('option', {value:String(value), disabled:!canSetDuration(Number(value))}, `${name}音符`))),
           ]),
           h('div', {class:'arrange-step-row'}, [
             h('button', {type:'button', 'aria-label':`${label}休符`, title:`${label}休符 (Z)`, 'aria-keyshortcuts':'Z',
               disabled:!inputEnabled.value || stepCursor.value === null || stepCursor.value >= totalBeats(),
               onClick:()=>useDuration(Number(duration), true)}, restIcon(Number(duration))),
-            h('button', {type:'button', 'aria-label':'直前の音を伸ばす', title:'直前の音を選択した音価分伸ばす (X)', 'aria-keyshortcuts':'X', disabled:!extensionTarget(), onClick:extendPreviousNote}, '→伸'),
+            h('button', {type:'button', 'aria-label':connectTarget() >= 0 ? '次の同じ音につなぐ' : '直前の音を伸ばす', title:connectTarget() >= 0 ? '次の同じ音につなぐ (X)' : '直前の音を選択した音価分伸ばす (X)', 'aria-keyshortcuts':'X', disabled:connectTarget() < 0 && !extensionTarget(), onClick:()=>connectTarget() >= 0 ? connectSelectedNote() : extendPreviousNote()}, connectTarget() >= 0 ? '→繋' : '→伸'),
             h('button', {type:'button', class:'arrange-clear-page', 'aria-label':'表示中のページのノートを消す', disabled:!notes.value.some(note => { const [start, end] = pageBounds(); return note.beat < end && note.beat + note.length > start }), onClick:clearPage}, 'ページを消す'),
           ]),
+          isBass ? h('div', {class:'segmented-control arrange-bass-accent', role:'group', 'aria-label':'ベースのアクセント'}, /** @type {const} */ ([['front','表'], ['back','裏']]).map(([value,label]) => h('label', [
+            h('input', {type:'radio', name:'bass-accent', value, 'aria-label':`${label}にアクセント`, checked:bassAccent.value === value, onChange:()=>{bassAccent.value = value}}),
+            h('span', label),
+          ]))) : null,
         ]),
       ])
     })(),
@@ -1082,7 +1292,7 @@ const app = createApp({ render: () => [
       onPageChange:page=>{scorePage.value = page},
     }),
   isDrums ? null : h('div', {class:'part-mix arrange-record'}, [
-    h('button', {type:'button', class:'mix-button', 'aria-label':partLabel + '入力', title:partLabel + '入力 (Shift+R)', 'aria-keyshortcuts':'Shift+R', 'aria-pressed':inputEnabled.value, onClick:()=>{ inputEnabled.value = !inputEnabled.value }}, [
+    h('button', {type:'button', class:'mix-button', 'aria-label':partLabel + '入力', title:partLabel + '入力 (R)', 'aria-keyshortcuts':'R', 'aria-pressed':inputEnabled.value, onClick:()=>{ inputEnabled.value = !inputEnabled.value }}, [
       h('span', {'aria-hidden':'true'}, '●'), ' Rec',
     ]),
   ]),
@@ -1107,21 +1317,29 @@ const app = createApp({ render: () => [
   isAccompaniment ? null : h('div', {class:'tutorial-keyboard arrange-keyboard', style:{'--tutorial-key-count':String(keyboardOctaves.value * 7 + 1)},role:'group','aria-label':partLabel + 'を試す鍵盤'}, Array.from({length:keyboardOctaves.value * 12 + 1}, (_, i) => midiKey((octave.value + 1) * 12 + i)).map(key => h('button', {
     type:'button', class:[key.black ? 'tutorial-black' : 'tutorial-white', {active:heldPitches.value.includes(key.midi) || dragPitch.value === key.midi || (playing.value && notes.value.some(note => note.midi === key.midi && position.value >= note.beat && position.value < note.beat + note.length * .9))}],
     style:key.black ? {left:`${Array.from({length:keyboardOctaves.value * 12 + 1}, (_, i) => midiKey((octave.value + 1) * 12 + i)).filter(note => !note.black && note.midi < key.midi).length * (100 / (keyboardOctaves.value * 7 + 1))}%`} : undefined,
-    'aria-label':key.label, disabled:key.midi < minMidi || key.midi > maxMidi,
-    onPointerdown:()=>setPitchHeld(key.midi, true),
+    'aria-label':key.label + (isBass && options.rootForBeat?.(Number.isFinite(position.value) ? position.value : stepCursor.value ?? notes.value[selected.value]?.beat ?? playbackStart.value) === key.midi % 12 ? '（ルート）' : ''), disabled:key.midi < minMidi || key.midi > maxMidi,
+    onPointerdown:(/** @type {PointerEvent} */ event)=>{
+      if (event.button !== 0) return
+      setPitchHeld(key.midi, true)
+      if (liveNoteInput()) {
+        event.preventDefault()
+        choosePitch(key.midi)
+      }
+    },
     onPointerup:()=>setPitchHeld(key.midi, false),
     onPointercancel:()=>setPitchHeld(key.midi, false),
     onLostpointercapture:()=>setPitchHeld(key.midi, false),
     onPointerleave:(/** @type {PointerEvent} */ event)=>{if (event.buttons) setPitchHeld(key.midi, false)},
-    onClick:()=>choosePitch(key.midi),
-  }, key.black || key.midi % 12 !== 0 ? '' : `C${Math.floor(key.midi / 12) - 1}`))),
+    onClick:(/** @type {MouseEvent} */ event)=>{ if (!liveNoteInput() || event.detail === 0) choosePitch(key.midi) },
+  }, [isBass && options.rootForBeat?.(Number.isFinite(position.value) ? position.value : stepCursor.value ?? notes.value[selected.value]?.beat ?? playbackStart.value) === key.midi % 12 ? h('span', {class:'arrange-root-mark', 'aria-label':'ルート'}, 'R') : null,
+    key.black || key.midi % 12 !== 0 ? '' : `C${Math.floor(key.midi / 12) - 1}`]))),
   ]),
 ] })
 app.mount(host)
 
 const handleKey = (/** @type {KeyboardEvent} */ event) => {
   const target = event.target
-  if (!isDrums && event.code === 'KeyR' && event.shiftKey && options.empty && host.getClientRects().length > 0 &&
+  if (!isDrums && event.code === 'KeyR' && !event.shiftKey && options.empty && host.getClientRects().length > 0 &&
       !event.repeat && !event.isComposing && !event.ctrlKey && !event.metaKey && !event.altKey &&
       !document.querySelector('dialog[open]') &&
       !(target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select, [contenteditable]')))) {
@@ -1141,10 +1359,21 @@ const handleKey = (/** @type {KeyboardEvent} */ event) => {
     }
     return
   }
-  if (!host.contains(document.activeElement)) return
+  const durationShortcut = !isDrums && options.empty && document.body.dataset.appMode === 'free' &&
+    host.getClientRects().length > 0 && (event.code === 'KeyA' || event.code === 'KeyS')
+  if (!host.contains(document.activeElement) && !durationShortcut) return
   if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return
   if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select, dialog'))) return
   if (!event.shiftKey && !event.isComposing && !document.querySelector('dialog[open]')) {
+    if (!isDrums && (event.code === 'KeyA' || event.code === 'KeyS')) {
+      event.preventDefault()
+      event.stopPropagation()
+      const current = notes.value[selected.value]?.length ?? stepDuration.value
+      const values = durations.map(([value]) => Number(value))
+      const next = event.code === 'KeyA' ? values.filter(value => value < current).at(-1) : values.find(value => value > current)
+      if (next !== undefined) useDuration(next, false)
+      return
+    }
     if (!isDrums && event.code === 'KeyZ') {
       event.preventDefault()
       useDuration(notes.value[selected.value]?.length ?? stepDuration.value, true)
@@ -1152,7 +1381,8 @@ const handleKey = (/** @type {KeyboardEvent} */ event) => {
     }
     if (!isDrums && event.code === 'KeyX') {
       event.preventDefault()
-      extendPreviousNote()
+      if (connectTarget() >= 0) connectSelectedNote()
+      else extendPreviousNote()
       return
     }
     const key = /^Key([A-Z])$/.exec(event.code)?.[1]
@@ -1167,12 +1397,26 @@ const handleKey = (/** @type {KeyboardEvent} */ event) => {
       }
     }
   }
-  if ((event.key === 'Delete' || event.key === 'Backspace') && (selected.value >= 0 || selection.value.length)) {
+  if (!isDrums && selection.value.length && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+    event.preventDefault()
+    moveSelection(event.key === 'ArrowLeft' ? -.125 : .125)
+  } else if (!isDrums && selected.value >= 0 && !selection.value.length && (event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !(target instanceof Element && target.closest('.arrange-score-boundary'))) {
+    event.preventDefault()
+    selectAdjacentNote(event.key === 'ArrowLeft' ? -1 : 1)
+  } else if ((event.key === 'Delete' || event.key === 'Backspace') && (selected.value >= 0 || selection.value.length)) {
     event.preventDefault()
     deleteSelectedNote()
-  } else if (!isDrums && selection.value.length && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+  } else if (!isDrums && (selected.value >= 0 || selection.value.length) && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
     event.preventDefault()
-    transposeSelection(event.key === 'ArrowUp' ? 1 : -1)
+    const delta = event.key === 'ArrowUp' ? 1 : -1
+    if (selection.value.length) transposeSelection(delta)
+    else {
+      const note = notes.value[selected.value]
+      if (note && note.midi + delta >= minMidi && note.midi + delta <= maxMidi) {
+        remember()
+        note.midi += delta
+      }
+    }
   } else if (event.code === 'Space') {
     event.preventDefault()
     void play()
@@ -1181,6 +1425,19 @@ const handleKey = (/** @type {KeyboardEvent} */ event) => {
 document.addEventListener('keydown', handleKey, true)
 window.addEventListener('pagehide', stop)
 return {
+  getBassTechniques() { return {...bassTechniquesByPage.value} },
+  /** @param {Record<number,string>} techniques */
+  setBassTechniques(techniques) { bassTechniquesByPage.value = techniques; syncBassPages() },
+  getBassAccent() { return bassAccent.value },
+  /** @param {'front'|'back'} value */
+  setBassAccent(value) { bassAccent.value = value },
+  initializeBass() {
+    if (isBass && options.rootForBeat && !notes.value.length) {
+      notes.value = makeBassTechnique('straight8', 0, Math.min(16, totalBeats()))
+      bassTechniquesByPage.value = Object.fromEntries(Array.from({length:Math.ceil(totalBars() / 4)}, (_, page) => [page, page === 0 ? 'straight8' : 'previous']))
+      syncBassPages()
+    }
+  },
   /** @param {number} bar @param {number} beat @param {number} time @param {number} secondsPerBeat @param {number} meter @param {AudioContext} context */
   schedulePlaybackBar(bar, beat, time, secondsPerBeat, meter, context) {
     playbackContext = context
@@ -1193,6 +1450,7 @@ return {
     stop()
     notes.value = saved.map(note => ({beat:note.beat, length:note.duration, midi:note.midi}))
     history.value = []
+    bassTechniquesByPage.value = {}
     redoHistory.length = 0
     selectNote(-1)
     stepCursor.value = 0
@@ -1212,6 +1470,7 @@ return {
   midiRelease(midi) { setPitchHeld(midi, false) },
   /** @param {readonly number[]} pitches */
   recordStep(pitches) {
+    if (liveNoteInput()) return false
     if (isDrums && inputEnabled.value && stepCursor.value === null && selected.value >= 0) {
       stepCursor.value = notes.value[selected.value].beat
     }
@@ -1227,9 +1486,19 @@ return {
   /** @param {number[]} assignments */
   setDrumAssignments(assignments) { drumAssignments.value = [...assignments] },
   getDrumAssignments() { return [...drumAssignments.value] },
-  getNotes() {
-    const result = notes.value.map(note => ({beat:note.beat, duration:note.length, midi:note.midi, velocity:0.8}))
+  getPlaybackNotes() {
+    const result = notes.value.map(note => {
+      const fraction = ((note.beat % 1) + 1) % 1
+      const onBeat = Math.abs(fraction) < 1e-7 || Math.abs(fraction - 1) < 1e-7
+      const offBeat = Math.abs(fraction - .5) < 1e-7
+      const velocity = !isBass || !onBeat && !offBeat ? .8 : (bassAccent.value === 'front' ? onBeat : offBeat) ? .95 : .65
+      return {beat:note.beat, duration:note.length, midi:note.midi, velocity}
+    })
     return isAccompaniment ? result.sort((a,b) => a.beat - b.beat) : result
   },
-  destroy() {stopPlaybackPosition();stop();app.unmount();document.removeEventListener('keydown', handleKey, true);window.removeEventListener('pagehide',stop)}}
+  getNotes() {
+    const result = notes.value.map(note => ({beat:note.beat, duration:note.length, midi:note.midi, velocity:.8}))
+    return isAccompaniment ? result.sort((a,b) => a.beat - b.beat) : result
+  },
+  destroy() {stopBassPageWatch?.();stopPlaybackPosition();stop();app.unmount();document.removeEventListener('keydown', handleKey, true);window.removeEventListener('pagehide',stop)}}
 }
